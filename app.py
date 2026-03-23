@@ -25,8 +25,6 @@ with st.expander("🔍 내 비밀 금고(Secrets)에 뭐가 들어있을까?"):
 # --- [1. ⚡ 초고속 클라우드 연결 설정] ---
 @st.cache_resource(ttl=600)
 def get_connection():
-    # 수파베이스가 준 '공식 주소'를 그대로 사용하여 연결합니다.
-    # 이 방식이 가장 오류가 적고 확실합니다.
     db_url = st.secrets["SUPABASE_URL"]
     return psycopg2.connect(db_url)
 
