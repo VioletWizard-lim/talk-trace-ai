@@ -10,9 +10,14 @@ from google import genai
 # --- [1. ⚡ 초고속 클라우드 연결 설정] ---
 @st.cache_resource(ttl=600)
 def get_connection():
-    # Secrets에서 안전하게 주소를 가져옵니다.
-    db_url = st.secrets["SUPABASE_URL"]
-    return psycopg2.connect(db_url)
+    return psycopg2.connect(
+        user = st.secrets["DB_USER"],
+        password = st.secrets["DB_PW"],
+        host = st.secrets["DB_HOST"],
+        port = st.secrets["DB_PORT"],
+        database = st.secrets["DB_NAME"],
+        sslmode = "require"
+    )
 
 def init_db():
     try:
