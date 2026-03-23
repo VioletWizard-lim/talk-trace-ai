@@ -10,23 +10,18 @@ from google import genai
 # --- [1. ⚡ 초고속 클라우드 연결 설정] ---
 @st.cache_resource(ttl=600)
 def get_connection():
-    # 🚨 여기에 선생님의 '진짜' 프로젝트 ID와 비밀번호를 넣어주세요.
-    my_id = "hxibfcuelsupfbmnagwd"  # 수파베이스 주소창에 있는 그 ID!
-    my_pw = "InhaTeacher0323"      # 아까 새로 만드신 그 비밀번호!
+    # 🚨 여기에 선생님의 '진짜' 정보를 한 번만 더 확인해서 넣어주세요.
+    # 1. 프로젝트 ID (수파베이스 주소창 20자리)
+    # 2. 비밀번호 (특수문자 없이 새로 만드신 것!)
     
-    # 수파베이스 6543 포트가 요구하는 완벽한 형식입니다.
-    # 아이디 부분에 점(.)이 들어가는 게 핵심입니다.
-    user_id = f"postgres.{my_id}"
-    host_url = "aws-0-ap-northeast-2.pooler.supabase.com"
+    project_id = "hxibfcuelsupfbmnagwd" 
+    db_pw = "InhaTeacher0323"
     
-    return psycopg2.connect(
-        user = user_id,
-        password = my_pw,
-        host = host_url,
-        port = "6543",
-        database = "postgres",
-        sslmode = "require"
-    )
+    # 수파베이스가 제공하는 가장 표준적인 'URI' 형식입니다.
+    # %40은 @를 의미하며, 비밀번호에 혹시 모를 문제를 방지합니다.
+    db_url = f"postgresql://postgres.{project_id}:{db_pw}@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require"
+    
+    return psycopg2.connect(db_url)
 
 def init_db():
     try:
