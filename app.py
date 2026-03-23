@@ -10,12 +10,13 @@ from google import genai
 # --- [1. ⚡ 초고속 클라우드 연결 설정] ---
 @st.cache_resource(ttl=600)
 def get_connection():
+    # .strip()을 추가해서 혹시 모를 앞뒤 공백을 강제로 제거합니다.
     return psycopg2.connect(
-        user = st.secrets["DB_USER"],
-        password = st.secrets["DB_PW"],
-        host = st.secrets["DB_HOST"],
-        port = st.secrets["DB_PORT"],
-        database = st.secrets["DB_NAME"],
+        user = st.secrets["DB_USER"].strip(),
+        password = st.secrets["DB_PW"].strip(),
+        host = st.secrets["DB_HOST"].strip(),
+        port = st.secrets["DB_PORT"].strip(),
+        database = st.secrets["DB_NAME"].strip(),
         sslmode = "require"
     )
 
