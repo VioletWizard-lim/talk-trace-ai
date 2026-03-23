@@ -8,21 +8,20 @@ import psycopg2.extras
 from google import genai
 
 
-# --- [디버깅용: 입력값 확인 창] ---
-with st.expander("🔍 현재 연결 설정 확인 (에러 해결 후 삭제하세요)"):
-    try:
-        # Secrets에서 가져오는 경우
-        st.write(f"**아이디(USER):** `{st.secrets['DB_USER']}`")
-        st.write(f"**호스트(HOST):** `{st.secrets['DB_HOST']}`")
-        st.write(f"**포트(PORT):** `{st.secrets['DB_PORT']}`")
-        st.write(f"**비밀번호 길이:** {len(st.secrets['DB_PW'])}자")
-        
-        # 전체 주소(URL) 형식을 쓰는 경우
-        if "SUPABASE_URL" in st.secrets:
-             st.write(f"**전체 URL 일부:** `{st.secrets['SUPABASE_URL'][:30]}...`")
-    except:
-        st.warning("Secrets 설정이 아직 완료되지 않았거나 형식이 다릅니다.")
-# -----------------------------------
+# --- [진짜 마지막! 금고 내용물 체크리스트] ---
+with st.expander("🔍 내 비밀 금고(Secrets)에 뭐가 들어있을까?"):
+    keys = list(st.secrets.keys())
+    if not keys:
+        st.error("🚨 금고가 텅 비어있습니다! 스트림릿 Secrets 설정을 확인하세요.")
+    else:
+        st.write(f"현재 인식된 이름들: `{keys}`")
+        for key in keys:
+            # 보안을 위해 비밀번호나 키는 길이만 표시합니다.
+            if "PW" in key.upper() or "KEY" in key.upper() or "URL" in key.upper():
+                st.write(f"✅ **{key}**: [보안상 마스킹] (길이: {len(str(st.secrets[key]))}자)")
+            else:
+                st.write(f"✅ **{key}**: `{st.secrets[key]}`")
+# ------------------------------------------
 # --- [1. ⚡ 초고속 클라우드 연결 설정] ---
 @st.cache_resource(ttl=600)
 def get_connection():
