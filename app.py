@@ -7,6 +7,22 @@ import psycopg2
 import psycopg2.extras
 from google import genai
 
+
+# --- [디버깅용: 입력값 확인 창] ---
+with st.expander("🔍 현재 연결 설정 확인 (에러 해결 후 삭제하세요)"):
+    try:
+        # Secrets에서 가져오는 경우
+        st.write(f"**아이디(USER):** `{st.secrets['DB_USER']}`")
+        st.write(f"**호스트(HOST):** `{st.secrets['DB_HOST']}`")
+        st.write(f"**포트(PORT):** `{st.secrets['DB_PORT']}`")
+        st.write(f"**비밀번호 길이:** {len(st.secrets['DB_PW'])}자")
+        
+        # 전체 주소(URL) 형식을 쓰는 경우
+        if "SUPABASE_URL" in st.secrets:
+             st.write(f"**전체 URL 일부:** `{st.secrets['SUPABASE_URL'][:30]}...`")
+    except:
+        st.warning("Secrets 설정이 아직 완료되지 않았거나 형식이 다릅니다.")
+# -----------------------------------
 # --- [1. ⚡ 초고속 클라우드 연결 설정] ---
 @st.cache_resource(ttl=600)
 def get_connection():
