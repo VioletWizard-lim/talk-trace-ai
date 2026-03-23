@@ -25,12 +25,12 @@ with st.expander("🔍 내 비밀 금고(Secrets)에 뭐가 들어있을까?"):
 # --- [1. ⚡ 초고속 클라우드 연결 설정] ---
 @st.cache_resource(ttl=600)
 def get_connection():
-    # 🚨 선생님의 정보를 직접 입력해서 주소 꼬임을 방지합니다.
+    # .strip()을 사용해 혹시 모를 앞뒤 공백을 한 번 더 제거합니다.
     return psycopg2.connect(
-        user = "postgres.hxibfcuelsupfbmnagwd", # 아이디.ID 형태
-        password = "InhaTeacher0323",          # 비밀번호
-        host = "aws-0-ap-northeast-2.pooler.supabase.com",
-        port = "6543",
+        user = st.secrets["DB_USER"].strip(),
+        password = st.secrets["DB_PW"].strip(),
+        host = st.secrets["DB_HOST"].strip(),
+        port = "6543", # 포트는 6543으로 고정!
         database = "postgres",
         sslmode = "require"
     )
