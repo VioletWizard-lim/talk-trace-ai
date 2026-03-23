@@ -10,17 +10,9 @@ from google import genai
 # --- [1. ⚡ 초고속 클라우드 연결 설정] ---
 @st.cache_resource(ttl=600)
 def get_connection():
-    # 🚨 여기에 선생님의 '진짜' 정보를 한 번만 더 확인해서 넣어주세요.
-    # 1. 프로젝트 ID (수파베이스 주소창 20자리)
-    # 2. 비밀번호 (특수문자 없이 새로 만드신 것!)
-    
-    project_id = "hxibfcuelsupfbmnagwd" 
-    db_pw = "InhaTeacher0323"
-    
-    # 수파베이스가 제공하는 가장 표준적인 'URI' 형식입니다.
-    # %40은 @를 의미하며, 비밀번호에 혹시 모를 문제를 방지합니다.
-    db_url = f"postgresql://postgres.{project_id}:{db_pw}@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require"
-    
+    # Secrets에 저장한 'URI 주소'를 그대로 가져와서 연결합니다.
+    # 수파베이스가 준 주소 형식을 그대로 쓰기 때문에 오타 확률이 0%입니다.
+    db_url = st.secrets["SUPABASE_URL"]
     return psycopg2.connect(db_url)
 
 def init_db():
