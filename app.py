@@ -7,21 +7,6 @@ import psycopg2
 import psycopg2.extras
 from google import genai
 
-
-# --- [진짜 마지막! 금고 내용물 체크리스트] ---
-with st.expander("🔍 내 비밀 금고(Secrets)에 뭐가 들어있을까?"):
-    keys = list(st.secrets.keys())
-    if not keys:
-        st.error("🚨 금고가 텅 비어있습니다! 스트림릿 Secrets 설정을 확인하세요.")
-    else:
-        st.write(f"현재 인식된 이름들: `{keys}`")
-        for key in keys:
-            # 보안을 위해 비밀번호나 키는 길이만 표시합니다.
-            if "PW" in key.upper() or "KEY" in key.upper() or "URL" in key.upper():
-                st.write(f"✅ **{key}**: [보안상 마스킹] (길이: {len(str(st.secrets[key]))}자)")
-            else:
-                st.write(f"✅ **{key}**: `{st.secrets[key]}`")
-# ------------------------------------------
 # --- [1. ⚡ 초고속 클라우드 연결 설정] ---
 @st.cache_resource(ttl=600)
 def get_connection():
