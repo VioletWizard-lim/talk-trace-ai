@@ -229,6 +229,15 @@ if user_role == "교사" and teacher_auth:
                             st.success(f"✅ {selected_student} 학생의 세특 초안이 완성되었습니다!")
                             st.text_area("AI 생성 결과 (수정 후 복사하여 사용하세요)", value=response.text, height=250)
                             
+                            # ⬇️ 여기서부터 6줄 추가! (미리 만들어둔 records 테이블에 저장)
+                            conn = get_connection()
+                            with conn.cursor() as c:
+                                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                c.execute("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
+                                          (room_name, now, selected_student, response.text))
+                            conn.commit()
+                            st.info("💾 생성된 세특 초안이 수파베이스(records 테이블)에 안전하게 보관되었습니다.")
+                            
                         except Exception as e:
                             st.error(f"AI 생성 중 오류 발생: {e}\n(Secrets에 GEMINI_API_KEY가 정확한지 확인해주세요!)")
             else:
