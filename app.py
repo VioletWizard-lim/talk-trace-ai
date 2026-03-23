@@ -184,7 +184,7 @@ if not df.empty:
             st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp']}")
             st.info(row['content'])
 
-# --- [7. 교사 전용: 데이터 다운로드 및 AI 세특 자동 생성] ---
+# --- [7. 교사 전용: 데이터 다운로드, AI 세특 자동 생성 및 보관함] ---
 if user_role == "교사" and teacher_auth:
     st.divider()
     st.header("👨‍🏫 교사 관리 대시보드")
@@ -210,11 +210,13 @@ if user_role == "교사" and teacher_auth:
                 if st.button(f"'{selected_student}' 학생 세특 생성 🪄"):
                     with st.spinner("Gemini AI가 학생의 활동을 분석하여 세특을 작성 중입니다..."):
                         try:
+                            # 1. 학생 발언 데이터 모으기
                             student_data = df[df['student_name'] == selected_student]
                             debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
                             
+                            # 2. 제미나이 2.5 최신 모델 호출
                             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                            model = genai.GenerativeModel('gemini-2.5-flash') # ✅ 2.5 최신 모델 원상 복구!
+                            model = genai.GenerativeModel('gemini-2.5-flash')
                             
                             prompt = f"""
                             당신은 고등학교 정보 교사입니다. 다음은 '{current_topic}'을(를) 주제로 한 동아리 토론에서 '{selected_student}' 학생이 발언한 내용입니다.
@@ -229,7 +231,7 @@ if user_role == "교사" and teacher_auth:
                             st.success(f"✅ {selected_student} 학생의 세특 초안이 완성되었습니다!")
                             st.text_area("AI 생성 결과 (수정 후 복사하여 사용하세요)", value=response.text, height=250)
                             
-                            # ⬇️ 여기서부터 6줄 추가! (미리 만들어둔 records 테이블에 저장)
+                            # 3. [추가됨] DB(records 테이블)에 세특 결과 영구 저장
                             conn = get_connection()
                             with conn.cursor() as c:
                                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -242,3 +244,22 @@ if user_role == "교사" and teacher_auth:
                             st.error(f"AI 생성 중 오류 발생: {e}\n(Secrets에 GEMINI_API_KEY가 정확한지 확인해주세요!)")
             else:
                 st.info("아직 실명으로 의견을 제출한 학생이 없습니다.")
+
+    # 4. [추가됨] 저장된 세특 기록 보관함 및 엑셀 다운로드
+    st.divider()
+    st.subheader("📂 저장된 세특 기록 보관함")
+    
+    # DB에서 records 테이블의 데이터 꺼내오기
+    records_df = get_df_from_db("SELECT timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
+    
+    if not records_df.empty:
+        # 화면에 표 형태로 보여주기
+        st.dataframe(records_df, use_container_width=True)
+        
+        # 엑셀로 한 번에 다운로드하는 버튼
+        buffer_records = io.BytesIO()
+        with pd.ExcelWriter(buffer_records, engine='openpyxl') as writer:
+            records_df.to_excel(writer, index=False)
+        st.download_button("📥 저장된 세특 전체 다운로드 (Excel)", data=buffer_records.getvalue(), file_name=f"{room_name}_세특기록.xlsx")
+    else:
+        st.info("아직 저장된 세특 기록이 없습니다. 위에서 AI 세특을 생성하면 여기에 차곡차곡 쌓입니다!")
