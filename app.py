@@ -10,13 +10,21 @@ from google import genai
 # --- [1. ⚡ 초고속 클라우드 연결 설정] ---
 @st.cache_resource(ttl=600)
 def get_connection():
-    # .strip()을 추가해서 혹시 모를 앞뒤 공백을 강제로 제거합니다.
+    # 🚨 여기에 선생님의 '진짜' 프로젝트 ID와 비밀번호를 넣어주세요.
+    my_id = "hxibfcuelsupfbmnagwd"  # 수파베이스 주소창에 있는 그 ID!
+    my_pw = "InhaTeacher0323"      # 아까 새로 만드신 그 비밀번호!
+    
+    # 수파베이스 6543 포트가 요구하는 완벽한 형식입니다.
+    # 아이디 부분에 점(.)이 들어가는 게 핵심입니다.
+    user_id = f"postgres.{my_id}"
+    host_url = "aws-0-ap-northeast-2.pooler.supabase.com"
+    
     return psycopg2.connect(
-        user = st.secrets["DB_USER"].strip(),
-        password = st.secrets["DB_PW"].strip(),
-        host = st.secrets["DB_HOST"].strip(),
-        port = st.secrets["DB_PORT"].strip(),
-        database = st.secrets["DB_NAME"].strip(),
+        user = user_id,
+        password = my_pw,
+        host = host_url,
+        port = "6543",
+        database = "postgres",
         sslmode = "require"
     )
 
