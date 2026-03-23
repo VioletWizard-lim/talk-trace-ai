@@ -1,0 +1,9 @@
+streamlit
+streamlit-autorefresh
+google-genai
+psycopg2-binary
+python-dotenv
+pandas
+plotly
+openpyxl
+SpeechRecognition
