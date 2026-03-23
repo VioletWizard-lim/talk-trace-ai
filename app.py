@@ -35,7 +35,10 @@ import psycopg2.extras
 # 환경변수 강제 업데이트
 load_dotenv(override=True)
 MY_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
+# 기존 코드를 지우고 아래 3줄로 바꿔주세요
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+if not SUPABASE_URL:
+    st.error("🚨 Secrets에서 주소를 찾을 수 없습니다!")
 
 # --- [1. ⚡ 초고속 클라우드 연결 유지 (캐싱)] ---
 @st.cache_resource(ttl=600)
