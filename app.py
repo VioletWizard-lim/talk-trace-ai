@@ -131,33 +131,65 @@ if not df.empty:
             st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp']}")
             st.info(row['content'])
 
-# --- [6. 교사 전용 도구 (AI 세특 및 보관함)] ---
+# --- [6. 교사 전용 도구 (새로고침에도 안전한 버전)] ---
 if user_role == "교사" and teacher_auth:
-    st.divider(); st.header("👨‍🏫 교사 관리 대시보드")
-    if st.button("📊 참여도 대시보드 및 워드클라우드 (준비 중)"): st.toast("연구용 데이터 수집 중입니다!")
+    st.divider()
+    st.header("👨‍🏫 교사 관리 대시보드")
     
+    # 💡 세션 상태에 AI 결과 저장용 변수 초기화
+    if 'ai_result_text' not in st.session_state:
+        st.session_state['ai_result_text'] = ""
+
     col3, col4 = st.columns([1, 1])
     with col3:
+        st.subheader("📥 활동 데이터 다운로드")
         buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer: df.to_excel(writer, index=False)
-        st.download_button("📥 전체 로그 다운로드", data=buffer.getvalue(), file_name=f"{room_name}_log.xlsx")
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+        st.download_button("전체 로그 다운로드 (Excel)", data=buffer.getvalue(), file_name=f"{room_name}_log.xlsx")
     
     with col4:
+        st.subheader("🤖 AI 세특 초안 생성")
         student_list = df[~df['student_name'].isin(['교사', '익명', '🤖 AI 조력자'])]['student_name'].unique()
+        
         if len(student_list) > 0:
-            sel_std = st.selectbox("학생 선택", student_list)
-            if st.button(f"'{sel_std}' AI 세특 생성"):
-                with st.spinner("분석 중..."):
-                    std_hist = "\n".join(df[df['student_name'] == sel_std]['content'].tolist())
-                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                    res = genai.GenerativeModel('gemini-2.5-flash').generate_content(f"{sel_std}의 토론 내용 분석 후 세특 300자 작성:\n{std_hist}")
-                    st.text_area("결과", value=res.text, height=200)
-                    conn = get_connection()
-                    with conn.cursor() as c:
-                        c.execute("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
-                                  (room_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), sel_std, res.text))
-                    conn.commit(); st.info("💾 보관함에 저장됨")
+            sel_std = st.selectbox("분석할 학생을 선택하세요", student_list)
+            
+            if st.button(f"'{sel_std}' AI 세특 생성 🪄"):
+                with st.spinner("Gemini AI가 분석 중입니다..."):
+                    try:
+                        std_hist = "\n".join(df[df['student_name'] == sel_std]['content'].tolist())
+                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        
+                        prompt = f"당신은 정보 교사입니다. '{current_topic}' 토론에서 '{sel_std}' 학생의 발언을 분석해 세특 300자를 작성하세요:\n{std_hist}"
+                        res = model.generate_content(prompt)
+                        
+                        # 💡 핵심: 새로고침 되어도 안 사라지게 세션 상태에 저장!
+                        st.session_state['ai_result_text'] = res.text
+                        
+                        # 생성과 동시에 DB에도 일단 저장
+                        conn = get_connection()
+                        with conn.cursor() as c:
+                            c.execute("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
+                                      (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), room_name, sel_std, res.text))
+                        conn.commit()
+                        st.toast(f"{sel_std} 학생의 기록이 보관함에 자동 저장되었습니다.")
+                    except Exception as e:
+                        st.error(f"오류 발생: {e}")
 
+            # 💡 새로고침이 되어도 'ai_result_text'에 값이 있으면 화면에 계속 보여줍니다.
+            if st.session_state['ai_result_text']:
+                st.success("✅ AI 세특 생성이 완료되었습니다. (7초마다 자동 갱신되어도 유지됩니다)")
+                # text_area의 value를 세션 상태 값으로 고정
+                st.text_area("AI 생성 결과 (복사하여 사용하세요)", 
+                             value=st.session_state['ai_result_text'], 
+                             height=250,
+                             key="final_ai_output") 
+        else:
+            st.info("실명으로 참여한 학생이 없습니다.")
+
+    # [보관함 영역은 동일]
     st.subheader("📂 세특 보관함")
     rec_df = get_df_from_db("SELECT timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
     if not rec_df.empty:
