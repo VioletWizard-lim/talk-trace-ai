@@ -126,9 +126,10 @@ with col_stt:
             recognition.onresult = (event) => {
                 const text = event.results[0][0].transcript;
                 
-                // 투명 유리벽을 뚫고 텍스트창에 입력
                 const parentDoc = window.parent.document;
-                const textArea = parentDoc.querySelector('textarea');
+                
+                // 💡 [핵심 해결책] 화면에 텍스트 상자가 몇 개든 상관없이, '의견 입력창'만 정확히 스나이퍼처럼 저격!
+                const textArea = parentDoc.querySelector('textarea[aria-label="의견을 입력하세요"]');
                 
                 if (textArea) {
                     const currentText = textArea.value;
@@ -140,7 +141,8 @@ with col_stt:
                     
                     status.innerText = "텍스트 창에 입력 완료!";
                 } else {
-                    alert("인식 내용: " + text);
+                    // 혹시라도 창을 못 찾으면 알림으로 띄워주는 최후의 방어선
+                    alert("인식 내용: " + text + "\\n(입력창을 찾을 수 없어 알림으로 띄웁니다.)");
                 }
             };
 
