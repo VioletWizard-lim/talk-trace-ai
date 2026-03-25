@@ -51,7 +51,6 @@ if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] 
 with st.sidebar:
     st.header("👤 접속 권한")
     user_role = st.radio("모드 선택", ["학생", "교사"])
-    st.caption("✨ 최신 실시간 동기화 엔진 적용 완료 (깜빡임 방지)")
     st.divider()
 
     rooms_df = get_df_from_db("SELECT DISTINCT room_name FROM topic")
@@ -80,7 +79,7 @@ st.title(f"🎙️ Talk-Trace AI [{room_name}]")
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
 
 # ==========================================
-# [5] 의견 입력 영역 (고정 영역 - 깜빡이지 않음!)
+# [5] 의견 입력 영역 (고정 영역)
 # ==========================================
 st.subheader("🗣️ 내 의견 작성")
 col_input, col_stt = st.columns([4, 1])
@@ -91,13 +90,13 @@ with col_input:
     sentiment = st.radio("의견 성격", opts, horizontal=True)
 
 with col_stt:
+    # (선생님이 극찬하신 완벽한 음성인식 토글 버튼 로직 유지)
     st.components.v1.html(
         """
         <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer;">
             🎤 음성 입력 시작
         </button>
-        <p id="status" style="font-size:11px; color:gray; text-align:center; margin-top:5px;">대기 중... (버튼을 누르세요)</p>
-        
+        <p id="status" style="font-size:11px; color:gray; text-align:center; margin-top:5px;">대기 중...</p>
         <script>
             const btn = document.getElementById('stt-btn');
             const status = document.getElementById('status');
@@ -105,63 +104,50 @@ with col_stt:
             recognition.lang = 'ko-KR';
             let isRecognizing = false;
 
-            // 💡 [핵심 해결책] 버튼을 누를 때 켜져 있으면 끄고, 꺼져 있으면 켭니다!
             btn.onclick = () => { 
-                if (!isRecognizing) {
-                    recognition.start(); 
-                } else {
-                    recognition.stop();
-                    status.innerText = "버튼으로 마이크 종료! 텍스트 변환 중...";
-                }
+                if (!isRecognizing) recognition.start(); 
+                else recognition.stop();
             };
 
             recognition.onstart = () => {
                 isRecognizing = true;
-                status.innerText = "듣는 중... (끝내려면 버튼을 다시 누르거나 스페이스바!)"; 
+                status.innerText = "듣는 중... (종료: 버튼/스페이스바)"; 
                 btn.style.backgroundColor = "#ff4b4b"; 
                 btn.style.color = "white"; 
-                btn.innerHTML = "🛑 음성 입력 중지 (클릭)"; // 버튼 글씨도 바꿈!
+                btn.innerHTML = "🛑 음성 입력 중지";
             };
 
             recognition.onresult = (event) => {
                 const text = event.results[0][0].transcript;
-                
                 const parentDoc = window.parent.document;
-                
-                // 💡 [핵심 해결책] 화면에 텍스트 상자가 몇 개든 상관없이, '의견 입력창'만 정확히 스나이퍼처럼 저격!
                 const textArea = parentDoc.querySelector('textarea[aria-label="의견을 입력하세요"]');
                 
                 if (textArea) {
                     const currentText = textArea.value;
                     const newText = currentText ? currentText + " " + text : text;
-                    
                     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
                     nativeInputValueSetter.call(textArea, newText);
                     textArea.dispatchEvent(new Event('input', { bubbles: true }));
-                    
-                    status.innerText = "텍스트 창에 입력 완료!";
+                    status.innerText = "입력 완료!";
                 } else {
-                    // 혹시라도 창을 못 찾으면 알림으로 띄워주는 최후의 방어선
-                    alert("인식 내용: " + text + "\\n(입력창을 찾을 수 없어 알림으로 띄웁니다.)");
+                    alert("인식 내용: " + text);
                 }
             };
 
             recognition.onend = () => {
                 isRecognizing = false;
                 setTimeout(() => {
-                    status.innerText = "대기 중... (버튼을 누르세요)"; 
+                    status.innerText = "대기 중..."; 
                     btn.style.backgroundColor = "#e8f0fe"; 
                     btn.style.color = "#1a73e8";
-                    btn.innerHTML = "🎤 음성 입력 시작"; // 버튼 원상 복구
+                    btn.innerHTML = "🎤 음성 입력 시작";
                 }, 1500); 
             };
 
-            // 스페이스바 킬스위치도 그대로 유지
             document.addEventListener('keydown', (event) => {
                 if (event.code === 'Space' && isRecognizing) {
                     event.preventDefault(); 
                     recognition.stop();
-                    status.innerText = "스페이스바로 마이크 꺼짐! 텍스트 변환 중...";
                 }
             });
         </script>
@@ -182,19 +168,16 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 st.divider()
 
 # ==========================================
-# 🚀 [6] 실시간 업데이트 영역 (st.fragment의 마법!)
+# [6] 🚀 실시간 업데이트 영역 (통계 + 채팅창)
 # ==========================================
-# 💡 이 영역만 3초마다 부드럽게 새로고침 됩니다. 타이핑이 끊기지 않습니다!
 @st.fragment(run_every="3s")
 def live_chat_board():
-    # 1. AI 15초 침묵 감지 로직 (학생 화면에서만 뒤에서 조용히 작동)
     if user_role == "학생":
         last_msg_df = get_df_from_db("SELECT id, timestamp, student_name FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 1", (room_name,))
         if not last_msg_df.empty:
             last_time = datetime.strptime(last_msg_df.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
             if (datetime.now() - last_time).total_seconds() > 15 and "AI" not in last_msg_df.iloc[0]['student_name']:
                 try:
-                    # 자리 찜하기
                     conn = get_connection()
                     with conn.cursor() as c:
                         c.execute("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s) RETURNING id",
@@ -202,19 +185,16 @@ def live_chat_board():
                         inserted_id = c.fetchone()[0]
                     conn.commit()
                     
-                    # 제미나이 호출
                     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                     context = "\n".join(get_df_from_db("SELECT content FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 3", (room_name,))['content'].tolist())
                     res = genai.GenerativeModel('gemini-2.5-flash').generate_content(f"'{current_topic}' 주제로 15초 침묵 중입니다. 토론을 유도할 짧은 질문 1개를 던지세요:\n{context}")
                     
-                    # 진짜 질문으로 덮어쓰기
                     with conn.cursor() as c:
                         c.execute("UPDATE debate SET content = %s WHERE id = %s", (res.text.strip(), inserted_id))
                     conn.commit()
-                    st.rerun() # Fragment 내부에서만 부드럽게 새로고침 됨
+                    st.rerun() 
                 except: pass
 
-    # 2. 통계 및 대화 내역 불러오기
     df = get_df_from_db("SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC", (room_name,))
     
     col_stat, col_chat = st.columns([1, 2])
@@ -227,29 +207,36 @@ def live_chat_board():
             st.write("데이터 수집 중...")
             
     with col_chat:
-        st.subheader("💬 실시간 토론 현황")
+        st.subheader("💬 실시간 전체 의견")
         if not df.empty:
-            # 스크롤 박스 형태로 깔끔하게 표시
-            chat_html = "<div style='height:300px; overflow-y:auto; padding:10px; border:1px solid #ddd; border-radius:5px;'>"
             for _, row in df.iterrows():
-                bg_color = "#f0f2f6" if "AI" in row['student_name'] else ("#ffebee" if "교사" in row['student_name'] else "#e8f0fe")
-                icon = "🤖" if "AI" in row['student_name'] else ("👨‍🏫" if "교사" in row['student_name'] else "👤")
-                chat_html += f"""
-                <div style='background-color:{bg_color}; padding:10px; border-radius:10px; margin-bottom:10px;'>
-                    <div style='font-size:0.8em; color:gray; margin-bottom:5px;'>{icon} <b>{row['student_name']}</b> ({row['sentiment']}) - {row['timestamp'][11:]}</div>
-                    <div style='font-size:1em;'>{row['content']}</div>
-                </div>
-                """
-            chat_html += "</div>"
-            st.components.v1.html(chat_html, height=320)
+                is_ai = "AI" in row['student_name']
+                is_teacher = "교사" in row['student_name']
+                
+                with st.chat_message("assistant" if is_ai else "user"):
+                    # 💡 [핵심: 삭제 기능 1] 교사에게만 메시지 삭제 버튼 표시
+                    if user_role == "교사" and teacher_auth:
+                        c_text, c_btn = st.columns([9, 1])
+                        with c_text:
+                            st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp'][11:]}")
+                            st.info(row['content'])
+                        with c_btn:
+                            if st.button("❌", key=f"del_msg_{row['id']}", help="메시지 강제 삭제"):
+                                conn = get_connection()
+                                with conn.cursor() as c:
+                                    c.execute("DELETE FROM debate WHERE id = %s", (row['id'],))
+                                conn.commit()
+                                st.rerun() # 삭제 후 즉시 화면 반영
+                    else:
+                        st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp'][11:]}")
+                        st.info(row['content'])
         else:
             st.info("아직 대화가 없습니다. 첫 의견을 남겨주세요!")
 
-# 화면에 실시간 영역 실행
 live_chat_board()
 
 # ==========================================
-# [7] 교사 전용 대시보드 (입력 폼이므로 깜빡임 영향 안 받음!)
+# [7] 교사 전용 대시보드 (세특 관리 및 방 삭제)
 # ==========================================
 if user_role == "교사" and teacher_auth:
     st.divider()
@@ -299,9 +286,43 @@ if user_role == "교사" and teacher_auth:
 
     st.divider()
     st.subheader("📂 저장된 세특 기록 보관함")
-    records_df = get_df_from_db("SELECT timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
+    records_df = get_df_from_db("SELECT id, timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
+    
     if not records_df.empty:
         st.dataframe(records_df, use_container_width=True)
-        buffer_records = io.BytesIO()
-        with pd.ExcelWriter(buffer_records, engine='openpyxl') as writer: records_df.to_excel(writer, index=False)
-        st.download_button("📥 저장된 세특 전체 다운로드 (Excel)", data=buffer_records.getvalue(), file_name=f"{room_name}_세특기록.xlsx")
+        
+        # 💡 [핵심: 삭제 기능 2] 세특 선택 및 삭제
+        col_down, col_del = st.columns([1, 1])
+        with col_down:
+            buffer_records = io.BytesIO()
+            with pd.ExcelWriter(buffer_records, engine='openpyxl') as writer: 
+                # 엑셀 다운로드 시 id 열은 보기 흉하므로 제외
+                records_df.drop(columns=['id']).to_excel(writer, index=False)
+            st.download_button("📥 세특 기록 다운로드 (Excel)", data=buffer_records.getvalue(), file_name=f"{room_name}_세특.xlsx")
+            
+        with col_del:
+            del_id = st.selectbox("🗑️ 삭제할 세특의 '고유 번호(id)'를 선택하세요", records_df['id'].tolist())
+            if st.button("선택한 세특 영구 삭제"):
+                conn = get_connection()
+                with conn.cursor() as c:
+                    c.execute("DELETE FROM records WHERE id = %s", (del_id,))
+                conn.commit()
+                st.success("세특이 삭제되었습니다.")
+                st.rerun()
+    else:
+        st.info("아직 저장된 세특 기록이 없습니다.")
+
+    # 💡 [핵심: 삭제 기능 3] 토론방 전체 폭파
+    st.divider()
+    st.subheader("🚨 위험 구역 (방 관리)")
+    with st.expander("이 토론방 전체 삭제하기 (클릭 시 펼쳐짐)"):
+        st.warning(f"정말 '{room_name}' 방을 삭제하시겠습니까? (토론 내역 및 세특이 모두 날아가며 복구할 수 없습니다.)")
+        if st.button(f"네, '{room_name}' 방을 완전히 삭제합니다", type="primary"):
+            conn = get_connection()
+            with conn.cursor() as c:
+                c.execute("DELETE FROM topic WHERE room_name = %s", (room_name,))
+                c.execute("DELETE FROM debate WHERE room_name = %s", (room_name,))
+                c.execute("DELETE FROM records WHERE room_name = %s", (room_name,))
+            conn.commit()
+            st.success("방이 성공적으로 폭파되었습니다. 화면 상단(사이드바)에서 다른 방을 선택해 주세요.")
+            st.session_state['ai_result_text'] = "" # 세션 초기화
