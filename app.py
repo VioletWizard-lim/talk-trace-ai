@@ -1,17 +1,16 @@
 import streamlit as st
 import pandas as pd
 import io
-from datetime import datetime, timedelta
+from datetime import datetime
 import psycopg2
 import psycopg2.extras
 import google.generativeai as genai
-from streamlit_autorefresh import st_autorefresh # 💡 자동 새로고침용
+from streamlit_autorefresh import st_autorefresh
 
-# --- [1. ⚡ 초고속 클라우드 연결 설정] ---
+# --- [1. DB 연결] ---
 @st.cache_resource(ttl=600)
 def get_connection():
-    db_url = st.secrets["SUPABASE_URL"]
-    return psycopg2.connect(db_url)
+    return psycopg2.connect(st.secrets["SUPABASE_URL"])
 
 def init_db():
     try:
@@ -21,8 +20,7 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS records (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT)')
             c.execute('CREATE TABLE IF NOT EXISTS topic (room_name TEXT PRIMARY KEY, title TEXT, mode TEXT)')
         conn.commit()
-    except Exception as e:
-        st.error(f"🚨 DB 연결 실패: {e}"); st.stop()
+    except: pass
 
 init_db()
 
@@ -30,69 +28,62 @@ def get_df_from_db(query, params=()):
     try:
         conn = get_connection()
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
-            c.execute(query, params); data = c.fetchall()
-            return pd.DataFrame(data, columns=[desc[0] for desc in c.description]) if c.description else pd.DataFrame()
+            c.execute(query, params)
+            return pd.DataFrame(c.fetchall(), columns=[desc[0] for desc in c.description]) if c.description else pd.DataFrame()
     except: return pd.DataFrame()
 
-# --- [2. 앱 기본 설정 및 자동 새로고침] ---
+# --- [2. 앱 기본 설정 및 세션 초기화] ---
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
-# 💡 7초마다 자동으로 화면을 갱신하여 친구들의 글을 실시간으로 가져옵니다.
-st_autorefresh(interval=7000, key="datarefresh")
-
 if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
+if 'ai_result' not in st.session_state: st.session_state['ai_result'] = ""
 
-
-# --- [3. 사이드바 설정] ---
+# --- [3. 사이드바 (권한 및 💡자동새로고침 제어)] ---
 with st.sidebar:
     st.header("👤 접속 권한")
     user_role = st.radio("모드 선택", ["학생", "교사"])
     
-    # 💡 [핵심 해결책] 학생일 때만 7초 자동 새로고침 작동!
-    # 교사는 AI 세특 작성 등 업무가 끊기지 않도록 자동 갱신을 멈춥니다.
+    # 🚨 [가장 중요한 해결책] 학생일 때만 자동 새로고침! 교사는 세특 작성 중 끊김 방지!
     if user_role == "학생":
-        from streamlit_autorefresh import st_autorefresh
         st_autorefresh(interval=7000, key="student_refresh")
-        st.caption("🔄 실시간 동기화 켜짐 (7초)")
+        st.caption("🔄 학생 모드: 7초 실시간 동기화 켜짐")
     else:
-        st.caption("⏸️ 세특 작업 보호를 위해 자동 동기화 꺼짐")
+        st.caption("⏸️ 교사 모드: 세특 작성 보호를 위해 동기화 꺼짐")
 
-    # (이 아래는 기존 코드와 동일합니다)
     rooms_df = get_df_from_db("SELECT DISTINCT room_name FROM topic")
     existing_rooms = rooms_df['room_name'].tolist() if not rooms_df.empty else []
+    
     room_name = ""; teacher_auth = False
     if user_role == "교사":
         if st.text_input("교사 인증 암호", type="password") == "admin":
             teacher_auth = True; st.success("인증 성공!")
             room_opt = st.radio("방 선택", ["기존 방 선택", "새 방 만들기"])
             room_name = st.selectbox("목록", existing_rooms) if room_opt == "기존 방 선택" and existing_rooms else st.text_input("방 이름", value="정보_토론방")
-    else: room_name = st.text_input("🏠 접속할 방 이름", value="정보_토론방")
+    else: 
+        room_name = st.text_input("🏠 접속할 방 이름", value="정보_토론방")
+        
     student_name = st.text_input("내 이름", value="익명" if user_role == "학생" else "교사")
 
-# --- [4. 토론 설정 및 AI 퍼실리테이터 로직] ---
+# --- [4. 토론 설정 및 AI 퍼실리테이터] ---
 topic_df = get_df_from_db("SELECT title, mode FROM topic WHERE room_name = %s", (room_name,))
-current_topic = topic_df.iloc[0]['title'] if not topic_df.empty else "자유 주제로 대화합시다."
+current_topic = topic_df.iloc[0]['title'] if not topic_df.empty else "자유 주제"
 current_mode = topic_df.iloc[0]['mode'] if not topic_df.empty else "⚔️ 찬반 토론"
 
-# 💡 AI 중복 응답 방지 강화 로직
-last_msg_df = get_df_from_db("SELECT timestamp, student_name FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 1", (room_name,))
-if not last_msg_df.empty:
-    last_time = datetime.strptime(last_msg_df.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
-    time_diff = (datetime.now() - last_time).total_seconds()
-    # 15초 경과 & 마지막이 AI가 아닐 때만 실행
-    if time_diff > 15 and "AI" not in last_msg_df.iloc[0]['student_name']:
-        try:
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            recent_msgs = get_df_from_db("SELECT content FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 3", (room_name,))
-            context = "\n".join(recent_msgs['content'].tolist())
-            prompt = f"주제 '{current_topic}'에 대해 학생들이 침묵 중입니다. 토론을 활성화할 예리한 질문을 1개만 짧게 던지세요."
-            response = model.generate_content(prompt)
-            conn = get_connection()
-            with conn.cursor() as c:
-                c.execute("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
-                          (room_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "🤖 AI 조력자", response.text.strip(), "❓ 질문"))
-            conn.commit(); st.rerun()
-        except: pass
+if user_role == "학생":
+    last_msg_df = get_df_from_db("SELECT timestamp, student_name FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 1", (room_name,))
+    if not last_msg_df.empty:
+        last_time = datetime.strptime(last_msg_df.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
+        if (datetime.now() - last_time).total_seconds() > 15 and "AI" not in last_msg_df.iloc[0]['student_name']:
+            try:
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                recent_msgs = get_df_from_db("SELECT content FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 3", (room_name,))
+                context = "\n".join(recent_msgs['content'].tolist())
+                res = genai.GenerativeModel('gemini-2.5-flash').generate_content(f"'{current_topic}' 토론이 조용합니다. 예리한 질문 1개만 던지세요:\n{context}")
+                conn = get_connection()
+                with conn.cursor() as c:
+                    c.execute("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
+                              (room_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "🤖 AI 조력자", res.text.strip(), "❓ 질문"))
+                conn.commit(); st.rerun()
+            except: pass
 
 # --- [5. 메인 화면] ---
 st.title(f"🎙️ Talk-Trace AI [{room_name}]")
@@ -103,9 +94,8 @@ with col1:
     st.subheader("🗣️ 내 의견 작성")
     user_input = st.text_area("의견을 입력하세요", key=f"in_{st.session_state['reset_key']}", height=100)
     
-    # 🎙️ 음성인식 버튼 복구 (HTML/JS)
     st.components.v1.html("""
-        <button id="stt-btn" style="width:100%; padding:10px; border-radius:5px; border:none; background:#f0f2f6; cursor:pointer;">🎤 음성 인식 시작 (말씀하세요)</button>
+        <button id="stt-btn" style="width:100%; padding:10px; border-radius:5px; border:none; background:#f0f2f6; cursor:pointer;">🎤 음성 인식 (말씀하세요)</button>
         <script>
             const btn = document.getElementById('stt-btn');
             const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
@@ -113,10 +103,10 @@ with col1:
             btn.onclick = () => { recognition.start(); btn.style.background = '#ff4b4b'; btn.innerText = '듣고 있어요...'; };
             recognition.onresult = (e) => {
                 alert("인식 결과: " + e.results[0][0].transcript + "\\n복사해서 의견란에 붙여넣어 주세요!");
-                btn.style.background = '#f0f2f6'; btn.innerText = '🎤 음성 인식 시작 (말씀하세요)';
+                btn.style.background = '#f0f2f6'; btn.innerText = '🎤 음성 인식 (말씀하세요)';
             };
         </script>""", height=60)
-    
+        
     opts = ["🔵 찬성", "🔴 반대"] if current_mode == "⚔️ 찬반 토론" else ["💡 아이디어", "➕ 보충", "❓ 질문"]
     sentiment = st.radio("성격", opts, horizontal=True)
     if st.button("의견 제출", use_container_width=True):
@@ -143,79 +133,52 @@ if not df.empty:
             st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp']}")
             st.info(row['content'])
 
-# --- [6. 교사 전용 도구 (AI 세특 생성 및 보관함)] ---
+# --- [6. 교사 전용 도구 (세특 끊김 방지 완벽 적용!)] ---
 if user_role == "교사" and teacher_auth:
-    st.divider()
-    st.header("👨‍🏫 교사 관리 대시보드")
-    
-    # 💡 세특 결과를 화면에 계속 띄워두기 위한 세션 상태
-    if 'ai_result' not in st.session_state:
-        st.session_state['ai_result'] = ""
-        
+    st.divider(); st.header("👨‍🏫 교사 관리 대시보드")
     col3, col4 = st.columns([1, 1])
     
     with col3:
-        st.subheader("📥 활동 데이터 다운로드")
         buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False)
-        st.download_button("전체 활동 로그 다운로드 (Excel)", data=buffer.getvalue(), file_name=f"{room_name}_log.xlsx")
-        
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer: df.to_excel(writer, index=False)
+        st.download_button("📥 전체 로그 다운로드", data=buffer.getvalue(), file_name=f"{room_name}_log.xlsx")
+        # 교사는 자동 갱신이 꺼져있으므로 수동 갱신 버튼 제공
+        if st.button("🔄 학생들 새 의견 불러오기"): st.rerun()
+    
     with col4:
         st.subheader("🤖 AI 세특 초안 생성")
         student_list = df[~df['student_name'].isin(['교사', '익명', '🤖 AI 조력자'])]['student_name'].unique()
-        
         if len(student_list) > 0:
-            sel_std = st.selectbox("분석할 학생을 선택하세요", student_list)
-            
-            # 버튼을 누르면 AI가 생성하고 DB에 저장!
+            sel_std = st.selectbox("학생 선택", student_list)
             if st.button(f"'{sel_std}' AI 세특 생성 🪄"):
-                with st.spinner("Gemini AI가 분석 중입니다..."):
+                with st.spinner("Gemini AI 분석 중... (절대 안 끊깁니다!)"):
                     try:
                         std_hist = "\n".join(df[df['student_name'] == sel_std]['content'].tolist())
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        res = genai.GenerativeModel('gemini-2.5-flash').generate_content(f"정보 교사로서 '{current_topic}' 토론에 참여한 '{sel_std}' 학생의 세특 300자:\n{std_hist}")
                         
-                        prompt = f"당신은 정보 교사입니다. '{current_topic}' 토론에서 '{sel_std}' 학생의 발언을 분석해 세특 300자를 작성하세요:\n{std_hist}"
-                        res = model.generate_content(prompt)
-                        
-                        # 1. 화면 유지를 위해 세션에 저장
                         st.session_state['ai_result'] = res.text
                         
-                        # 2. DB에 기록 (방이름, 시간, 학생이름, 내용 순서 완벽 적용!)
                         conn = get_connection()
                         with conn.cursor() as c:
-                            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             c.execute("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
-                                      (room_name, now, sel_std, res.text))
+                                      (room_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), sel_std, res.text))
                         conn.commit()
-                        
-                        # 3. 보관함 표에 즉시 나타나도록 강제 새로고침
-                        st.rerun()
+                        st.success("보관함에 자동 저장되었습니다!")
+                        st.rerun() # 저장 직후 아래 표에 반영하기 위해 안전하게 새로고침
                         
                     except Exception as e:
-                        st.error(f"오류 발생: {e}")
+                        st.error(f"오류: {e}")
             
-            # 💡 새로고침이 되더라도 세션에 값이 있으면 텍스트 박스를 띄워줍니다.
             if st.session_state['ai_result']:
-                st.success("✅ AI 세특 생성이 완료되어 보관함에 자동 저장되었습니다.")
-                st.text_area("AI 생성 결과 (수정 후 복사하여 사용하세요)", value=st.session_state['ai_result'], height=250)
-                
+                st.text_area("생성 결과 (복사하세요)", value=st.session_state['ai_result'], height=200)
         else:
-            st.info("실명으로 참여한 학생이 없습니다.")
+            st.info("실명 참여 학생이 없습니다.")
 
-    # --- [보관함 영역] ---
-    st.divider()
     st.subheader("📂 세특 보관함")
-    
-    # DB에서 방금 저장한 내용까지 싹 다 불러오기
     rec_df = get_df_from_db("SELECT timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
-    
     if not rec_df.empty:
         st.dataframe(rec_df, use_container_width=True)
         buf_rec = io.BytesIO()
-        with pd.ExcelWriter(buf_rec, engine='openpyxl') as writer:
-            rec_df.to_excel(writer, index=False)
-        st.download_button("📥 세특 기록 전체 다운로드 (Excel)", data=buf_rec.getvalue(), file_name=f"{room_name}_세특기록.xlsx")
-    else:
-        st.info("아직 저장된 세특 기록이 없습니다. 위에서 생성하면 여기에 차곡차곡 쌓입니다!")
+        with pd.ExcelWriter(buf_rec, engine='openpyxl') as writer: rec_df.to_excel(writer, index=False)
+        st.download_button("📥 세특 기록 다운로드", data=buf_rec.getvalue(), file_name=f"{room_name}_세특.xlsx")
