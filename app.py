@@ -178,14 +178,19 @@ if user_role == "교사" and teacher_auth:
                         res = model.generate_content(prompt)
                         
                         # 💡 핵심: 새로고침 되어도 안 사라지게 세션 상태에 저장!
+                        # 💡 핵심: 세션 상태에 저장하여 화면 유지
                         st.session_state['ai_result_text'] = res.text
                         
-                        # 생성과 동시에 DB에도 일단 저장
+                        # 💡 [버그 수정 완료] room_name과 시간을 올바른 순서로 넣습니다!
                         conn = get_connection()
                         with conn.cursor() as c:
+                            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            # 순서: room_name 먼저, 그다음이 now(시간)
                             c.execute("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
-                                      (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), room_name, sel_std, res.text))
+                                      (room_name, now, sel_std, res.text))
                         conn.commit()
+                        # 표에 방금 저장한 데이터가 즉시 뜨도록 화면을 한 번 새로고침 합니다.
+                        st.rerun()
                         st.toast(f"{sel_std} 학생의 기록이 보관함에 자동 저장되었습니다.")
                     except Exception as e:
                         st.error(f"오류 발생: {e}")
