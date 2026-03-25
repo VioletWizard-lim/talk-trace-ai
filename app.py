@@ -143,23 +143,24 @@ if not df.empty:
             st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp']}")
             st.info(row['content'])
 
-# --- [6. 교사 전용 도구 (새로고침에도 안전한 버전)] ---
+# --- [6. 교사 전용 도구 (AI 세특 생성 및 보관함)] ---
 if user_role == "교사" and teacher_auth:
     st.divider()
     st.header("👨‍🏫 교사 관리 대시보드")
     
-    # 💡 세션 상태에 AI 결과 저장용 변수 초기화
-    if 'ai_result_text' not in st.session_state:
-        st.session_state['ai_result_text'] = ""
-
+    # 💡 세특 결과를 화면에 계속 띄워두기 위한 세션 상태
+    if 'ai_result' not in st.session_state:
+        st.session_state['ai_result'] = ""
+        
     col3, col4 = st.columns([1, 1])
+    
     with col3:
         st.subheader("📥 활동 데이터 다운로드")
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             df.to_excel(writer, index=False)
-        st.download_button("전체 로그 다운로드 (Excel)", data=buffer.getvalue(), file_name=f"{room_name}_log.xlsx")
-    
+        st.download_button("전체 활동 로그 다운로드 (Excel)", data=buffer.getvalue(), file_name=f"{room_name}_log.xlsx")
+        
     with col4:
         st.subheader("🤖 AI 세특 초안 생성")
         student_list = df[~df['student_name'].isin(['교사', '익명', '🤖 AI 조력자'])]['student_name'].unique()
@@ -167,6 +168,7 @@ if user_role == "교사" and teacher_auth:
         if len(student_list) > 0:
             sel_std = st.selectbox("분석할 학생을 선택하세요", student_list)
             
+            # 버튼을 누르면 AI가 생성하고 DB에 저장!
             if st.button(f"'{sel_std}' AI 세특 생성 🪄"):
                 with st.spinner("Gemini AI가 분석 중입니다..."):
                     try:
@@ -177,40 +179,43 @@ if user_role == "교사" and teacher_auth:
                         prompt = f"당신은 정보 교사입니다. '{current_topic}' 토론에서 '{sel_std}' 학생의 발언을 분석해 세특 300자를 작성하세요:\n{std_hist}"
                         res = model.generate_content(prompt)
                         
-                        # 💡 핵심: 새로고침 되어도 안 사라지게 세션 상태에 저장!
-                        # 💡 핵심: 세션 상태에 저장하여 화면 유지
-                        st.session_state['ai_result_text'] = res.text
+                        # 1. 화면 유지를 위해 세션에 저장
+                        st.session_state['ai_result'] = res.text
                         
-                        # 💡 [버그 수정 완료] room_name과 시간을 올바른 순서로 넣습니다!
+                        # 2. DB에 기록 (방이름, 시간, 학생이름, 내용 순서 완벽 적용!)
                         conn = get_connection()
                         with conn.cursor() as c:
                             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            # 순서: room_name 먼저, 그다음이 now(시간)
                             c.execute("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
                                       (room_name, now, sel_std, res.text))
                         conn.commit()
-                        # 표에 방금 저장한 데이터가 즉시 뜨도록 화면을 한 번 새로고침 합니다.
+                        
+                        # 3. 보관함 표에 즉시 나타나도록 강제 새로고침
                         st.rerun()
-                        st.toast(f"{sel_std} 학생의 기록이 보관함에 자동 저장되었습니다.")
+                        
                     except Exception as e:
                         st.error(f"오류 발생: {e}")
-
-            # 💡 새로고침이 되어도 'ai_result_text'에 값이 있으면 화면에 계속 보여줍니다.
-            if st.session_state['ai_result_text']:
-                st.success("✅ AI 세특 생성이 완료되었습니다. (7초마다 자동 갱신되어도 유지됩니다)")
-                # text_area의 value를 세션 상태 값으로 고정
-                st.text_area("AI 생성 결과 (복사하여 사용하세요)", 
-                             value=st.session_state['ai_result_text'], 
-                             height=250,
-                             key="final_ai_output") 
+            
+            # 💡 새로고침이 되더라도 세션에 값이 있으면 텍스트 박스를 띄워줍니다.
+            if st.session_state['ai_result']:
+                st.success("✅ AI 세특 생성이 완료되어 보관함에 자동 저장되었습니다.")
+                st.text_area("AI 생성 결과 (수정 후 복사하여 사용하세요)", value=st.session_state['ai_result'], height=250)
+                
         else:
             st.info("실명으로 참여한 학생이 없습니다.")
 
-    # [보관함 영역은 동일]
+    # --- [보관함 영역] ---
+    st.divider()
     st.subheader("📂 세특 보관함")
+    
+    # DB에서 방금 저장한 내용까지 싹 다 불러오기
     rec_df = get_df_from_db("SELECT timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
+    
     if not rec_df.empty:
         st.dataframe(rec_df, use_container_width=True)
         buf_rec = io.BytesIO()
-        with pd.ExcelWriter(buf_rec, engine='openpyxl') as writer: rec_df.to_excel(writer, index=False)
-        st.download_button("📥 세특 기록 다운로드", data=buf_rec.getvalue(), file_name=f"{room_name}_세특.xlsx")
+        with pd.ExcelWriter(buf_rec, engine='openpyxl') as writer:
+            rec_df.to_excel(writer, index=False)
+        st.download_button("📥 세특 기록 전체 다운로드 (Excel)", data=buf_rec.getvalue(), file_name=f"{room_name}_세특기록.xlsx")
+    else:
+        st.info("아직 저장된 세특 기록이 없습니다. 위에서 생성하면 여기에 차곡차곡 쌓입니다!")
