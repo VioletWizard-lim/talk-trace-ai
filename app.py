@@ -94,19 +94,50 @@ with col_stt:
     st.components.v1.html(
         """
         <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer;">
-            🎤 음성 입력
+            🎤 음성 입력 시작
         </button>
-        <p id="status" style="font-size:11px; color:gray; text-align:center; margin-top:5px;">대기 중...</p>
+        <p id="status" style="font-size:11px; color:gray; text-align:center; margin-top:5px;">대기 중... (버튼을 누르세요)</p>
+        
         <script>
             const btn = document.getElementById('stt-btn');
             const status = document.getElementById('status');
             const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
             recognition.lang = 'ko-KR';
-            btn.onclick = () => { recognition.start(); status.innerText = "듣는 중..."; btn.style.backgroundColor = "#ff4b4b"; btn.style.color = "white"; };
+            
+            let isRecognizing = false;
+
+            btn.onclick = () => { 
+                if (!isRecognizing) {
+                    recognition.start(); 
+                }
+            };
+
+            recognition.onstart = () => {
+                isRecognizing = true;
+                status.innerText = "듣는 중... (끝내려면 스페이스바를 누르세요!)"; 
+                btn.style.backgroundColor = "#ff4b4b"; 
+                btn.style.color = "white"; 
+            };
+
             recognition.onresult = (e) => {
                 alert("인식 내용: " + e.results[0][0].transcript + "\\n\\n복사해서 의견란에 붙여넣으세요!");
-                status.innerText = "완료!"; btn.style.backgroundColor = "#e8f0fe"; btn.style.color = "#1a73e8";
             };
+
+            recognition.onend = () => {
+                isRecognizing = false;
+                status.innerText = "대기 중... (버튼을 누르세요)"; 
+                btn.style.backgroundColor = "#e8f0fe"; 
+                btn.style.color = "#1a73e8";
+            };
+
+            // 💡 킬스위치(Kill-Switch): 스페이스바를 누르면 즉시 강제 종료!
+            document.addEventListener('keydown', (event) => {
+                if (event.code === 'Space' && isRecognizing) {
+                    event.preventDefault(); // 스페이스바 누를 때 화면 밑으로 내려가는 것 방지
+                    recognition.stop();
+                    status.innerText = "스페이스바로 마이크 꺼짐!";
+                }
+            });
         </script>
         """, height=120
     )
