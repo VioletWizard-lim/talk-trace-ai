@@ -103,13 +103,10 @@ with col_stt:
             const status = document.getElementById('status');
             const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
             recognition.lang = 'ko-KR';
-            
             let isRecognizing = false;
 
             btn.onclick = () => { 
-                if (!isRecognizing) {
-                    recognition.start(); 
-                }
+                if (!isRecognizing) recognition.start(); 
             };
 
             recognition.onstart = () => {
@@ -119,23 +116,45 @@ with col_stt:
                 btn.style.color = "white"; 
             };
 
-            recognition.onresult = (e) => {
-                alert("인식 내용: " + e.results[0][0].transcript + "\\n\\n복사해서 의견란에 붙여넣으세요!");
+            recognition.onresult = (event) => {
+                const text = event.results[0][0].transcript;
+                
+                // 💡 [핵심 마법] 투명 유리벽을 뚫고 부모 창(스트림릿 메인 화면)에 접근!
+                const parentDoc = window.parent.document;
+                const textArea = parentDoc.querySelector('textarea');
+                
+                if (textArea) {
+                    // 기존에 적혀있던 글씨 뒤에 띄어쓰기 하고 붙여넣기
+                    const currentText = textArea.value;
+                    const newText = currentText ? currentText + " " + text : text;
+                    
+                    // 스트림릿(React)이 값이 바뀌었다는 걸 눈치채게 강제로 이벤트 발생시키기
+                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+                    nativeInputValueSetter.call(textArea, newText);
+                    textArea.dispatchEvent(new Event('input', { bubbles: true }));
+                    
+                    status.innerText = "텍스트 창에 입력 완료!";
+                } else {
+                    // 혹시라도 텍스트창을 못 찾으면 최후의 수단으로 알림창 띄움
+                    alert("인식 내용: " + text);
+                }
             };
 
             recognition.onend = () => {
                 isRecognizing = false;
-                status.innerText = "대기 중... (버튼을 누르세요)"; 
-                btn.style.backgroundColor = "#e8f0fe"; 
-                btn.style.color = "#1a73e8";
+                setTimeout(() => {
+                    status.innerText = "대기 중... (버튼을 누르세요)"; 
+                    btn.style.backgroundColor = "#e8f0fe"; 
+                    btn.style.color = "#1a73e8";
+                }, 1500); // 1.5초 뒤에 버튼 색깔 원래대로 복구
             };
 
-            // 💡 킬스위치(Kill-Switch): 스페이스바를 누르면 즉시 강제 종료!
+            // 💡 킬스위치: 스페이스바 누르면 즉시 강제 종료!
             document.addEventListener('keydown', (event) => {
                 if (event.code === 'Space' && isRecognizing) {
-                    event.preventDefault(); // 스페이스바 누를 때 화면 밑으로 내려가는 것 방지
+                    event.preventDefault(); 
                     recognition.stop();
-                    status.innerText = "스페이스바로 마이크 꺼짐!";
+                    status.innerText = "스페이스바로 마이크 꺼짐! 입력 중...";
                 }
             });
         </script>
