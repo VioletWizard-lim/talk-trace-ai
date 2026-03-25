@@ -41,10 +41,22 @@ st_autorefresh(interval=7000, key="datarefresh")
 
 if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
 
+
 # --- [3. 사이드바 설정] ---
 with st.sidebar:
     st.header("👤 접속 권한")
     user_role = st.radio("모드 선택", ["학생", "교사"])
+    
+    # 💡 [핵심 해결책] 학생일 때만 7초 자동 새로고침 작동!
+    # 교사는 AI 세특 작성 등 업무가 끊기지 않도록 자동 갱신을 멈춥니다.
+    if user_role == "학생":
+        from streamlit_autorefresh import st_autorefresh
+        st_autorefresh(interval=7000, key="student_refresh")
+        st.caption("🔄 실시간 동기화 켜짐 (7초)")
+    else:
+        st.caption("⏸️ 세특 작업 보호를 위해 자동 동기화 꺼짐")
+
+    # (이 아래는 기존 코드와 동일합니다)
     rooms_df = get_df_from_db("SELECT DISTINCT room_name FROM topic")
     existing_rooms = rooms_df['room_name'].tolist() if not rooms_df.empty else []
     room_name = ""; teacher_auth = False
