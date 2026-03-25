@@ -209,27 +209,29 @@ def live_chat_board():
     with col_chat:
         st.subheader("💬 실시간 전체 의견")
         if not df.empty:
-            for _, row in df.iterrows():
-                is_ai = "AI" in row['student_name']
-                is_teacher = "교사" in row['student_name']
-                
-                with st.chat_message("assistant" if is_ai else "user"):
-                    # 💡 [핵심: 삭제 기능 1] 교사에게만 메시지 삭제 버튼 표시
-                    if user_role == "교사" and teacher_auth:
-                        c_text, c_btn = st.columns([9, 1])
-                        with c_text:
+            # 💡 [핵심 해결책] 높이를 400px로 고정하고, 넘치면 알아서 스크롤이 생기게 만듭니다!
+            with st.container(height=400):
+                for _, row in df.iterrows():
+                    is_ai = "AI" in row['student_name']
+                    is_teacher = "교사" in row['student_name']
+                    
+                    with st.chat_message("assistant" if is_ai else "user"):
+                        # 삭제 기능이 포함된 채팅 UI 렌더링
+                        if user_role == "교사" and teacher_auth:
+                            c_text, c_btn = st.columns([9, 1])
+                            with c_text:
+                                st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp'][11:]}")
+                                st.info(row['content'])
+                            with c_btn:
+                                if st.button("❌", key=f"del_msg_{row['id']}", help="메시지 강제 삭제"):
+                                    conn = get_connection()
+                                    with conn.cursor() as c:
+                                        c.execute("DELETE FROM debate WHERE id = %s", (row['id'],))
+                                    conn.commit()
+                                    st.rerun() 
+                        else:
                             st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp'][11:]}")
                             st.info(row['content'])
-                        with c_btn:
-                            if st.button("❌", key=f"del_msg_{row['id']}", help="메시지 강제 삭제"):
-                                conn = get_connection()
-                                with conn.cursor() as c:
-                                    c.execute("DELETE FROM debate WHERE id = %s", (row['id'],))
-                                conn.commit()
-                                st.rerun() # 삭제 후 즉시 화면 반영
-                    else:
-                        st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp'][11:]}")
-                        st.info(row['content'])
         else:
             st.info("아직 대화가 없습니다. 첫 의견을 남겨주세요!")
 
