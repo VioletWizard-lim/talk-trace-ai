@@ -83,30 +83,36 @@ if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] 
 if 'joined' not in st.session_state: st.session_state['joined'] = False # 대기실 로직용
 
 # ==========================================
-# [3] 사이드바 설정 (방 접속 권한)
+# [3] 사이드바 설정 (공백 기본값 적용!)
 # ==========================================
 with st.sidebar:
     st.header("👤 접속 권한")
     user_role = st.radio("모드 선택", ["학생", "교사"])
     st.divider()
 
-    # 💡 [핵심 수정] topic 테이블과 debate 테이블 양쪽에서 방 이름을 모두 긁어옵니다!
+    # topic 테이블과 debate 테이블 양쪽에서 방 이름을 긁어옵니다.
     rooms_df = get_df_from_db("SELECT DISTINCT room_name FROM topic UNION SELECT DISTINCT room_name FROM debate")
     existing_rooms = rooms_df['room_name'].tolist() if not rooms_df.empty else []
-    room_name = ""; teacher_auth = False
+    
+    room_name = ""
+    teacher_auth = False
     
     if user_role == "교사":
         pw = st.text_input("교사 인증 암호", type="password")
         if pw == "admin":
             teacher_auth = True; st.success("인증 성공!")
             room_opt = st.radio("방 선택", ["기존 방 선택", "새 방 만들기"])
-            room_name = st.selectbox("토론방 목록", existing_rooms) if room_opt == "기존 방 선택" and existing_rooms else st.text_input("방 이름 입력", value="정보_토론방")
+            if room_opt == "기존 방 선택" and existing_rooms:
+                room_name = st.selectbox("토론방 목록", existing_rooms)
+            else:
+                # 💡 [핵심] 기본값을 공백("")으로 바꿨습니다!
+                room_name = st.text_input("새로 만들 방 이름 입력", value="") 
     else:
-        room_name = st.text_input("🏠 접속할 방 이름", value="정보_토론방")
+        # 💡 [핵심] 학생 접속 화면도 기본값을 공백("")으로 바꿨습니다!
+        room_name = st.text_input("🏠 접속할 방 이름 (정확히 입력)", value="")
         
     student_name = st.text_input("내 이름", value="익명" if user_role == "학생" else "교사")
     
-    # 방 입장 후 퇴장 버튼
     if st.session_state['joined']:
         st.divider()
         if st.button("🚪 방 나가기 (대기실로)"):
@@ -114,7 +120,7 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# [4] 🛑 대기실 (Lobby) 로직 (학생들의 무단 접근 방지!)
+# [4] 🛑 대기실 (빈칸일 때 입장 불가 방어막 추가!)
 # ==========================================
 if not st.session_state['joined']:
     st.title("🚪 Talk-Trace AI 대기실")
@@ -122,11 +128,15 @@ if not st.session_state['joined']:
     
     if user_role == "교사" and not teacher_auth:
         st.warning("🚨 교사 인증 암호를 입력해야 입장할 수 있습니다.")
+    elif not room_name.strip():
+        # 💡 [핵심] 방 이름이 빈칸이면 입장 버튼 대신 경고창을 띄웁니다!
+        st.error("🚨 접속할 방 이름을 먼저 입력(또는 선택)해 주세요.")
     else:
-        if st.button("🚀 방 입장하기", use_container_width=True, type="primary"):
+        # 방 이름이 제대로 입력되었을 때만 입장 버튼이 짠! 하고 나타납니다.
+        if st.button(f"🚀 '{room_name}' 방 입장하기", use_container_width=True, type="primary"):
             st.session_state['joined'] = True
             st.rerun()
-    st.stop() # 💡 여기서 멈춤! 입장 전에는 채팅창이나 DB 폴링이 절대 실행되지 않음!
+    st.stop()
 
 # ==========================================
 # [5] 메인 화면 (방 입장 완료 후)
