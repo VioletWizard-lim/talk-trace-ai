@@ -66,6 +66,35 @@ def init_db():
 
 init_db()
 
+# 💡 [핵심] 25명이 동시에 들어와도 무조건 1명만 통과시키는 절대 자물쇠 로직!
+def insert_ai_placeholder_atomic(room_name):
+    conn = None
+    try:
+        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        with conn.cursor() as c:
+            # 1. 은행 금고 잠금! (이 작업이 끝날 때까지 다른 24명은 밖에서 강제 대기)
+            c.execute("SELECT pg_advisory_xact_lock(9999)")
+            
+            # 2. 최근 10초 이내에 AI가 글 쓴 적 있는지 꼼꼼히 확인
+            from datetime import timedelta
+            ten_secs_ago = (datetime.now() - timedelta(seconds=10)).strftime("%Y-%m-%d %H:%M:%S")
+            c.execute("SELECT 1 FROM debate WHERE room_name = %s AND student_name LIKE '%%AI%%' AND timestamp > %s", (room_name, ten_secs_ago))
+            
+            if c.fetchone():
+                return None # 이미 다른 1등 친구가 찜했음! 난 포기.
+                
+            # 3. 아무도 없으면 드디어 내가 찜!
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            c.execute("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                      (room_name, now_str, "🤖 AI 조력자", "토론 질문 생성 중...", "❓ 질문"))
+            inserted_id = c.fetchone()[0]
+            conn.commit() # 커밋되는 순간 자물쇠가 스르륵 풀림
+            return inserted_id
+    except Exception as e:
+        return None
+    finally:
+        if conn is not None: conn.close()
+
 # ==========================================
 # [2] 앱 기본 설정 및 세션 초기화
 # ==========================================
@@ -246,7 +275,7 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 st.divider()
 
 # ==========================================
-# [6] 🚀 실시간 업데이트 영역 (🔥 이중 잠금장치 완벽 패치)
+# [6] 🚀 실시간 업데이트 영역 (🔥 이중 잠금장치 & 강제 1줄 자르기 적용)
 # ==========================================
 @st.fragment(run_every="5s")
 def live_chat_board():
@@ -255,48 +284,31 @@ def live_chat_board():
         if not last_msg_df.empty:
             last_time = datetime.strptime(last_msg_df.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
             
+            # 마지막 대화 후 15초가 지났고, 마지막 발언자가 AI가 아닐 때
             if (datetime.now() - last_time).total_seconds() > 15 and "AI" not in last_msg_df.iloc[0]['student_name']:
                 try:
-                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    # 절대 자물쇠를 통과한 '단 1명'의 화면만 inserted_id를 받습니다.
+                    inserted_id = insert_ai_placeholder_atomic(room_name)
                     
-                    # 💡 [방어 1: DB 원자적 락] 최근 5초 이내에 AI가 이미 생성된 적이 '없을 때만' 생성 성공!
-                    from datetime import timedelta
-                    five_secs_ago = (datetime.now() - timedelta(seconds=5)).strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    lock_query = """
-                    INSERT INTO debate (room_name, timestamp, student_name, content, sentiment)
-                    SELECT %s, %s, %s, %s, %s
-                    WHERE NOT EXISTS (
-                        SELECT 1 FROM debate 
-                        WHERE room_name = %s AND student_name LIKE '%%AI%%' AND timestamp > %s
-                    ) RETURNING id;
-                    """
-                    
-                    inserted_id = execute_insert_returning_id(lock_query, 
-                        (room_name, now_str, "🤖 AI 조력자", "토론 질문 생성 중...", "❓ 질문", room_name, five_secs_ago))
-                    
-                    # 25명 중 DB 락을 뚫고 온 '오직 1명'의 화면에서만 제미나이를 호출합니다.
                     if inserted_id:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                         context = "\n".join(get_df_from_db("SELECT content FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 3", (room_name,))['content'].tolist())
                         
-                        # 💡 [방어 2: 멱살 프롬프트] 제미나이가 절대 딴소리 못하게 엄격한 룰 부여!
                         prompt = f"""
                         당신은 고등학교 토론 조력자입니다. '{current_topic}' 주제로 15초 침묵 중입니다. 
                         최근 대화: {context}
-                        
-                        [엄격한 규칙]
-                        1. 절대로 여러 개의 질문을 나열하지 마세요. (1. 2. 3. 등 번호 매기기 절대 금지)
-                        2. 부연 설명 없이, 오직 단 1개의 짧고 예리한 질문만 출력하세요.
-                        3. 학생들의 호기심을 자극하는 문장 딱 1개만 작성하세요.
+                        [엄격한 규칙] 학생들의 호기심을 자극하는 짧은 질문을 딱 1문장만 작성하세요. 줄바꿈이나 번호 매기기는 절대 금지입니다.
                         """
-                        
                         res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                        execute_query("UPDATE debate SET content = %s WHERE id = %s", (res.text.strip(), inserted_id))
+                        
+                        # 💡 [투머치토커 방지] 제미나이가 말을 길게 해도 첫 번째 줄만 강제로 잘라냅니다!
+                        ai_final_text = res.text.strip().split('\n')[0] 
+                        
+                        execute_query("UPDATE debate SET content = %s WHERE id = %s", (ai_final_text, inserted_id))
                         st.rerun() 
                 except: pass
 
-    # --- (이 아래 통계 및 채팅창 UI 부분은 기존 코드와 동일하게 유지) ---
+    # --- 데이터 불러오기 및 UI 렌더링 ---
     df = get_df_from_db("SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC", (room_name,))
     
     col_stat, col_chat = st.columns([1, 2])
@@ -315,6 +327,7 @@ def live_chat_board():
                 for _, row in df.iterrows():
                     is_ai = "AI" in row['student_name']
                     with st.chat_message("assistant" if is_ai else "user"):
+                        # 교사 모드일 때만 삭제 버튼 표시
                         if user_role == "교사" and teacher_auth:
                             c_text, c_btn = st.columns([9, 1])
                             with c_text:
@@ -330,6 +343,7 @@ def live_chat_board():
         else:
             st.info("아직 대화가 없습니다. 첫 의견을 남겨주세요!")
 
+# 함수 실행
 live_chat_board()
 
 # ==========================================
