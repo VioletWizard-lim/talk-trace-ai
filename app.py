@@ -24,6 +24,9 @@ def init_db():
                 c.execute('CREATE TABLE IF NOT EXISTS debate (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT, sentiment TEXT)')
                 c.execute('CREATE TABLE IF NOT EXISTS records (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT)')
                 c.execute('CREATE TABLE IF NOT EXISTS topic (room_name TEXT PRIMARY KEY, title TEXT, mode TEXT)')
+                
+                # 💡 [핵심 추가] '정보_토론방'을 기본 방으로 DB에 강제로 만들어 둡니다!
+                c.execute("INSERT INTO topic (room_name, title, mode) VALUES ('정보_토론방', '자유 주제로 대화해 봅시다.', '⚔️ 찬반 토론') ON CONFLICT (room_name) DO NOTHING")
             conn.commit()
         finally:
             db_pool.putconn(conn)
@@ -87,7 +90,8 @@ with st.sidebar:
     user_role = st.radio("모드 선택", ["학생", "교사"])
     st.divider()
 
-    rooms_df = get_df_from_db("SELECT DISTINCT room_name FROM topic")
+    # 💡 [핵심 수정] topic 테이블과 debate 테이블 양쪽에서 방 이름을 모두 긁어옵니다!
+    rooms_df = get_df_from_db("SELECT DISTINCT room_name FROM topic UNION SELECT DISTINCT room_name FROM debate")
     existing_rooms = rooms_df['room_name'].tolist() if not rooms_df.empty else []
     room_name = ""; teacher_auth = False
     
