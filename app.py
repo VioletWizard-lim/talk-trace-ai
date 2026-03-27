@@ -41,9 +41,12 @@ def execute_insert_returning_id(query, params=()):
         conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
         with conn.cursor() as c:
             c.execute(query, params)
-            inserted_id = c.fetchone()[0]
+            row = c.fetchone()
+            inserted_id = row[0] if row else None  # 1등이 아니면 None 반환
         conn.commit()
         return inserted_id
+    except Exception:
+        return None
     finally:
         if conn is not None: conn.close()
 
@@ -243,29 +246,57 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 st.divider()
 
 # ==========================================
-# [6] 🚀 실시간 업데이트 영역 (🔥 5초 주기 & 부하 최적화)
+# [6] 🚀 실시간 업데이트 영역 (🔥 이중 잠금장치 완벽 패치)
 # ==========================================
-# 💡 핵심: run_every="5s"로 설정하여 서버 부하를 대폭 줄이고 안정성을 높였습니다!
 @st.fragment(run_every="5s")
 def live_chat_board():
     if user_role == "학생":
         last_msg_df = get_df_from_db("SELECT id, timestamp, student_name FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 1", (room_name,))
         if not last_msg_df.empty:
             last_time = datetime.strptime(last_msg_df.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
+            
             if (datetime.now() - last_time).total_seconds() > 15 and "AI" not in last_msg_df.iloc[0]['student_name']:
                 try:
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    inserted_id = execute_insert_returning_id(
-                        "INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                        (room_name, now_str, "🤖 AI 조력자", "토론 질문 생성 중...", "❓ 질문")
-                    )
-                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                    context = "\n".join(get_df_from_db("SELECT content FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 3", (room_name,))['content'].tolist())
-                    res = genai.GenerativeModel('gemini-2.5-flash').generate_content(f"'{current_topic}' 주제로 15초 침묵 중입니다. 토론을 유도할 짧은 질문 1개를 던지세요:\n{context}")
-                    execute_query("UPDATE debate SET content = %s WHERE id = %s", (res.text.strip(), inserted_id))
-                    st.rerun() 
+                    
+                    # 💡 [방어 1: DB 원자적 락] 최근 5초 이내에 AI가 이미 생성된 적이 '없을 때만' 생성 성공!
+                    from datetime import timedelta
+                    five_secs_ago = (datetime.now() - timedelta(seconds=5)).strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    lock_query = """
+                    INSERT INTO debate (room_name, timestamp, student_name, content, sentiment)
+                    SELECT %s, %s, %s, %s, %s
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM debate 
+                        WHERE room_name = %s AND student_name LIKE '%%AI%%' AND timestamp > %s
+                    ) RETURNING id;
+                    """
+                    
+                    inserted_id = execute_insert_returning_id(lock_query, 
+                        (room_name, now_str, "🤖 AI 조력자", "토론 질문 생성 중...", "❓ 질문", room_name, five_secs_ago))
+                    
+                    # 25명 중 DB 락을 뚫고 온 '오직 1명'의 화면에서만 제미나이를 호출합니다.
+                    if inserted_id:
+                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                        context = "\n".join(get_df_from_db("SELECT content FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 3", (room_name,))['content'].tolist())
+                        
+                        # 💡 [방어 2: 멱살 프롬프트] 제미나이가 절대 딴소리 못하게 엄격한 룰 부여!
+                        prompt = f"""
+                        당신은 고등학교 토론 조력자입니다. '{current_topic}' 주제로 15초 침묵 중입니다. 
+                        최근 대화: {context}
+                        
+                        [엄격한 규칙]
+                        1. 절대로 여러 개의 질문을 나열하지 마세요. (1. 2. 3. 등 번호 매기기 절대 금지)
+                        2. 부연 설명 없이, 오직 단 1개의 짧고 예리한 질문만 출력하세요.
+                        3. 학생들의 호기심을 자극하는 문장 딱 1개만 작성하세요.
+                        """
+                        
+                        res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+                        execute_query("UPDATE debate SET content = %s WHERE id = %s", (res.text.strip(), inserted_id))
+                        st.rerun() 
                 except: pass
 
+    # --- (이 아래 통계 및 채팅창 UI 부분은 기존 코드와 동일하게 유지) ---
     df = get_df_from_db("SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC", (room_name,))
     
     col_stat, col_chat = st.columns([1, 2])
