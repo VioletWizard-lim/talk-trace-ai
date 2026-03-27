@@ -1,16 +1,39 @@
 import streamlit as st
 import pandas as pd
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 import psycopg2
 import psycopg2.extras
 import google.generativeai as genai
 
-# ==========================================
-# [1] 데이터베이스 연결 (🔥 25명 동시접속 완벽 방어)
-# ==========================================
-# 연결을 열어두지 않고, 볼일이 끝나면 무조건 즉시 닫습니다(conn.close). 
-# 이렇게 하면 'connection pool exhausted' 에러가 절대 발생하지 않습니다.
+# 💡 [핵심 패치 1] 무조건 한국 시간(KST)을 반환하는 마법의 함수!
+def get_kst_now():
+    return datetime.utcnow() + timedelta(hours=9)
+
+def insert_ai_placeholder_atomic(room_name):
+    conn = None
+    try:
+        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        with conn.cursor() as c:
+            c.execute("SELECT pg_advisory_xact_lock(9999)")
+            
+            # KST 기준으로 10초 전 시간 계산
+            ten_secs_ago = (get_kst_now() - timedelta(seconds=10)).strftime("%Y-%m-%d %H:%M:%S")
+            c.execute("SELECT 1 FROM debate WHERE room_name = %s AND student_name LIKE '%%AI%%' AND timestamp > %s", (room_name, ten_secs_ago))
+            
+            if c.fetchone():
+                return None 
+                
+            now_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+            c.execute("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                      (room_name, now_str, "🤖 AI 조력자", "토론 질문 생성 중...", "❓ 질문"))
+            inserted_id = c.fetchone()[0]
+            conn.commit() 
+            return inserted_id
+    except Exception:
+        return None
+    finally:
+        if conn is not None: conn.close()
 
 def get_df_from_db(query, params=()):
     conn = None
@@ -35,21 +58,6 @@ def execute_query(query, params=()):
     finally:
         if conn is not None: conn.close()
 
-def execute_insert_returning_id(query, params=()):
-    conn = None
-    try:
-        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
-        with conn.cursor() as c:
-            c.execute(query, params)
-            row = c.fetchone()
-            inserted_id = row[0] if row else None  # 1등이 아니면 None 반환
-        conn.commit()
-        return inserted_id
-    except Exception:
-        return None
-    finally:
-        if conn is not None: conn.close()
-
 def init_db():
     conn = None
     try:
@@ -66,50 +74,20 @@ def init_db():
 
 init_db()
 
-# 💡 [핵심] 25명이 동시에 들어와도 무조건 1명만 통과시키는 절대 자물쇠 로직!
-def insert_ai_placeholder_atomic(room_name):
-    conn = None
-    try:
-        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
-        with conn.cursor() as c:
-            # 1. 은행 금고 잠금! (이 작업이 끝날 때까지 다른 24명은 밖에서 강제 대기)
-            c.execute("SELECT pg_advisory_xact_lock(9999)")
-            
-            # 2. 최근 10초 이내에 AI가 글 쓴 적 있는지 꼼꼼히 확인
-            from datetime import timedelta
-            ten_secs_ago = (datetime.now() - timedelta(seconds=10)).strftime("%Y-%m-%d %H:%M:%S")
-            c.execute("SELECT 1 FROM debate WHERE room_name = %s AND student_name LIKE '%%AI%%' AND timestamp > %s", (room_name, ten_secs_ago))
-            
-            if c.fetchone():
-                return None # 이미 다른 1등 친구가 찜했음! 난 포기.
-                
-            # 3. 아무도 없으면 드디어 내가 찜!
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            c.execute("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                      (room_name, now_str, "🤖 AI 조력자", "토론 질문 생성 중...", "❓ 질문"))
-            inserted_id = c.fetchone()[0]
-            conn.commit() # 커밋되는 순간 자물쇠가 스르륵 풀림
-            return inserted_id
-    except Exception as e:
-        return None
-    finally:
-        if conn is not None: conn.close()
-
-# ==========================================
-# [2] 앱 기본 설정 및 세션 초기화
-# ==========================================
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
 if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
 if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] = ""
 if 'joined' not in st.session_state: st.session_state['joined'] = False
 
-# ==========================================
-# [3] 사이드바 설정 (방 암호 및 보안 적용)
-# ==========================================
+# 💡 [핵심 패치 2] 모드가 바뀔 때마다 무조건 대기실로 쫓아내는 초기화 함수
+def reset_joined_state():
+    st.session_state['joined'] = False
+
 with st.sidebar:
     st.header("👤 접속 권한")
-    user_role = st.radio("모드 선택", ["학생", "교사"])
+    # 라디오 버튼을 클릭할 때마다 reset_joined_state 함수가 실행됩니다! (유령 방 납치 완벽 차단)
+    user_role = st.radio("모드 선택", ["학생", "교사"], on_change=reset_joined_state)
     st.divider()
 
     rooms_df = get_df_from_db("SELECT DISTINCT room_name FROM topic")
@@ -149,9 +127,6 @@ with st.sidebar:
             st.session_state['joined'] = False
             st.rerun()
 
-# ==========================================
-# [4] 🛑 대기실 로직 (자물쇠 통제)
-# ==========================================
 if not st.session_state['joined']:
     st.title("🚪 Talk-Trace AI 대기실")
     
@@ -182,9 +157,6 @@ if not st.session_state['joined']:
                 st.rerun()
     st.stop()
 
-# ==========================================
-# [5] 메인 화면 (의견 입력 및 음성인식)
-# ==========================================
 topic_df = get_df_from_db("SELECT title, mode FROM topic WHERE room_name = %s", (room_name,))
 current_topic = topic_df.iloc[0]['title'] if not topic_df.empty else "자유 주제로 대화해 봅시다."
 current_mode = topic_df.iloc[0]['mode'] if not topic_df.empty else "⚔️ 찬반 토론"
@@ -266,7 +238,8 @@ with col_stt:
 
 if st.button("의견 제출", use_container_width=True, type="primary"):
     if user_input.strip():
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # KST 한국 시간 적용
+        now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
         execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
                       (room_name, now, student_name, user_input, sentiment))
         st.session_state['reset_key'] += 1
@@ -274,9 +247,6 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 
 st.divider()
 
-# ==========================================
-# [6] 🚀 실시간 업데이트 영역 (🔥 이중 잠금장치 & 강제 1줄 자르기 적용)
-# ==========================================
 @st.fragment(run_every="5s")
 def live_chat_board():
     if user_role == "학생":
@@ -284,31 +254,24 @@ def live_chat_board():
         if not last_msg_df.empty:
             last_time = datetime.strptime(last_msg_df.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
             
-            # 마지막 대화 후 15초가 지났고, 마지막 발언자가 AI가 아닐 때
-            if (datetime.now() - last_time).total_seconds() > 15 and "AI" not in last_msg_df.iloc[0]['student_name']:
+            # 현재 시간 비교도 KST 한국 시간으로 통일!
+            if (get_kst_now() - last_time).total_seconds() > 60 and "AI" not in last_msg_df.iloc[0]['student_name']:
                 try:
-                    # 절대 자물쇠를 통과한 '단 1명'의 화면만 inserted_id를 받습니다.
                     inserted_id = insert_ai_placeholder_atomic(room_name)
-                    
                     if inserted_id:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                         context = "\n".join(get_df_from_db("SELECT content FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 3", (room_name,))['content'].tolist())
-                        
                         prompt = f"""
-                        당신은 고등학교 토론 조력자입니다. '{current_topic}' 주제로 15초 침묵 중입니다. 
+                        당신은 고등학교 토론 조력자입니다. '{current_topic}' 주제로 1분 침묵 중입니다. 
                         최근 대화: {context}
                         [엄격한 규칙] 학생들의 호기심을 자극하는 짧은 질문을 딱 1문장만 작성하세요. 줄바꿈이나 번호 매기기는 절대 금지입니다.
                         """
                         res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                        
-                        # 💡 [투머치토커 방지] 제미나이가 말을 길게 해도 첫 번째 줄만 강제로 잘라냅니다!
                         ai_final_text = res.text.strip().split('\n')[0] 
-                        
                         execute_query("UPDATE debate SET content = %s WHERE id = %s", (ai_final_text, inserted_id))
                         st.rerun() 
                 except: pass
 
-    # --- 데이터 불러오기 및 UI 렌더링 ---
     df = get_df_from_db("SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC", (room_name,))
     
     col_stat, col_chat = st.columns([1, 2])
@@ -327,7 +290,6 @@ def live_chat_board():
                 for _, row in df.iterrows():
                     is_ai = "AI" in row['student_name']
                     with st.chat_message("assistant" if is_ai else "user"):
-                        # 교사 모드일 때만 삭제 버튼 표시
                         if user_role == "교사" and teacher_auth:
                             c_text, c_btn = st.columns([9, 1])
                             with c_text:
@@ -343,12 +305,8 @@ def live_chat_board():
         else:
             st.info("아직 대화가 없습니다. 첫 의견을 남겨주세요!")
 
-# 함수 실행
 live_chat_board()
 
-# ==========================================
-# [7] 교사 전용 대시보드
-# ==========================================
 if user_role == "교사" and teacher_auth:
     st.divider()
     st.header("👨‍🏫 교사 관리 대시보드")
@@ -378,7 +336,7 @@ if user_role == "교사" and teacher_auth:
                         prompt = f"정보 교사로서 '{current_topic}' 토론에 참여한 '{selected_student}' 학생의 세특 300자:\n{debate_history}"
                         response = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
                         st.session_state['ai_result_text'] = response.text
-                        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
                         execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
                                       (room_name, now, selected_student, response.text))
                         st.rerun()
