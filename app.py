@@ -76,6 +76,27 @@ init_db()
 
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
+# 💡 [핵심 패치] 스트림릿의 '뿌옇게 변하는 현상'과 'Running' 표시를 강제로 숨기는 투명 망토!
+st.markdown(
+    """
+    <style>
+    /* 1. 화면 갱신 시 블록들이 회색으로 뿌옇게 흐려지는 현상(투명도) 방지 */
+    div[data-testid="stVerticalBlock"], 
+    div[data-testid="stAppViewBlockContainer"],
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        opacity: 1 !important;
+        transition: none !important;
+    }
+    
+    /* 2. 우측 상단 뱅글뱅글 도는 'Running...' 애니메이션 숨기기 */
+    div[data-testid="stStatusWidget"] {
+        visibility: hidden;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
 if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] = ""
 if 'joined' not in st.session_state: st.session_state['joined'] = False
