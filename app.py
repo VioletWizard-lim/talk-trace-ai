@@ -176,7 +176,7 @@ def live_chat_board():
         last_msg_df = get_df_from_db("SELECT id, timestamp, student_name FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 1", (room_name,))
         if not last_msg_df.empty:
             last_time = datetime.strptime(last_msg_df.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
-            if (datetime.now() - last_time).total_seconds() > 15 and "AI" not in last_msg_df.iloc[0]['student_name']:
+            if (datetime.now() - last_time).total_seconds() > 60 and "AI" not in last_msg_df.iloc[0]['student_name']:
                 try:
                     conn = get_connection()
                     with conn.cursor() as c:
