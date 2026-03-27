@@ -83,32 +83,30 @@ if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] 
 if 'joined' not in st.session_state: st.session_state['joined'] = False # 대기실 로직용
 
 # ==========================================
-# [3] 사이드바 설정 (공백 기본값 적용!)
+# [3] 사이드바 설정 (공백 기본값 및 보안 패치 적용)
 # ==========================================
 with st.sidebar:
     st.header("👤 접속 권한")
     user_role = st.radio("모드 선택", ["학생", "교사"])
     st.divider()
 
-    # topic 테이블과 debate 테이블 양쪽에서 방 이름을 긁어옵니다.
     rooms_df = get_df_from_db("SELECT DISTINCT room_name FROM topic UNION SELECT DISTINCT room_name FROM debate")
     existing_rooms = rooms_df['room_name'].tolist() if not rooms_df.empty else []
     
     room_name = ""
     teacher_auth = False
     
-   if user_role == "교사":
+    if user_role == "교사":
         pw = st.text_input("교사 인증 암호", type="password")
         if pw == st.secrets["TEACHER_PW"]:
-            teacher_auth = True; st.success("인증 성공!")
+            teacher_auth = True
+            st.success("인증 성공!")
             room_opt = st.radio("방 선택", ["기존 방 선택", "새 방 만들기"])
             if room_opt == "기존 방 선택" and existing_rooms:
                 room_name = st.selectbox("토론방 목록", existing_rooms)
             else:
-                # 💡 [핵심] 기본값을 공백("")으로 바꿨습니다!
                 room_name = st.text_input("새로 만들 방 이름 입력", value="") 
     else:
-        # 💡 [핵심] 학생 접속 화면도 기본값을 공백("")으로 바꿨습니다!
         room_name = st.text_input("🏠 접속할 방 이름 (정확히 입력)", value="")
         
     student_name = st.text_input("내 이름", value="익명" if user_role == "학생" else "교사")
