@@ -76,21 +76,31 @@ init_db()
 
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
-# 💡 [핵심 패치] 스트림릿의 '뿌옇게 변하는 현상'과 'Running' 표시를 강제로 숨기는 투명 망토!
+# 💡 [초강력 패치] 스트림릿의 모든 로딩/흐려짐/깜빡임 효과를 원천 차단하는 무적의 CSS!
 st.markdown(
     """
     <style>
-    /* 1. 화면 갱신 시 블록들이 회색으로 뿌옇게 흐려지는 현상(투명도) 방지 */
-    div[data-testid="stVerticalBlock"], 
-    div[data-testid="stAppViewBlockContainer"],
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        opacity: 1 !important;
-        transition: none !important;
+    /* 1. 우측 상단 'Running...' 사람 아이콘 완전 삭제 */
+    [data-testid="stStatusWidget"] {
+        visibility: hidden !important;
+        display: none !important;
     }
     
-    /* 2. 우측 상단 뱅글뱅글 도는 'Running...' 애니메이션 숨기기 */
-    div[data-testid="stStatusWidget"] {
-        visibility: hidden;
+    /* 2. 화면 상단에 얇게 지나가는 빨간/파란 로딩 바(Loading bar) 숨기기 */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+
+    /* 3. ⭐️ 핵심: Fragment가 5초마다 갱신될 때 화면이 회색으로 뿌옇게 변하는 현상 강제 차단! */
+    /* 스트림릿이 내부적으로 투명도를 낮추거나 흐림 필터를 거는 모든 태그를 색출해서 무효화합니다. */
+    [data-testid="stFragment"], 
+    [data-testid="stVerticalBlock"], 
+    [data-testid="stElementContainer"],
+    [data-stale="true"] {
+        opacity: 1 !important;
+        transition: none !important;
+        filter: none !important;
+        -webkit-filter: none !important;
     }
     </style>
     """,
