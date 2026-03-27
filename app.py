@@ -97,9 +97,9 @@ with st.sidebar:
     room_name = ""
     teacher_auth = False
     
-    if user_role == "교사":
+   if user_role == "교사":
         pw = st.text_input("교사 인증 암호", type="password")
-        if pw == "admin":
+        if pw == st.secrets["TEACHER_PW"]:
             teacher_auth = True; st.success("인증 성공!")
             room_opt = st.radio("방 선택", ["기존 방 선택", "새 방 만들기"])
             if room_opt == "기존 방 선택" and existing_rooms:
