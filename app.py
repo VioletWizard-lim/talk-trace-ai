@@ -3,75 +3,65 @@ import pandas as pd
 import io
 from datetime import datetime
 import psycopg2
-from psycopg2 import pool
 import psycopg2.extras
 import google.generativeai as genai
 
 # ==========================================
-# [1] 데이터베이스 연결 풀링 (40차선 고속도로 확장!)
+# [1] 데이터베이스 연결 (🔥 25명 동시접속 완벽 방어)
 # ==========================================
-@st.cache_resource(ttl=3600)
-def get_pool():
-    # 25명 동시 접속을 넉넉히 버티기 위해 최대 40개의 연결 풀 생성
-    return pool.ThreadedConnectionPool(1, 40, st.secrets["SUPABASE_URL"])
+# 연결을 열어두지 않고, 볼일이 끝나면 무조건 즉시 닫습니다(conn.close). 
+# 이렇게 하면 'connection pool exhausted' 에러가 절대 발생하지 않습니다.
 
-def init_db():
-    try:
-        db_pool = get_pool()
-        conn = db_pool.getconn()
-        try:
-            with conn.cursor() as c:
-                c.execute('CREATE TABLE IF NOT EXISTS debate (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT, sentiment TEXT)')
-                c.execute('CREATE TABLE IF NOT EXISTS records (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT)')
-                c.execute('CREATE TABLE IF NOT EXISTS topic (room_name TEXT PRIMARY KEY, title TEXT, mode TEXT)')
-                
-                # 💡 [핵심 추가] '정보_토론방'을 기본 방으로 DB에 강제로 만들어 둡니다!
-                c.execute("INSERT INTO topic (room_name, title, mode) VALUES ('정보_토론방', '자유 주제로 대화해 봅시다.', '⚔️ 찬반 토론') ON CONFLICT (room_name) DO NOTHING")
-            conn.commit()
-        finally:
-            db_pool.putconn(conn)
-    except Exception as e:
-        st.error(f"🚨 DB 연결 실패: {e}"); st.stop()
-
-init_db()
-
-# DB 헬퍼 함수 1: 데이터 불러오기
 def get_df_from_db(query, params=()):
-    db_pool = get_pool()
-    conn = db_pool.getconn()
+    conn = None
     try:
+        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
             c.execute(query, params)
             data = c.fetchall()
             return pd.DataFrame(data, columns=[desc[0] for desc in c.description] if c.description else [])
-    except Exception as e:
+    except Exception:
         return pd.DataFrame()
     finally:
-        db_pool.putconn(conn)
+        if conn is not None: conn.close()
 
-# DB 헬퍼 함수 2: 단순 실행 (삽입, 수정, 삭제)
 def execute_query(query, params=()):
-    db_pool = get_pool()
-    conn = db_pool.getconn()
+    conn = None
     try:
+        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
         with conn.cursor() as c:
             c.execute(query, params)
         conn.commit()
     finally:
-        db_pool.putconn(conn)
+        if conn is not None: conn.close()
 
-# DB 헬퍼 함수 3: 삽입 후 ID 반환 (AI 선점 로직용)
 def execute_insert_returning_id(query, params=()):
-    db_pool = get_pool()
-    conn = db_pool.getconn()
+    conn = None
     try:
+        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
         with conn.cursor() as c:
             c.execute(query, params)
             inserted_id = c.fetchone()[0]
         conn.commit()
         return inserted_id
     finally:
-        db_pool.putconn(conn)
+        if conn is not None: conn.close()
+
+def init_db():
+    conn = None
+    try:
+        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        with conn.cursor() as c:
+            c.execute('CREATE TABLE IF NOT EXISTS debate (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT, sentiment TEXT)')
+            c.execute('CREATE TABLE IF NOT EXISTS records (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT)')
+            c.execute('CREATE TABLE IF NOT EXISTS topic (room_name TEXT PRIMARY KEY, title TEXT, mode TEXT, entry_code TEXT DEFAULT \'\')')
+        conn.commit()
+    except Exception as e:
+        st.error(f"🚨 DB 연결 실패: {e}")
+    finally:
+        if conn is not None: conn.close()
+
+init_db()
 
 # ==========================================
 # [2] 앱 기본 설정 및 세션 초기화
@@ -80,17 +70,17 @@ st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
 if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
 if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] = ""
-if 'joined' not in st.session_state: st.session_state['joined'] = False # 대기실 로직용
+if 'joined' not in st.session_state: st.session_state['joined'] = False
 
 # ==========================================
-# [3] 사이드바 설정 (공백 기본값 및 보안 패치 적용)
+# [3] 사이드바 설정 (방 암호 및 보안 적용)
 # ==========================================
 with st.sidebar:
     st.header("👤 접속 권한")
     user_role = st.radio("모드 선택", ["학생", "교사"])
     st.divider()
 
-    rooms_df = get_df_from_db("SELECT DISTINCT room_name FROM topic UNION SELECT DISTINCT room_name FROM debate")
+    rooms_df = get_df_from_db("SELECT DISTINCT room_name FROM topic")
     existing_rooms = rooms_df['room_name'].tolist() if not rooms_df.empty else []
     
     room_name = ""
@@ -99,16 +89,26 @@ with st.sidebar:
     if user_role == "교사":
         pw = st.text_input("교사 인증 암호", type="password")
         if pw == st.secrets["TEACHER_PW"]:
-            teacher_auth = True
-            st.success("인증 성공!")
+            teacher_auth = True; st.success("인증 성공!")
             room_opt = st.radio("방 선택", ["기존 방 선택", "새 방 만들기"])
+            
             if room_opt == "기존 방 선택" and existing_rooms:
                 room_name = st.selectbox("토론방 목록", existing_rooms)
             else:
-                room_name = st.text_input("새로 만들 방 이름 입력", value="") 
+                new_room = st.text_input("새로 만들 방 이름 입력")
+                new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
+                if st.button("새 방 개설하기") and new_room:
+                    execute_query("INSERT INTO topic (room_name, title, mode, entry_code) VALUES (%s, %s, %s, %s) ON CONFLICT (room_name) DO NOTHING", 
+                                  (new_room, "자유 주제로 대화해 봅시다.", "⚔️ 찬반 토론", new_pw))
+                    st.success(f"'{new_room}' 방이 개설되었습니다! 위쪽에서 '기존 방 선택'을 눌러 입장하세요.")
+                room_name = new_room
     else:
-        room_name = st.text_input("🏠 접속할 방 이름 (정확히 입력)", value="")
-        
+        if existing_rooms:
+            room_name = st.selectbox("🏠 접속할 방 선택", existing_rooms)
+        else:
+            st.warning("선생님이 아직 열어둔 토론방이 없습니다.")
+            room_name = ""
+            
     student_name = st.text_input("내 이름", value="익명" if user_role == "학생" else "교사")
     
     if st.session_state['joined']:
@@ -118,26 +118,40 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# [4] 🛑 대기실 (빈칸일 때 입장 불가 방어막 추가!)
+# [4] 🛑 대기실 로직 (자물쇠 통제)
 # ==========================================
 if not st.session_state['joined']:
     st.title("🚪 Talk-Trace AI 대기실")
-    st.info("👈 왼쪽 사이드바에서 이름과 접속할 방을 설정한 후 입장해주세요.")
     
     if user_role == "교사" and not teacher_auth:
         st.warning("🚨 교사 인증 암호를 입력해야 입장할 수 있습니다.")
     elif not room_name.strip():
-        # 💡 [핵심] 방 이름이 빈칸이면 입장 버튼 대신 경고창을 띄웁니다!
-        st.error("🚨 접속할 방 이름을 먼저 입력(또는 선택)해 주세요.")
+        st.error("🚨 접속할 방을 먼저 선택해 주세요.")
     else:
-        # 방 이름이 제대로 입력되었을 때만 입장 버튼이 짠! 하고 나타납니다.
-        if st.button(f"🚀 '{room_name}' 방 입장하기", use_container_width=True, type="primary"):
-            st.session_state['joined'] = True
-            st.rerun()
+        if user_role == "학생":
+            topic_info = get_df_from_db("SELECT entry_code FROM topic WHERE room_name = %s", (room_name,))
+            real_pw = topic_info.iloc[0]['entry_code'] if not topic_info.empty and topic_info.iloc[0]['entry_code'] else ""
+            
+            if real_pw:
+                student_pw = st.text_input("🔒 방 입장 암호 (선생님께 확인하세요)", type="password")
+                if student_pw == real_pw:
+                    if st.button(f"🚀 '{room_name}' 입장하기", type="primary", use_container_width=True):
+                        st.session_state['joined'] = True
+                        st.rerun()
+                elif student_pw:
+                    st.error("❌ 암호가 틀렸습니다. 다시 확인해 주세요!")
+            else:
+                if st.button(f"🚀 '{room_name}' 입장하기", type="primary", use_container_width=True):
+                    st.session_state['joined'] = True
+                    st.rerun()
+        else:
+            if st.button(f"🚀 '{room_name}' 관리자 권한으로 입장", type="primary", use_container_width=True):
+                st.session_state['joined'] = True
+                st.rerun()
     st.stop()
 
 # ==========================================
-# [5] 메인 화면 (방 입장 완료 후)
+# [5] 메인 화면 (의견 입력 및 음성인식)
 # ==========================================
 topic_df = get_df_from_db("SELECT title, mode FROM topic WHERE room_name = %s", (room_name,))
 current_topic = topic_df.iloc[0]['title'] if not topic_df.empty else "자유 주제로 대화해 봅시다."
@@ -229,9 +243,10 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 st.divider()
 
 # ==========================================
-# [6] 🚀 실시간 업데이트 영역 (통계 + 스크롤 채팅창)
+# [6] 🚀 실시간 업데이트 영역 (🔥 5초 주기 & 부하 최적화)
 # ==========================================
-@st.fragment(run_every="3s")
+# 💡 핵심: run_every="5s"로 설정하여 서버 부하를 대폭 줄이고 안정성을 높였습니다!
+@st.fragment(run_every="5s")
 def live_chat_board():
     if user_role == "학생":
         last_msg_df = get_df_from_db("SELECT id, timestamp, student_name FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 1", (room_name,))
@@ -239,19 +254,14 @@ def live_chat_board():
             last_time = datetime.strptime(last_msg_df.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
             if (datetime.now() - last_time).total_seconds() > 15 and "AI" not in last_msg_df.iloc[0]['student_name']:
                 try:
-                    # 자리 찜하기
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     inserted_id = execute_insert_returning_id(
                         "INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s) RETURNING id",
                         (room_name, now_str, "🤖 AI 조력자", "토론 질문 생성 중...", "❓ 질문")
                     )
-                    
-                    # 제미나이 호출
                     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                     context = "\n".join(get_df_from_db("SELECT content FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 3", (room_name,))['content'].tolist())
                     res = genai.GenerativeModel('gemini-2.5-flash').generate_content(f"'{current_topic}' 주제로 15초 침묵 중입니다. 토론을 유도할 짧은 질문 1개를 던지세요:\n{context}")
-                    
-                    # 내용 업데이트
                     execute_query("UPDATE debate SET content = %s WHERE id = %s", (res.text.strip(), inserted_id))
                     st.rerun() 
                 except: pass
@@ -270,7 +280,7 @@ def live_chat_board():
     with col_chat:
         st.subheader("💬 실시간 전체 의견")
         if not df.empty:
-            with st.container(height=400): # 깔끔한 스크롤
+            with st.container(height=400):
                 for _, row in df.iterrows():
                     is_ai = "AI" in row['student_name']
                     with st.chat_message("assistant" if is_ai else "user"):
@@ -319,11 +329,9 @@ if user_role == "교사" and teacher_auth:
                     try:
                         student_data = df_all[df_all['student_name'] == selected_student]
                         debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
-                        
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                         prompt = f"정보 교사로서 '{current_topic}' 토론에 참여한 '{selected_student}' 학생의 세특 300자:\n{debate_history}"
                         response = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                        
                         st.session_state['ai_result_text'] = response.text
                         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
