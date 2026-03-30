@@ -274,7 +274,7 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 st.divider()
 
 # ==========================================
-# [6] 🚀 실시간 업데이트 영역 (🔥 전자칠판용 2분할 UI 대개편)
+# [6] 🚀 실시간 업데이트 영역 (🔥 자동 스크롤 강제 하강 버그 완벽 해결!)
 # ==========================================
 @st.fragment(run_every="5s")
 def live_chat_board():
@@ -302,7 +302,6 @@ def live_chat_board():
 
     df = get_df_from_db("SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC", (room_name,))
     
-    # 💡 [UI 개선] 통계는 접이식으로 올려서 화면 공간을 넓게 확보합니다.
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
         if not df.empty:
             import plotly.express as px
@@ -313,31 +312,28 @@ def live_chat_board():
     st.subheader("💬 실시간 토론 보드")
     
     if not df.empty:
-        # 💡 [UI 개선] AI의 질문은 화면 맨 위에 가로로 길게 강조해서 띄워줍니다!
         ai_df = df[df['student_name'].str.contains('AI', na=False)]
         if not ai_df.empty:
             st.success(f"🤖 **AI 조력자의 돌발 질문!** ➡️ {ai_df.iloc[0]['content']}")
 
-        # AI가 아닌 진짜 학생들의 데이터만 분류
         student_df = df[~df['student_name'].str.contains('AI', na=False)]
         
-        # 반복되는 채팅 메시지 렌더링을 깔끔한 함수로 묶었습니다.
+        # 💡 [핵심 패치] st.chat_message 껍데기를 제거했습니다! 이제 스크롤이 맨 위에 얌전히 고정됩니다.
         def render_msg(row, bg_color):
-            with st.chat_message("user"):
-                if user_role == "교사" and teacher_auth:
-                    c_text, c_btn = st.columns([9, 1])
-                    with c_text:
-                        st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
-                        st.info(row['content']) # 배경색을 맞추기 위해 info 사용 (원하면 커스텀 가능)
-                    with c_btn:
-                        if st.button("❌", key=f"del_{row['id']}", help="메시지 강제 삭제"):
-                            execute_query("DELETE FROM debate WHERE id = %s", (row['id'],))
-                            st.rerun()
-                else:
+            if user_role == "교사" and teacher_auth:
+                c_text, c_btn = st.columns([9, 1])
+                with c_text:
                     st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
                     st.info(row['content'])
+                with c_btn:
+                    if st.button("❌", key=f"del_{row['id']}", help="메시지 강제 삭제"):
+                        execute_query("DELETE FROM debate WHERE id = %s", (row['id'],))
+                        st.rerun()
+            else:
+                st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
+                st.info(row['content'])
+            st.write("") # 말풍선 사이 간격 띄우기
 
-        # 💡 [UI 개선] 찬반 토론이면 화면을 정확히 2분할 (왼쪽 찬성 / 오른쪽 반대)
         if current_mode == "⚔️ 찬반 토론":
             col_pro, col_con = st.columns(2)
             
@@ -353,7 +349,6 @@ def live_chat_board():
                     for _, row in student_df[student_df['sentiment'] == '🔴 반대'].iterrows():
                         render_msg(row, "red")
                         
-        # 💡 [UI 개선] 자유 주제(브레인스토밍) 모드면 화면을 3분할!
         else:
             col_idea, col_plus, col_q = st.columns(3)
             
