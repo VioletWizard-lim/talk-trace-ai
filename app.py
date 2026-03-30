@@ -109,6 +109,8 @@ if 'is_working' not in st.session_state: st.session_state['is_working'] = False
 
 def set_working():
     st.session_state['is_working'] = True
+    # 💡 [핵심 패치 2] 버튼이 눌리는 즉시 우측 하단에 팝업을 띄워서, 먹통처럼 보이는 0.5초의 딜레이를 메꿉니다!
+    st.toast("요청을 받았습니다! 서버가 분석을 준비합니다... 🚀", icon="⏳")
 
 def reset_joined_state():
     st.session_state['joined'] = False
