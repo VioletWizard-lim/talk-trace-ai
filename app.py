@@ -104,11 +104,17 @@ if 'ai_report_text' not in st.session_state: st.session_state['ai_report_text'] 
 if 'current_room' not in st.session_state: st.session_state['current_room'] = ""
 if 'joined' not in st.session_state: st.session_state['joined'] = False
 
+# 💡 [핵심 패치 1] AI가 일하고 있는지 체크하는 변수 생성!
+if 'is_working' not in st.session_state: st.session_state['is_working'] = False
+
+def set_working():
+    st.session_state['is_working'] = True
+
 def reset_joined_state():
     st.session_state['joined'] = False
 
 # ==========================================
-# [3] 사이드바 (방 관리 - 프리셋 제거 및 심플 모드 적용)
+# [3] 사이드바 (방 관리 - 심플 모드)
 # ==========================================
 with st.sidebar:
     st.header("👤 접속 권한")
@@ -130,7 +136,6 @@ with st.sidebar:
             if room_opt == "기존 방 선택" and existing_rooms:
                 room_name = st.selectbox("토론/토의방 목록", existing_rooms)
             else:
-                # 💡 [핵심 변경] 프리셋을 없애고 직관적인 직접 입력 방식으로 되돌렸습니다.
                 new_room = st.text_input("새로 만들 방 이름 (예: 1학년 3반)")
                 new_title = st.text_input("주제 직접 입력 (예: 인공지능 윤리)")
                 new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"], horizontal=True)
@@ -191,13 +196,12 @@ if not st.session_state['joined']:
     st.stop()
 
 # ==========================================
-# [5] 메인 화면 (의견 입력부 & 💡 토의/토론 자동 변환)
+# [5] 메인 화면 (의견 입력부)
 # ==========================================
 topic_df = get_df_from_db("SELECT title, mode FROM topic WHERE room_name = %s", (room_name,))
 current_topic = topic_df.iloc[0]['title'] if not topic_df.empty else "자유 주제로 대화해 봅시다."
 current_mode = topic_df.iloc[0]['mode'] if not topic_df.empty else "⚔️ 찬반 토론"
 
-# 현재 모드에 따라 '토론'과 '토의' 단어 추출
 act_type = "토론" if "토론" in current_mode else "토의"
 
 st.title(f"🎙️ Talk-Trace AI [{room_name}]")
@@ -249,10 +253,10 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 st.divider()
 
 # ==========================================
-# [6] 실시간 업데이트 영역 
+# [6] 실시간 업데이트 영역 (🔥 타이머 충돌 완벽 방지 설계)
 # ==========================================
-@st.fragment(run_every="5s")
-def live_chat_board():
+# 이 함수는 화면을 그리는 알맹이입니다.
+def live_chat_board_core():
     df = get_df_from_db("SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC", (room_name,))
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
@@ -312,7 +316,20 @@ def live_chat_board():
                     for _, row in student_df[student_df['sentiment'] == '❓ 질문'].iterrows(): render_msg(row)
     else: st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
-live_chat_board()
+# 💡 [핵심 패치 2] 평소에는 5초 타이머 작동 모드!
+@st.fragment(run_every="5s")
+def live_chat_board_auto():
+    live_chat_board_core()
+
+# 💡 [핵심 패치 3] AI가 일할 때는 수동 렌더링 모드! (타이머 해제)
+def live_chat_board_manual():
+    live_chat_board_core()
+
+# AI가 일하는 중이면 타이머 없는 안전 모드로 화면을 그립니다.
+if st.session_state.get('is_working', False):
+    live_chat_board_manual()
+else:
+    live_chat_board_auto()
 
 # ==========================================
 # [7] 교사 전용 대시보드
@@ -350,8 +367,9 @@ if user_role == "교사" and teacher_auth:
     
     col_hint1, col_hint2 = st.columns(2)
     with col_hint1:
-        if st.button("🪄 AI 힌트 초안 생성", use_container_width=True):
-            with st.spinner("⏳ AI가 최근 맥락을 분석 중입니다... (약 3초 소요)"):
+        # 💡 [핵심 패치 4] on_click=set_working 을 추가하여 누르는 즉시 타이머 잠금!
+        if st.button("🪄 AI 힌트 초안 생성", use_container_width=True, on_click=set_working):
+            with st.spinner("⏳ AI가 최근 맥락을 분석 중입니다... (약 3~5초 소요)"):
                 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                 context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
                 prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
@@ -359,6 +377,7 @@ if user_role == "교사" and teacher_auth:
                     res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
                     st.session_state['ai_hint_text'] = res.text.strip().split('\n')[0]
                 except Exception as e: st.error(f"🚨 AI 호출 오류: {e}")
+            st.session_state['is_working'] = False # 일 끝났으니 타이머 잠금 해제
             st.rerun() 
                 
     edited_hint = st.text_input("선생님의 검토 및 수정", value=st.session_state['ai_hint_text'], help="AI 제안 내용을 수정하세요.")
@@ -375,7 +394,8 @@ if user_role == "교사" and teacher_auth:
     st.divider()
 
     st.subheader(f"📝 수업 종료 및 전체 {act_type} 요약 리포트")
-    if st.button(f"{act_type} 요약 및 베스트 발언 추출 🪄", use_container_width=True):
+    # 💡 [핵심 패치 5] 여기도 on_click 잠금 추가!
+    if st.button(f"{act_type} 요약 및 베스트 발언 추출 🪄", use_container_width=True, on_click=set_working):
         with st.spinner(f"⏳ AI가 1차시 {act_type} 전체 기록을 꼼꼼히 읽고 있습니다... (약 10초 소요)"):
             if not df_all.empty:
                 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -387,6 +407,8 @@ if user_role == "교사" and teacher_auth:
                 except Exception as e: st.error(f"🚨 AI 호출 오류: {e}")
             else:
                 st.error("🚨 분석할 데이터가 없습니다.")
+        st.session_state['is_working'] = False
+        st.rerun()
 
     if st.session_state['ai_report_text']:
         st.info(f"📊 **AI 수업 {act_type} 요약 리포트**")
@@ -408,7 +430,8 @@ if user_role == "교사" and teacher_auth:
         
         if len(student_list) > 0:
             selected_student = st.selectbox("학생을 선택하세요", student_list)
-            if st.button(f"'{selected_student}' 세특 생성 🪄", use_container_width=True):
+            # 💡 [핵심 패치 6] 여기도 on_click 잠금 추가!
+            if st.button(f"'{selected_student}' 세특 생성 🪄", use_container_width=True, on_click=set_working):
                 with st.spinner(f"⏳ AI가 '{selected_student}' 학생의 활동을 분석 중입니다... (약 5초 소요)"):
                     try:
                         student_data = df_all[df_all['student_name'] == selected_student]
@@ -421,6 +444,7 @@ if user_role == "교사" and teacher_auth:
                         execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
                                       (room_name, now, selected_student, response.text))
                     except Exception as e: st.error(f"🚨 AI 호출 오류: {e}")
+                st.session_state['is_working'] = False
                 st.rerun() 
             
             if st.session_state['ai_result_text']:
