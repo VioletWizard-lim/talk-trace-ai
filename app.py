@@ -70,7 +70,7 @@ def init_db():
 init_db()
 
 # ==========================================
-# [2] 앱 기본 설정 및 CSS 
+# [2] 앱 기본 설정 및 세션/CSS 
 # ==========================================
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
@@ -97,8 +97,12 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# 💡 [핵심 패치 1] 앱에 필요한 모든 '주머니(Session)'를 여기서 한 번에 깔끔하게 준비합니다.
 if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
 if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] = ""
+if 'ai_hint_text' not in st.session_state: st.session_state['ai_hint_text'] = ""
+if 'ai_report_text' not in st.session_state: st.session_state['ai_report_text'] = ""
+if 'current_room' not in st.session_state: st.session_state['current_room'] = ""
 if 'joined' not in st.session_state: st.session_state['joined'] = False
 
 def reset_joined_state():
@@ -142,6 +146,13 @@ with st.sidebar:
             room_name = ""
             
     student_name = st.text_input("내 이름", value="익명" if user_role == "학생" else "교사")
+    
+    # 💡 [핵심 패치 2] 선택한 방이 이전 방과 다르면? 이전 방의 AI 기록들을 싹 다 날려버립니다!
+    if room_name and room_name != st.session_state['current_room']:
+        st.session_state['current_room'] = room_name
+        st.session_state['ai_hint_text'] = ""
+        st.session_state['ai_report_text'] = ""
+        st.session_state['ai_result_text'] = ""
     
     if st.session_state['joined']:
         st.divider()
@@ -241,13 +252,11 @@ def live_chat_board():
             st.plotly_chart(px.pie(df, names="sentiment", hole=0.4, height=300), use_container_width=True, config={'displayModeBar': False})
         else: st.write("데이터 수집 중...")
 
-    # 💡 [핵심 패치] 교사에게만 보이는 실시간 보드 수동 새로고침 버튼 추가
     col_board_title, col_board_ref = st.columns([8, 2])
     with col_board_title:
         st.subheader("💬 실시간 토론 보드")
     with col_board_ref:
         if user_role == "교사" and teacher_auth:
-            # st.fragment 내부의 버튼이므로 클릭하면 이 구역만 즉시 새로고침됩니다!
             st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
     
     if not df.empty:
@@ -331,12 +340,9 @@ if user_role == "교사" and teacher_auth:
     st.subheader("💡 AI 토론 촉진 (Teacher-in-the-loop)")
     st.info("AI 제안을 수정 후 전송하세요.")
     
-    if 'ai_hint_text' not in st.session_state: st.session_state['ai_hint_text'] = ""
-    
     col_hint1, col_hint2 = st.columns(2)
     with col_hint1:
         if st.button("🪄 AI 힌트 초안 생성", use_container_width=True):
-            # 💡 [핵심 패치] st.spinner를 사용하여 무조건 렌더링되게 보장!
             with st.spinner("⏳ AI가 최근 맥락을 분석 중입니다... (약 3초 소요)"):
                 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                 context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
@@ -345,7 +351,7 @@ if user_role == "교사" and teacher_auth:
                     res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
                     st.session_state['ai_hint_text'] = res.text.strip().split('\n')[0]
                 except Exception as e: st.error(f"🚨 AI 호출 오류: {e}")
-            st.rerun() # 스피너 작업 완료 후 화면 갱신
+            st.rerun() 
                 
     edited_hint = st.text_input("선생님의 검토 및 수정", value=st.session_state['ai_hint_text'], help="AI 제안 내용을 수정하세요.")
     
@@ -362,7 +368,6 @@ if user_role == "교사" and teacher_auth:
 
     st.subheader("📝 수업 종료 및 전체 요약 리포트")
     if st.button("토론 요약 및 베스트 발언 추출 🪄", use_container_width=True):
-        # 💡 [핵심 패치] st.spinner로 안내 문구 무조건 띄우기!
         with st.spinner("⏳ AI가 1차시 토론 전체 기록을 꼼꼼히 읽고 있습니다... (약 10초 소요)"):
             if not df_all.empty:
                 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -375,7 +380,6 @@ if user_role == "교사" and teacher_auth:
             else:
                 st.error("🚨 분석할 토론 데이터가 없습니다.")
 
-    if 'ai_report_text' not in st.session_state: st.session_state['ai_report_text'] = ""
     if st.session_state['ai_report_text']:
         st.info("📊 **AI 수업 요약 리포트**")
         st.markdown(st.session_state['ai_report_text'])
@@ -397,7 +401,6 @@ if user_role == "교사" and teacher_auth:
         if len(student_list) > 0:
             selected_student = st.selectbox("학생을 선택하세요", student_list)
             if st.button(f"'{selected_student}' 세특 생성 🪄", use_container_width=True):
-                # 💡 [핵심 패치] 개인별 세특 생성도 확실한 스피너 안내!
                 with st.spinner(f"⏳ AI가 '{selected_student}' 학생의 활동을 분석 중입니다... (약 5초 소요)"):
                     try:
                         student_data = df_all[df_all['student_name'] == selected_student]
@@ -410,7 +413,7 @@ if user_role == "교사" and teacher_auth:
                         execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
                                       (room_name, now, selected_student, response.text))
                     except Exception as e: st.error(f"🚨 AI 호출 오류: {e}")
-                st.rerun() # 작업 완료 후 갱신
+                st.rerun() 
             
             if st.session_state['ai_result_text']:
                 st.success("🤖 **개인별 세특 초안** (보관함에 자동 저장되었습니다)")
