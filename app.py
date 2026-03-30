@@ -274,32 +274,11 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 st.divider()
 
 # ==========================================
-# [6] 🚀 실시간 업데이트 영역 (🔥 자동 스크롤 강제 하강 버그 완벽 해결!)
+# [6] 🚀 실시간 업데이트 영역 (🔥 자동 AI 개입 삭제 -> 속도/안정성 극대화)
 # ==========================================
+# 💡 학생 화면에서 AI가 맘대로 떠들지 못하게 자동 로직을 과감히 삭제했습니다! (서버 부하 대폭 감소)
 @st.fragment(run_every="5s")
 def live_chat_board():
-    if user_role == "학생":
-        last_msg_df = get_df_from_db("SELECT id, timestamp, student_name FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 1", (room_name,))
-        if not last_msg_df.empty:
-            last_time = datetime.strptime(last_msg_df.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
-            
-            if (get_kst_now() - last_time).total_seconds() > 60 and "AI" not in last_msg_df.iloc[0]['student_name']:
-                try:
-                    inserted_id = insert_ai_placeholder_atomic(room_name)
-                    if inserted_id:
-                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                        context = "\n".join(get_df_from_db("SELECT content FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 3", (room_name,))['content'].tolist())
-                        prompt = f"""
-                        당신은 고등학교 토론 조력자입니다. '{current_topic}' 주제로 1분간 침묵 중입니다. 
-                        최근 대화: {context}
-                        [엄격한 규칙] 학생들의 호기심을 자극하는 짧은 질문을 딱 1문장만 작성하세요. 줄바꿈이나 번호 매기기는 절대 금지입니다.
-                        """
-                        res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                        ai_final_text = res.text.strip().split('\n')[0] 
-                        execute_query("UPDATE debate SET content = %s WHERE id = %s", (ai_final_text, inserted_id))
-                        st.rerun() 
-                except: pass
-
     df = get_df_from_db("SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC", (room_name,))
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
@@ -312,16 +291,15 @@ def live_chat_board():
     st.subheader("💬 실시간 토론 보드")
     
     if not df.empty:
-        ai_df = df[df['student_name'].str.contains('AI', na=False)]
-        if not ai_df.empty:
-            st.success(f"🤖 **AI 조력자의 돌발 질문!** ➡️ {ai_df.iloc[0]['content']}")
+        # 💡 [UI 개선] 선생님의 힌트(AI 보조)는 화면 맨 위에 강력하게 띄워줍니다!
+        teacher_df = df[df['student_name'].str.contains('선생님', na=False)]
+        if not teacher_df.empty:
+            st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {teacher_df.iloc[0]['content']}")
 
-        student_df = df[~df['student_name'].str.contains('AI', na=False)]
+        student_df = df[~df['student_name'].str.contains('선생님', na=False)]
         
-        # 💡 [핵심 패치] st.chat_message 껍데기를 제거하고 삭제 버튼 UI 깨짐을 해결했습니다!
         def render_msg(row, bg_color):
             if user_role == "교사" and teacher_auth:
-                # 버튼을 글씨 옆이 아니라, 이름표 옆으로 배치하여 찌그러짐을 방지합니다.
                 c_name, c_btn = st.columns([5, 1])
                 with c_name:
                     st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
@@ -329,30 +307,26 @@ def live_chat_board():
                     if st.button("❌", key=f"del_{row['id']}", help="메시지 강제 삭제"):
                         execute_query("DELETE FROM debate WHERE id = %s", (row['id'],))
                         st.rerun()
-                st.info(row['content']) # 내용 상자는 분할 밖으로 빼서 온전한 넓이를 차지하게 함
+                st.info(row['content']) 
             else:
                 st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
                 st.info(row['content'])
-            st.write("") # 말풍선 사이 간격 띄우기
+            st.write("") 
 
         if current_mode == "⚔️ 찬반 토론":
             col_pro, col_con = st.columns(2)
-            
             with col_pro:
                 st.markdown("### 🔵 찬성 측 의견")
                 with st.container(height=450):
                     for _, row in student_df[student_df['sentiment'] == '🔵 찬성'].iterrows():
                         render_msg(row, "blue")
-                        
             with col_con:
                 st.markdown("### 🔴 반대 측 의견")
                 with st.container(height=450):
                     for _, row in student_df[student_df['sentiment'] == '🔴 반대'].iterrows():
                         render_msg(row, "red")
-                        
         else:
             col_idea, col_plus, col_q = st.columns(3)
-            
             with col_idea:
                 st.markdown("### 💡 아이디어")
                 with st.container(height=450):
@@ -372,3 +346,139 @@ def live_chat_board():
         st.info("아직 대화가 없습니다. 첫 의견을 남겨주세요!")
 
 live_chat_board()
+
+# ==========================================
+# [7] 교사 전용 대시보드 (🔥 무기 창고 전면 개편)
+# ==========================================
+if user_role == "교사" and teacher_auth:
+    st.divider()
+    st.header("👨‍🏫 교사 관리 대시보드")
+    df_all = get_df_from_db("SELECT * FROM debate WHERE room_name = %s", (room_name,))
+    
+    # 💡 1. [신규] 학생 참여도 분석 차트
+    st.subheader("📊 학생 참여도 현황")
+    if not df_all.empty:
+        student_only_df = df_all[~df_all['student_name'].str.contains('교사|선생님|익명', na=False, regex=True)]
+        if not student_only_df.empty:
+            st.bar_chart(student_only_df['student_name'].value_counts())
+        else:
+            st.info("실명 참여 데이터가 없습니다.")
+            
+    st.divider()
+    
+    # 💡 2. [신규] Teacher-in-the-loop (교사 개입형 AI)
+    st.subheader("💡 AI 토론 촉진 (Teacher-in-the-loop)")
+    st.info("AI가 대화 흐름을 분석하여 힌트를 제안합니다. 선생님이 검토/수정 후 학생들에게 전송하세요.")
+    
+    if 'ai_hint_text' not in st.session_state: st.session_state['ai_hint_text'] = ""
+    
+    col_hint1, col_hint2 = st.columns(2)
+    with col_hint1:
+        if st.button("🪄 AI 힌트 초안 생성", use_container_width=True):
+            with st.spinner("최근 맥락 분석 중..."):
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
+                prompt = f"'{current_topic}' 주제의 고등학교 토론입니다. 찬반 양측의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 짧고 예리한 질문을 1문장만 제안하세요. 최근 대화: {context}"
+                try:
+                    res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+                    st.session_state['ai_hint_text'] = res.text.strip().split('\n')[0]
+                    st.rerun()
+                except Exception as e: st.error("AI 호출 오류")
+                
+    edited_hint = st.text_input("선생님의 검토 및 수정", value=st.session_state['ai_hint_text'])
+    
+    with col_hint2:
+        if st.button("🚀 학생 화면으로 힌트 전송", use_container_width=True, type="primary"):
+            if edited_hint.strip():
+                now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+                execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
+                              (room_name, now, "👨‍🏫 선생님 (AI 보조)", edited_hint, "❓ 질문"))
+                st.session_state['ai_hint_text'] = "" 
+                st.success("학생들 화면에 힌트가 전송되었습니다!")
+                st.rerun()
+
+    st.divider()
+
+    # 💡 3. [신규] 수업 종료 및 전체 AI 요약 리포트
+    st.subheader("📝 수업 종료 및 전체 요약 리포트")
+    if st.button("전체 토론 요약 및 베스트 발언 추출 🪄"):
+        with st.spinner("AI가 1차시 토론 전체를 분석하고 있습니다..."):
+            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+            full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
+            prompt = f"'{current_topic}' 주제의 토론 기록입니다.\n1. 토론의 핵심 요약 3줄\n2. 가장 논리적이고 창의적인 주장을 펼친 학생 1명의 이름과 그 이유\n위 두 가지를 명확히 구분하여 작성해주세요.\n\n기록:\n{full_history}"
+            try:
+                res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+                st.info(res.text)
+            except Exception as e: st.error("AI 호출 오류")
+
+    st.divider()
+
+    # --- 기존 세특 생성 및 다운로드 영역 ---
+    col3, col4 = st.columns([1, 1])
+    
+    with col3:
+        st.subheader("📥 활동 데이터 다운로드")
+        if not df_all.empty:
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer: df_all.to_excel(writer, index=False)
+            st.download_button("전체 활동 로그 다운로드 (Excel)", data=buffer.getvalue(), file_name=f"{room_name}_log.xlsx")
+
+    with col4:
+        st.subheader("🤖 개인별 AI 세특 초안 생성")
+        student_list = student_only_df['student_name'].unique() if not df_all.empty else []
+        
+        if len(student_list) > 0:
+            selected_student = st.selectbox("분석할 학생을 선택하세요", student_list)
+            if st.button(f"'{selected_student}' 학생 세특 생성 🪄"):
+                with st.spinner("Gemini 2.5 AI 분석 중..."):
+                    try:
+                        student_data = df_all[df_all['student_name'] == selected_student]
+                        debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
+                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                        prompt = f"정보 교사로서 '{current_topic}' 토론에 참여한 '{selected_student}' 학생의 세특 300자:\n{debate_history}"
+                        response = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+                        st.session_state['ai_result_text'] = response.text
+                        now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+                        execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
+                                      (room_name, now, selected_student, response.text))
+                        st.rerun()
+                    except Exception as e: st.error(f"오류: {e}")
+            
+            if st.session_state['ai_result_text']:
+                st.success("보관함에 자동 저장되었습니다.")
+                st.text_area("AI 생성 결과 (수정 후 복사하여 사용하세요)", value=st.session_state['ai_result_text'], height=200)
+        else:
+            st.info("실명 참여 학생이 없습니다.")
+
+    st.divider()
+    st.subheader("📂 저장된 세특 기록 보관함")
+    records_df = get_df_from_db("SELECT id, timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
+    
+    if not records_df.empty:
+        st.dataframe(records_df, use_container_width=True)
+        col_down, col_del = st.columns([1, 1])
+        with col_down:
+            buffer_records = io.BytesIO()
+            with pd.ExcelWriter(buffer_records, engine='openpyxl') as writer: 
+                records_df.drop(columns=['id']).to_excel(writer, index=False)
+            st.download_button("📥 세특 기록 다운로드 (Excel)", data=buffer_records.getvalue(), file_name=f"{room_name}_세특.xlsx")
+            
+        with col_del:
+            del_id = st.selectbox("🗑️ 삭제할 세특의 '고유 번호(id)'를 선택하세요", records_df['id'].tolist())
+            if st.button("선택한 세특 영구 삭제"):
+                execute_query("DELETE FROM records WHERE id = %s", (del_id,))
+                st.success("세특이 삭제되었습니다.")
+                st.rerun()
+    else:
+        st.info("아직 저장된 세특 기록이 없습니다.")
+
+    st.divider()
+    st.subheader("🚨 위험 구역 (방 관리)")
+    with st.expander("이 토론방 전체 삭제하기 (클릭 시 펼쳐짐)"):
+        st.warning(f"정말 '{room_name}' 방을 삭제하시겠습니까? (복구 불가)")
+        if st.button(f"네, '{room_name}' 방을 완전히 삭제합니다", type="primary"):
+            execute_query("DELETE FROM topic WHERE room_name = %s", (room_name,))
+            execute_query("DELETE FROM debate WHERE room_name = %s", (room_name,))
+            execute_query("DELETE FROM records WHERE room_name = %s", (room_name,))
+            st.success("방이 성공적으로 폭파되었습니다. 화면 상단(사이드바)에서 다른 방을 선택해 주세요.")
+            st.session_state['ai_result_text'] = ""
