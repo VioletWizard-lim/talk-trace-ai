@@ -24,7 +24,7 @@ def insert_ai_placeholder_atomic(room_name):
             if c.fetchone(): return None 
             now_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
             c.execute("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                      (room_name, now_str, "🤖 AI 조력자", "토론 질문 생성 중...", "❓ 질문"))
+                      (room_name, now_str, "🤖 AI 조력자", "질문 생성 중...", "❓ 질문"))
             inserted_id = c.fetchone()[0]
             conn.commit() 
             return inserted_id
@@ -97,7 +97,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 💡 [핵심 패치 1] 앱에 필요한 모든 '주머니(Session)'를 여기서 한 번에 깔끔하게 준비합니다.
 if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
 if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] = ""
 if 'ai_hint_text' not in st.session_state: st.session_state['ai_hint_text'] = ""
@@ -109,7 +108,7 @@ def reset_joined_state():
     st.session_state['joined'] = False
 
 # ==========================================
-# [3] 사이드바 (접속 및 방 관리)
+# [3] 사이드바 (방 관리 - 프리셋 제거 및 심플 모드 적용)
 # ==========================================
 with st.sidebar:
     st.header("👤 접속 권한")
@@ -126,28 +125,34 @@ with st.sidebar:
         pw = st.text_input("교사 인증 암호", type="password")
         if pw == st.secrets["TEACHER_PW"]:
             teacher_auth = True; st.success("인증 성공!")
-            room_opt = st.radio("방 선택", ["기존 방 선택", "새 방 만들기"])
+            room_opt = st.radio("방 관리", ["기존 방 선택", "새 방 만들기"])
             
             if room_opt == "기존 방 선택" and existing_rooms:
-                room_name = st.selectbox("토론방 목록", existing_rooms)
+                room_name = st.selectbox("토론/토의방 목록", existing_rooms)
             else:
-                new_room = st.text_input("새로 만들 방 이름 입력")
+                # 💡 [핵심 변경] 프리셋을 없애고 직관적인 직접 입력 방식으로 되돌렸습니다.
+                new_room = st.text_input("새로 만들 방 이름 (예: 1학년 3반)")
+                new_title = st.text_input("주제 직접 입력 (예: 인공지능 윤리)")
+                new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"], horizontal=True)
                 new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
-                if st.button("새 방 개설하기") and new_room:
-                    execute_query("INSERT INTO topic (room_name, title, mode, entry_code) VALUES (%s, %s, %s, %s) ON CONFLICT (room_name) DO NOTHING", 
-                                  (new_room, "자유 주제로 대화해 봅시다.", "⚔️ 찬반 토론", new_pw))
-                    st.success(f"'{new_room}' 방이 개설되었습니다! 위쪽에서 '기존 방 선택'을 눌러 입장하세요.")
+                
+                if st.button("새 방 개설하기", type="primary"):
+                    if new_room and new_title:
+                        execute_query("INSERT INTO topic (room_name, title, mode, entry_code) VALUES (%s, %s, %s, %s) ON CONFLICT (room_name) DO NOTHING", 
+                                      (new_room, new_title, new_mode, new_pw))
+                        st.success(f"'{new_room}' 방이 개설되었습니다! 위쪽에서 '기존 방 선택'을 눌러 입장하세요.")
+                    else:
+                        st.error("방 이름과 주제를 모두 입력해주세요.")
                 room_name = new_room
     else:
         if existing_rooms:
             room_name = st.selectbox("🏠 접속할 방 선택", existing_rooms)
         else:
-            st.warning("선생님이 아직 열어둔 토론방이 없습니다.")
+            st.warning("선생님이 아직 열어둔 방이 없습니다.")
             room_name = ""
             
     student_name = st.text_input("내 이름", value="익명" if user_role == "학생" else "교사")
     
-    # 💡 [핵심 패치 2] 선택한 방이 이전 방과 다르면? 이전 방의 AI 기록들을 싹 다 날려버립니다!
     if room_name and room_name != st.session_state['current_room']:
         st.session_state['current_room'] = room_name
         st.session_state['ai_hint_text'] = ""
@@ -186,11 +191,14 @@ if not st.session_state['joined']:
     st.stop()
 
 # ==========================================
-# [5] 메인 화면 (의견 입력부)
+# [5] 메인 화면 (의견 입력부 & 💡 토의/토론 자동 변환)
 # ==========================================
 topic_df = get_df_from_db("SELECT title, mode FROM topic WHERE room_name = %s", (room_name,))
 current_topic = topic_df.iloc[0]['title'] if not topic_df.empty else "자유 주제로 대화해 봅시다."
 current_mode = topic_df.iloc[0]['mode'] if not topic_df.empty else "⚔️ 찬반 토론"
+
+# 현재 모드에 따라 '토론'과 '토의' 단어 추출
+act_type = "토론" if "토론" in current_mode else "토의"
 
 st.title(f"🎙️ Talk-Trace AI [{room_name}]")
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
@@ -254,7 +262,7 @@ def live_chat_board():
 
     col_board_title, col_board_ref = st.columns([8, 2])
     with col_board_title:
-        st.subheader("💬 실시간 토론 보드")
+        st.subheader(f"💬 실시간 {act_type} 보드") 
     with col_board_ref:
         if user_role == "교사" and teacher_auth:
             st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
@@ -302,7 +310,7 @@ def live_chat_board():
                 st.markdown("### ❓ 질문")
                 with st.container(height=450):
                     for _, row in student_df[student_df['sentiment'] == '❓ 질문'].iterrows(): render_msg(row)
-    else: st.info("아직 대화가 없습니다.")
+    else: st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
 live_chat_board()
 
@@ -333,11 +341,11 @@ if user_role == "교사" and teacher_auth:
             fig.update_layout(yaxis_title="의견 수", dragmode=False, showlegend=False) 
             st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': False, 'displayModeBar': False})
         else: st.info("실명 참여 데이터가 없습니다.")
-    else: st.info("토론 데이터가 없습니다.")
+    else: st.info(f"{act_type} 데이터가 없습니다.")
             
     st.divider()
     
-    st.subheader("💡 AI 토론 촉진 (Teacher-in-the-loop)")
+    st.subheader(f"💡 AI {act_type} 촉진 (Teacher-in-the-loop)")
     st.info("AI 제안을 수정 후 전송하세요.")
     
     col_hint1, col_hint2 = st.columns(2)
@@ -346,7 +354,7 @@ if user_role == "교사" and teacher_auth:
             with st.spinner("⏳ AI가 최근 맥락을 분석 중입니다... (약 3초 소요)"):
                 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                 context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
-                prompt = f"당신은 고등학교 토론 조력자입니다. '{current_topic}' 주제로 토론 중입니다. 찬반 양측의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
+                prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
                 try:
                     res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
                     st.session_state['ai_hint_text'] = res.text.strip().split('\n')[0]
@@ -366,22 +374,22 @@ if user_role == "교사" and teacher_auth:
 
     st.divider()
 
-    st.subheader("📝 수업 종료 및 전체 요약 리포트")
-    if st.button("토론 요약 및 베스트 발언 추출 🪄", use_container_width=True):
-        with st.spinner("⏳ AI가 1차시 토론 전체 기록을 꼼꼼히 읽고 있습니다... (약 10초 소요)"):
+    st.subheader(f"📝 수업 종료 및 전체 {act_type} 요약 리포트")
+    if st.button(f"{act_type} 요약 및 베스트 발언 추출 🪄", use_container_width=True):
+        with st.spinner(f"⏳ AI가 1차시 {act_type} 전체 기록을 꼼꼼히 읽고 있습니다... (약 10초 소요)"):
             if not df_all.empty:
                 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                 full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
-                prompt = f"'{current_topic}' 주제의 고등학교 찬반 토론 기록입니다.\n\n[엄격한 규칙]\n1. 토론의 전체 맥락을 파악하고 핵심 내용을 딱 3줄로 요약하세요.\n2. 가장 논리적이고 창의적인 주장을 펼친 '학생 이름' 1명과 그 이유를 구체적으로 추출하세요.\n3. 보고서 형식으로 깔끔하게 출력하세요.\n\n기록:\n{full_history}"
+                prompt = f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n[엄격한 규칙]\n1. {act_type}의 전체 맥락을 파악하고 핵심 내용을 딱 3줄로 요약하세요.\n2. 가장 논리적이고 창의적인 주장을 펼친 '학생 이름' 1명과 그 이유를 구체적으로 추출하세요.\n3. 보고서 형식으로 깔끔하게 출력하세요.\n\n기록:\n{full_history}"
                 try:
                     res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
                     st.session_state['ai_report_text'] = res.text
                 except Exception as e: st.error(f"🚨 AI 호출 오류: {e}")
             else:
-                st.error("🚨 분석할 토론 데이터가 없습니다.")
+                st.error("🚨 분석할 데이터가 없습니다.")
 
     if st.session_state['ai_report_text']:
-        st.info("📊 **AI 수업 요약 리포트**")
+        st.info(f"📊 **AI 수업 {act_type} 요약 리포트**")
         st.markdown(st.session_state['ai_report_text'])
 
     st.divider()
@@ -392,7 +400,7 @@ if user_role == "교사" and teacher_auth:
         if not df_all.empty:
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer: df_all.to_excel(writer, index=False)
-            st.download_button("토론 전체 활동 로그 (Excel)", data=buffer.getvalue(), file_name=f"{room_name}_log_{get_kst_now().strftime('%Y%m%d_%H%M')}.xlsx")
+            st.download_button(f"{act_type} 전체 활동 로그 (Excel)", data=buffer.getvalue(), file_name=f"{room_name}_log_{get_kst_now().strftime('%Y%m%d_%H%M')}.xlsx")
 
     with col4:
         st.subheader("🤖 개인별 AI 세특 초안 생성")
@@ -406,7 +414,7 @@ if user_role == "교사" and teacher_auth:
                         student_data = df_all[df_all['student_name'] == selected_student]
                         debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                        prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 토론에 참여한 '{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
+                        prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 {act_type}에 참여한 '{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
                         response = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
                         st.session_state['ai_result_text'] = response.text
                         now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
@@ -443,8 +451,8 @@ if user_role == "교사" and teacher_auth:
 
     st.divider()
     st.subheader("🚨 위험 구역 (방 폭파)")
-    with st.expander("이 토론방 전체 삭제하기 (클릭 시 펼쳐짐)", expanded=False):
-        st.error(f"🚨 경고: '{room_name}' 방의 모든 토론 기록과 세특 보관함이 완전히 삭제됩니다.")
+    with st.expander("이 방 전체 삭제하기 (클릭 시 펼쳐짐)", expanded=False):
+        st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록과 세특 보관함이 완전히 삭제됩니다.")
         if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True):
             execute_query("DELETE FROM topic WHERE room_name = %s", (room_name,))
             execute_query("DELETE FROM debate WHERE room_name = %s", (room_name,))
