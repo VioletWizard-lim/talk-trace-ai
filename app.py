@@ -280,17 +280,24 @@ def live_chat_board_core():
 
         student_df = df[~df['student_name'].str.contains('선생님', na=False)]
         
+        # 💡 [핵심 패치 1] 삭제 작업을 0.1초 만에 먼저 처리하는 '콜백 함수'
+        def delete_chat_msg(msg_id):
+            execute_query("DELETE FROM debate WHERE id = %s", (msg_id,))
+            st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
+
         def render_msg(row):
             if user_role == "교사" and teacher_auth:
                 c_name, c_btn = st.columns([5, 1])
-                with c_name: st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
+                with c_name: 
+                    st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
                 with c_btn:
-                    if st.button("❌", key=f"del_{row['id']}", help="강제 삭제"): execute_query("DELETE FROM debate WHERE id = %s", (row['id'],)); st.rerun()
+                    # 💡 [핵심 패치 2] st.rerun()을 지우고 on_click 으로 콜백 함수 연결!
+                    st.button("❌", key=f"del_{row['id']}", help="강제 삭제", on_click=delete_chat_msg, args=(row['id'],))
                 st.info(row['content']) 
             else:
                 st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
                 st.info(row['content'])
-            st.write("") 
+            st.write("")
 
         if current_mode == "⚔️ 찬반 토론":
             col_pro, col_con = st.columns(2)
