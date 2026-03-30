@@ -334,7 +334,7 @@ else:
     live_chat_board_auto()
 
 # ==========================================
-# [7] 교사 전용 대시보드
+# [7] 교사 전용 대시보드 (🔥 완벽한 UI 배치 & 즉각 반응 패치 적용)
 # ==========================================
 if user_role == "교사" and teacher_auth:
     st.divider()
@@ -348,13 +348,15 @@ if user_role == "교사" and teacher_auth:
 
     df_all = get_df_from_db("SELECT * FROM debate WHERE room_name = %s", (room_name,))
     
+    # --- 1. 통계 (숫자 학번도 완벽하게 텍스트로 인식!) ---
     st.subheader("📊 학생 참여도 현황")
     if not df_all.empty:
         student_only_df = df_all[~df_all['student_name'].str.contains('교사|선생님|익명|AI', na=False, regex=True)].copy()
         if not student_only_df.empty:
-            student_only_df['student_name'] = student_only_df['student_name'].astype(str)
-            counts = student_only_df['student_name'].value_counts().reset_index()
+            counts = student_only_df['student_name'].astype(str).value_counts().reset_index()
             counts.columns = ['학생 이름', '참여 횟수']
+            counts['학생 이름'] = counts['학생 이름'] + " " # Plotly 숫자 강제변환 방지
+            
             fig = px.bar(counts, x='학생 이름', y='참여 횟수', text='참여 횟수', color='학생 이름')
             fig.update_xaxes(type='category', title="") 
             fig.update_layout(yaxis_title="의견 수", dragmode=False, showlegend=False) 
@@ -364,45 +366,41 @@ if user_role == "교사" and teacher_auth:
             
     st.divider()
     
+    # --- 2. Teacher in the loop (UI 대폭 개선!) ---
     st.subheader(f"💡 AI {act_type} 촉진 (Teacher-in-the-loop)")
     st.info("AI 제안을 수정 후 전송하세요.")
     
-    # 💡 [핵심 패치 1] 전광판을 2분할 컬럼 '바깥'으로 빼서 화면 전체를 넓게 쓰게 합니다!
-    hint_msg = st.empty() 
-    
-    col_hint1, col_hint2 = st.columns(2)
-    with col_hint1:
-        if st.button("🪄 AI 힌트 초안 생성", use_container_width=True, on_click=set_working):
-            # 1단계: 파란창 띄우고 브라우저가 그릴 수 있게 강제로 1초 대기
-            hint_msg.info("👀 AI가 최근 대화 맥락을 읽고 있습니다...")
-            import time; time.sleep(1) 
+    # 💡 [버튼을 누르면 바로 밑에 넓은 전광판이 생깁니다!]
+    if st.button("🪄 AI 힌트 초안 생성", use_container_width=True, on_click=set_working):
+        hint_msg = st.empty() 
+        hint_msg.info("👀 AI가 최근 대화 맥락을 읽고 있습니다...")
+        import time; time.sleep(1)
+        
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
+        
+        hint_msg.warning("✍️ AI가 예리한 질문을 작성하고 있습니다...")
+        time.sleep(0.5)
+        
+        prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
+        try:
+            res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+            st.session_state['ai_hint_text'] = res.text.strip().split('\n')[0]
+            hint_msg.success("✅ 힌트 작성 완료!")
+            time.sleep(1)
+        except Exception as e: 
+            hint_msg.error(f"🚨 AI 호출 오류: {e}")
+            time.sleep(2)
             
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
-            
-            # 2단계: 노란창 띄우고 다시 0.5초 대기 후 제미나이 통신 시작
-            hint_msg.warning("✍️ AI가 예리한 질문을 작성하고 있습니다...")
-            time.sleep(0.5)
-            
-            prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
-            try:
-                res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                st.session_state['ai_hint_text'] = res.text.strip().split('\n')[0]
-                
-                # 3단계: 초록창 띄우고 1초 대기 후 새로고침
-                hint_msg.success("✅ 힌트 작성 완료!")
-                time.sleep(1) 
-            except Exception as e: 
-                hint_msg.error(f"🚨 AI 호출 오류: {e}")
-                time.sleep(2)
-                
-            st.session_state['is_working'] = False
-            st.rerun() 
-                
-    edited_hint = st.text_input("선생님의 검토 및 수정", value=st.session_state['ai_hint_text'], help="AI 제안 내용을 수정하세요.")
-    
-    with col_hint2:
-        if st.button("🚀 학생 화면으로 힌트 전송", use_container_width=True, type="primary"):
+        st.session_state['is_working'] = False
+        st.rerun() 
+
+    # 💡 [글상자와 전송 버튼을 가로 8:2 비율로 깔끔하게 묶었습니다!]
+    col_edit_txt, col_edit_btn = st.columns([8, 2])
+    with col_edit_txt:
+        edited_hint = st.text_input("선생님의 검토 및 수정", value=st.session_state['ai_hint_text'], help="AI 제안 내용을 수정하세요.", label_visibility="collapsed")
+    with col_edit_btn:
+        if st.button("🚀 학생 화면 전송", use_container_width=True, type="primary"):
             if edited_hint.strip():
                 now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
                 execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
@@ -412,14 +410,13 @@ if user_role == "교사" and teacher_auth:
 
     st.divider()
 
+    # --- 3. 수업 종료 요약 리포트 ---
     st.subheader(f"📝 수업 종료 및 전체 {act_type} 요약 리포트")
     
-    # 💡 [핵심 패치 2] 요약 리포트 전광판도 큼지막하게 밖으로 배치!
-    report_msg = st.empty()
-    
     if st.button(f"{act_type} 요약 및 베스트 발언 추출 🪄", use_container_width=True, on_click=set_working):
+        report_msg = st.empty()
         report_msg.info(f"👀 AI가 1차시 {act_type} 전체 기록을 꼼꼼히 읽고 있습니다...")
-        import time; time.sleep(1) # 눈에 보일 시간 1초 부여!
+        import time; time.sleep(1) 
         
         if not df_all.empty:
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -450,6 +447,7 @@ if user_role == "교사" and teacher_auth:
 
     st.divider()
 
+    # --- 4. 세특 생성 및 다운로드 ---
     col3, col4 = st.columns([1, 1])
     with col3:
         st.subheader("📥 활동 데이터 다운로드")
@@ -465,10 +463,8 @@ if user_role == "교사" and teacher_auth:
         if len(student_list) > 0:
             selected_student = st.selectbox("학생을 선택하세요", student_list)
             
-            # 💡 [핵심 패치 3] 세특 전광판도 큼지막하게!
-            record_msg = st.empty()
-            
             if st.button(f"'{selected_student}' 세특 생성 🪄", use_container_width=True, on_click=set_working):
+                record_msg = st.empty()
                 record_msg.info(f"👀 AI가 '{selected_student}' 학생의 활동 기록을 모아 읽고 있습니다...")
                 import time; time.sleep(1)
                 
