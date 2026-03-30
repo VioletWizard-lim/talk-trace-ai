@@ -73,19 +73,32 @@ def init_db():
 init_db()
 
 # ==========================================
-# [2] 앱 기본 설정 및 CSS (전자칠판 가독성 극대화 & 화면 흐려짐 완벽 차단)
+# [2] 앱 기본 설정 및 CSS (🔥 스트림릿 화면 흐려짐 완전 박멸 패치)
 # ==========================================
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
 st.markdown(
     """
     <style>
+    /* 우측 상단 'Running...' 사람 아이콘 완전 삭제 */
     [data-testid="stStatusWidget"] { visibility: hidden !important; display: none !important; }
+    /* 상단 장식줄 삭제 */
     [data-testid="stDecoration"] { display: none !important; }
     
-    /* 💡 [핵심 패치] stAppViewBlockContainer 를 추가하여 '전체 화면'이 흐려지는 현상까지 원천 봉쇄! */
-    [data-testid="stAppViewBlockContainer"], [data-testid="stFragment"], [data-testid="stVerticalBlock"], [data-element-stale="true"] {
-        opacity: 1 !important; transition: none !important; filter: none !important; -webkit-filter: none !important;
+    /* 💡 [핵심 패치] 스트림릿의 '모든' 최상위 껍데기와 stale(오래된) 상태의 투명도 조작을 원천 봉쇄! */
+    .stApp, 
+    [data-testid="stAppViewContainer"], 
+    [data-testid="stMainBlockContainer"],
+    [data-testid="stAppViewBlockContainer"], 
+    [data-testid="stFragment"], 
+    [data-testid="stVerticalBlock"], 
+    [data-testid="stElementContainer"], 
+    [data-stale="true"],
+    div[data-stale="true"] {
+        opacity: 1 !important; 
+        transition: none !important; 
+        filter: none !important; 
+        -webkit-filter: none !important;
     }
     
     /* 📱 전자칠판(스마트보드) 가독성 극대화 (글씨 크기 확대) */
