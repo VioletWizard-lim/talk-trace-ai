@@ -73,7 +73,7 @@ def init_db():
 init_db()
 
 # ==========================================
-# [2] 앱 기본 설정 및 CSS (전자칠판 가독성 극대화)
+# [2] 앱 기본 설정 및 CSS (전자칠판 가독성 극대화 & 화면 흐려짐 완벽 차단)
 # ==========================================
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
@@ -82,7 +82,9 @@ st.markdown(
     <style>
     [data-testid="stStatusWidget"] { visibility: hidden !important; display: none !important; }
     [data-testid="stDecoration"] { display: none !important; }
-    [data-testid="stFragment"], [data-testid="stVerticalBlock"], [data-element-stale="true"] {
+    
+    /* 💡 [핵심 패치] stAppViewBlockContainer 를 추가하여 '전체 화면'이 흐려지는 현상까지 원천 봉쇄! */
+    [data-testid="stAppViewBlockContainer"], [data-testid="stFragment"], [data-testid="stVerticalBlock"], [data-element-stale="true"] {
         opacity: 1 !important; transition: none !important; filter: none !important; -webkit-filter: none !important;
     }
     
