@@ -79,31 +79,21 @@ init_db()
 # ==========================================
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
-# 💡 [CSS 수정] 사이드바 열기 버튼(Header)은 살리고, 보기 싫은 깜빡임만 잡습니다!
+# 💡 [UI 패치] 화면 깜빡임 방지 + 전자칠판용 대형 폰트(18px) 강제 적용!
 st.markdown(
     """
     <style>
-    /* 1. 우측 상단 'Running...' 사람 아이콘 완전 삭제 */
-    [data-testid="stStatusWidget"] {
-        visibility: hidden !important;
-        display: none !important;
+    [data-testid="stStatusWidget"] { visibility: hidden !important; display: none !important; }
+    [data-testid="stDecoration"] { display: none !important; }
+    [data-testid="stFragment"], [data-testid="stVerticalBlock"], [data-testid="stElementContainer"], [data-stale="true"] {
+        opacity: 1 !important; transition: none !important; filter: none !important; -webkit-filter: none !important;
     }
     
-    /* 2. 헤더 전체를 날리지 않고, 상단 장식줄(빨강/파랑 선)만 콕 집어서 숨깁니다! */
-    [data-testid="stDecoration"] {
-        display: none !important;
-    }
-
-    /* 3. ⭐️ 5초 갱신 시 화면 뿌옇게 변하는 현상 강제 차단 */
-    [data-testid="stFragment"], 
-    [data-testid="stVerticalBlock"], 
-    [data-testid="stElementContainer"],
-    [data-stale="true"] {
-        opacity: 1 !important;
-        transition: none !important;
-        filter: none !important;
-        -webkit-filter: none !important;
-    }
+    /* 📱 전자칠판(스마트보드) 가독성 극대화 (글씨 크기 확대) */
+    .stTextArea textarea { font-size: 18px !important; }
+    .stRadio label { font-size: 18px !important; font-weight: bold !important; }
+    .stMarkdown p { font-size: 18px !important; }
+    div[data-testid="stChatMessageContent"] { font-size: 18px !important; }
     </style>
     """,
     unsafe_allow_html=True
@@ -112,6 +102,9 @@ st.markdown(
 if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
 if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] = ""
 if 'joined' not in st.session_state: st.session_state['joined'] = False
+
+def reset_joined_state():
+    st.session_state['joined'] = False
 
 # 💡 [핵심 패치 2] 모드가 바뀔 때마다 무조건 대기실로 쫓아내는 초기화 함수
 def reset_joined_state():
@@ -280,6 +273,9 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 
 st.divider()
 
+# ==========================================
+# [6] 🚀 실시간 업데이트 영역 (🔥 전자칠판용 2분할 UI 대개편)
+# ==========================================
 @st.fragment(run_every="5s")
 def live_chat_board():
     if user_role == "학생":
@@ -287,7 +283,6 @@ def live_chat_board():
         if not last_msg_df.empty:
             last_time = datetime.strptime(last_msg_df.iloc[0]['timestamp'], "%Y-%m-%d %H:%M:%S")
             
-            # 현재 시간 비교도 KST 한국 시간으로 통일!
             if (get_kst_now() - last_time).total_seconds() > 60 and "AI" not in last_msg_df.iloc[0]['student_name']:
                 try:
                     inserted_id = insert_ai_placeholder_atomic(room_name)
@@ -295,7 +290,7 @@ def live_chat_board():
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                         context = "\n".join(get_df_from_db("SELECT content FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT 3", (room_name,))['content'].tolist())
                         prompt = f"""
-                        당신은 고등학교 토론 조력자입니다. '{current_topic}' 주제로 1분 침묵 중입니다. 
+                        당신은 고등학교 토론 조력자입니다. '{current_topic}' 주제로 1분간 침묵 중입니다. 
                         최근 대화: {context}
                         [엄격한 규칙] 학생들의 호기심을 자극하는 짧은 질문을 딱 1문장만 작성하세요. 줄바꿈이나 번호 매기기는 절대 금지입니다.
                         """
@@ -307,109 +302,77 @@ def live_chat_board():
 
     df = get_df_from_db("SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC", (room_name,))
     
-    col_stat, col_chat = st.columns([1, 2])
-    with col_stat:
-        st.subheader("📊 의견 통계")
+    # 💡 [UI 개선] 통계는 접이식으로 올려서 화면 공간을 넓게 확보합니다.
+    with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
         if not df.empty:
             import plotly.express as px
             st.plotly_chart(px.pie(df, names="sentiment", hole=0.4, height=300), use_container_width=True)
         else:
             st.write("데이터 수집 중...")
+
+    st.subheader("💬 실시간 토론 보드")
+    
+    if not df.empty:
+        # 💡 [UI 개선] AI의 질문은 화면 맨 위에 가로로 길게 강조해서 띄워줍니다!
+        ai_df = df[df['student_name'].str.contains('AI', na=False)]
+        if not ai_df.empty:
+            st.success(f"🤖 **AI 조력자의 돌발 질문!** ➡️ {ai_df.iloc[0]['content']}")
+
+        # AI가 아닌 진짜 학생들의 데이터만 분류
+        student_df = df[~df['student_name'].str.contains('AI', na=False)]
+        
+        # 반복되는 채팅 메시지 렌더링을 깔끔한 함수로 묶었습니다.
+        def render_msg(row, bg_color):
+            with st.chat_message("user"):
+                if user_role == "교사" and teacher_auth:
+                    c_text, c_btn = st.columns([9, 1])
+                    with c_text:
+                        st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
+                        st.info(row['content']) # 배경색을 맞추기 위해 info 사용 (원하면 커스텀 가능)
+                    with c_btn:
+                        if st.button("❌", key=f"del_{row['id']}", help="메시지 강제 삭제"):
+                            execute_query("DELETE FROM debate WHERE id = %s", (row['id'],))
+                            st.rerun()
+                else:
+                    st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
+                    st.info(row['content'])
+
+        # 💡 [UI 개선] 찬반 토론이면 화면을 정확히 2분할 (왼쪽 찬성 / 오른쪽 반대)
+        if current_mode == "⚔️ 찬반 토론":
+            col_pro, col_con = st.columns(2)
             
-    with col_chat:
-        st.subheader("💬 실시간 전체 의견")
-        if not df.empty:
-            with st.container(height=400):
-                for _, row in df.iterrows():
-                    is_ai = "AI" in row['student_name']
-                    with st.chat_message("assistant" if is_ai else "user"):
-                        if user_role == "교사" and teacher_auth:
-                            c_text, c_btn = st.columns([9, 1])
-                            with c_text:
-                                st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp'][11:]}")
-                                st.info(row['content'])
-                            with c_btn:
-                                if st.button("❌", key=f"del_msg_{row['id']}", help="메시지 강제 삭제"):
-                                    execute_query("DELETE FROM debate WHERE id = %s", (row['id'],))
-                                    st.rerun() 
-                        else:
-                            st.write(f"**{row['student_name']}** ({row['sentiment']}) - {row['timestamp'][11:]}")
-                            st.info(row['content'])
+            with col_pro:
+                st.markdown("### 🔵 찬성 측 의견")
+                with st.container(height=450):
+                    for _, row in student_df[student_df['sentiment'] == '🔵 찬성'].iterrows():
+                        render_msg(row, "blue")
+                        
+            with col_con:
+                st.markdown("### 🔴 반대 측 의견")
+                with st.container(height=450):
+                    for _, row in student_df[student_df['sentiment'] == '🔴 반대'].iterrows():
+                        render_msg(row, "red")
+                        
+        # 💡 [UI 개선] 자유 주제(브레인스토밍) 모드면 화면을 3분할!
         else:
-            st.info("아직 대화가 없습니다. 첫 의견을 남겨주세요!")
+            col_idea, col_plus, col_q = st.columns(3)
+            
+            with col_idea:
+                st.markdown("### 💡 아이디어")
+                with st.container(height=450):
+                    for _, row in student_df[student_df['sentiment'] == '💡 아이디어'].iterrows():
+                        render_msg(row, "gray")
+            with col_plus:
+                st.markdown("### ➕ 보충 의견")
+                with st.container(height=450):
+                    for _, row in student_df[student_df['sentiment'] == '➕ 보충'].iterrows():
+                        render_msg(row, "gray")
+            with col_q:
+                st.markdown("### ❓ 질문")
+                with st.container(height=450):
+                    for _, row in student_df[student_df['sentiment'] == '❓ 질문'].iterrows():
+                        render_msg(row, "gray")
+    else:
+        st.info("아직 대화가 없습니다. 첫 의견을 남겨주세요!")
 
 live_chat_board()
-
-if user_role == "교사" and teacher_auth:
-    st.divider()
-    st.header("👨‍🏫 교사 관리 대시보드")
-    df_all = get_df_from_db("SELECT * FROM debate WHERE room_name = %s", (room_name,))
-    
-    col3, col4 = st.columns([1, 1])
-    
-    with col3:
-        st.subheader("📥 활동 데이터 다운로드")
-        if not df_all.empty:
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer: df_all.to_excel(writer, index=False)
-            st.download_button("전체 활동 로그 다운로드 (Excel)", data=buffer.getvalue(), file_name=f"{room_name}_log.xlsx")
-
-    with col4:
-        st.subheader("🤖 AI 세특 초안 생성")
-        student_list = df_all[~df_all['student_name'].isin(['교사', '익명', '🤖 AI 조력자'])]['student_name'].unique() if not df_all.empty else []
-        
-        if len(student_list) > 0:
-            selected_student = st.selectbox("분석할 학생을 선택하세요", student_list)
-            if st.button(f"'{selected_student}' 학생 세특 생성 🪄"):
-                with st.spinner("Gemini 2.5 AI 분석 중..."):
-                    try:
-                        student_data = df_all[df_all['student_name'] == selected_student]
-                        debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
-                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                        prompt = f"정보 교사로서 '{current_topic}' 토론에 참여한 '{selected_student}' 학생의 세특 300자:\n{debate_history}"
-                        response = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                        st.session_state['ai_result_text'] = response.text
-                        now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
-                        execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
-                                      (room_name, now, selected_student, response.text))
-                        st.rerun()
-                    except Exception as e: st.error(f"오류: {e}")
-            
-            if st.session_state['ai_result_text']:
-                st.success("보관함에 자동 저장되었습니다.")
-                st.text_area("AI 생성 결과 (수정 후 복사하여 사용하세요)", value=st.session_state['ai_result_text'], height=200)
-        else:
-            st.info("실명 참여 학생이 없습니다.")
-
-    st.divider()
-    st.subheader("📂 저장된 세특 기록 보관함")
-    records_df = get_df_from_db("SELECT id, timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
-    
-    if not records_df.empty:
-        st.dataframe(records_df, use_container_width=True)
-        col_down, col_del = st.columns([1, 1])
-        with col_down:
-            buffer_records = io.BytesIO()
-            with pd.ExcelWriter(buffer_records, engine='openpyxl') as writer: 
-                records_df.drop(columns=['id']).to_excel(writer, index=False)
-            st.download_button("📥 세특 기록 다운로드 (Excel)", data=buffer_records.getvalue(), file_name=f"{room_name}_세특.xlsx")
-            
-        with col_del:
-            del_id = st.selectbox("🗑️ 삭제할 세특의 '고유 번호(id)'를 선택하세요", records_df['id'].tolist())
-            if st.button("선택한 세특 영구 삭제"):
-                execute_query("DELETE FROM records WHERE id = %s", (del_id,))
-                st.success("세특이 삭제되었습니다.")
-                st.rerun()
-    else:
-        st.info("아직 저장된 세특 기록이 없습니다.")
-
-    st.divider()
-    st.subheader("🚨 위험 구역 (방 관리)")
-    with st.expander("이 토론방 전체 삭제하기 (클릭 시 펼쳐짐)"):
-        st.warning(f"정말 '{room_name}' 방을 삭제하시겠습니까? (복구 불가)")
-        if st.button(f"네, '{room_name}' 방을 완전히 삭제합니다", type="primary"):
-            execute_query("DELETE FROM topic WHERE room_name = %s", (room_name,))
-            execute_query("DELETE FROM debate WHERE room_name = %s", (room_name,))
-            execute_query("DELETE FROM records WHERE room_name = %s", (room_name,))
-            st.success("방이 성공적으로 폭파되었습니다. 화면 상단(사이드바)에서 다른 방을 선택해 주세요.")
-            st.session_state['ai_result_text'] = ""
