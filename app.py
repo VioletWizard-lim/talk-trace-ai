@@ -318,17 +318,18 @@ def live_chat_board():
 
         student_df = df[~df['student_name'].str.contains('AI', na=False)]
         
-        # 💡 [핵심 패치] st.chat_message 껍데기를 제거했습니다! 이제 스크롤이 맨 위에 얌전히 고정됩니다.
+        # 💡 [핵심 패치] st.chat_message 껍데기를 제거하고 삭제 버튼 UI 깨짐을 해결했습니다!
         def render_msg(row, bg_color):
             if user_role == "교사" and teacher_auth:
-                c_text, c_btn = st.columns([9, 1])
-                with c_text:
+                # 버튼을 글씨 옆이 아니라, 이름표 옆으로 배치하여 찌그러짐을 방지합니다.
+                c_name, c_btn = st.columns([5, 1])
+                with c_name:
                     st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
-                    st.info(row['content'])
                 with c_btn:
                     if st.button("❌", key=f"del_{row['id']}", help="메시지 강제 삭제"):
                         execute_query("DELETE FROM debate WHERE id = %s", (row['id'],))
                         st.rerun()
+                st.info(row['content']) # 내용 상자는 분할 밖으로 빼서 온전한 넓이를 차지하게 함
             else:
                 st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
                 st.info(row['content'])
