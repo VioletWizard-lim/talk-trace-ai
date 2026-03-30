@@ -74,9 +74,12 @@ def init_db():
 
 init_db()
 
+# ==========================================
+# [2] 앱 기본 설정 및 세션 초기화
+# ==========================================
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
-# 💡 [초강력 패치] 스트림릿의 모든 로딩/흐려짐/깜빡임 효과를 원천 차단하는 무적의 CSS!
+# 💡 [CSS 수정] 사이드바 열기 버튼(Header)은 살리고, 보기 싫은 깜빡임만 잡습니다!
 st.markdown(
     """
     <style>
@@ -86,13 +89,12 @@ st.markdown(
         display: none !important;
     }
     
-    /* 2. 화면 상단에 얇게 지나가는 빨간/파란 로딩 바(Loading bar) 숨기기 */
-    header[data-testid="stHeader"] {
+    /* 2. 헤더 전체를 날리지 않고, 상단 장식줄(빨강/파랑 선)만 콕 집어서 숨깁니다! */
+    [data-testid="stDecoration"] {
         display: none !important;
     }
 
-    /* 3. ⭐️ 핵심: Fragment가 5초마다 갱신될 때 화면이 회색으로 뿌옇게 변하는 현상 강제 차단! */
-    /* 스트림릿이 내부적으로 투명도를 낮추거나 흐림 필터를 거는 모든 태그를 색출해서 무효화합니다. */
+    /* 3. ⭐️ 5초 갱신 시 화면 뿌옇게 변하는 현상 강제 차단 */
     [data-testid="stFragment"], 
     [data-testid="stVerticalBlock"], 
     [data-testid="stElementContainer"],
