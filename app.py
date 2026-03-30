@@ -348,25 +348,32 @@ def live_chat_board():
 live_chat_board()
 
 # ==========================================
-# [7] 교사 전용 대시보드 (🔥 무기 창고 전면 개편)
+# [7] 교사 전용 대시보드 (🔥 차트 스크롤 방지 & 즉각 반응 UI 패치)
 # ==========================================
 if user_role == "교사" and teacher_auth:
     st.divider()
     st.header("👨‍🏫 교사 관리 대시보드")
     df_all = get_df_from_db("SELECT * FROM debate WHERE room_name = %s", (room_name,))
     
-    # 💡 1. [신규] 학생 참여도 분석 차트
+    # 💡 1. 학생 참여도 차트 (스크롤 확대/축소 완벽 차단!)
     st.subheader("📊 학생 참여도 현황")
     if not df_all.empty:
-        student_only_df = df_all[~df_all['student_name'].str.contains('교사|선생님|익명', na=False, regex=True)]
+        student_only_df = df_all[~df_all['student_name'].str.contains('교사|선생님|익명|AI', na=False, regex=True)]
         if not student_only_df.empty:
-            st.bar_chart(student_only_df['student_name'].value_counts())
+            import plotly.express as px
+            counts = student_only_df['student_name'].value_counts().reset_index()
+            counts.columns = ['학생 이름', '참여 횟수']
+            fig = px.bar(counts, x='학생 이름', y='참여 횟수', text='참여 횟수')
+            # dragmode=False 로 차트가 마우스에 끌려다니는 것 방지
+            fig.update_layout(xaxis_title="", yaxis_title="의견 수", dragmode=False) 
+            # config={'scrollZoom': False} 로 마우스 휠 스크롤 트랩 원천 차단!
+            st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': False, 'displayModeBar': False})
         else:
             st.info("실명 참여 데이터가 없습니다.")
             
     st.divider()
     
-    # 💡 2. [신규] Teacher-in-the-loop (교사 개입형 AI)
+    # 💡 2. Teacher-in-the-loop (즉각 반응 토스트 알림 추가!)
     st.subheader("💡 AI 토론 촉진 (Teacher-in-the-loop)")
     st.info("AI가 대화 흐름을 분석하여 힌트를 제안합니다. 선생님이 검토/수정 후 학생들에게 전송하세요.")
     
@@ -375,6 +382,8 @@ if user_role == "교사" and teacher_auth:
     col_hint1, col_hint2 = st.columns(2)
     with col_hint1:
         if st.button("🪄 AI 힌트 초안 생성", use_container_width=True):
+            # 💡 [핵심 패치] 버튼을 누르는 즉시 우측 하단에 알림을 띄워 체감 속도 극대화!
+            st.toast("로봇이 맥락을 읽고 있습니다. 잠시만요! 🤖", icon="⏳") 
             with st.spinner("최근 맥락 분석 중..."):
                 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                 context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
@@ -394,21 +403,24 @@ if user_role == "교사" and teacher_auth:
                 execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
                               (room_name, now, "👨‍🏫 선생님 (AI 보조)", edited_hint, "❓ 질문"))
                 st.session_state['ai_hint_text'] = "" 
-                st.success("학생들 화면에 힌트가 전송되었습니다!")
+                st.toast("학생들 화면에 성공적으로 전송되었습니다! 🚀", icon="✅")
                 st.rerun()
 
     st.divider()
 
-    # 💡 3. [신규] 수업 종료 및 전체 AI 요약 리포트
+    # 💡 3. 수업 종료 리포트 (즉각 반응 토스트 알림 추가!)
     st.subheader("📝 수업 종료 및 전체 요약 리포트")
     if st.button("전체 토론 요약 및 베스트 발언 추출 🪄"):
-        with st.spinner("AI가 1차시 토론 전체를 분석하고 있습니다..."):
+        # 💡 [핵심 패치] 버튼을 누르는 즉시 알림 제공
+        st.toast("1차시 분량의 토론을 꼼꼼히 읽고 있습니다... 📚", icon="⏳") 
+        with st.spinner("AI가 1차시 토론 전체를 분석하고 있습니다... (약 5~10초 소요)"):
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
             full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
             prompt = f"'{current_topic}' 주제의 토론 기록입니다.\n1. 토론의 핵심 요약 3줄\n2. 가장 논리적이고 창의적인 주장을 펼친 학생 1명의 이름과 그 이유\n위 두 가지를 명확히 구분하여 작성해주세요.\n\n기록:\n{full_history}"
             try:
                 res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
                 st.info(res.text)
+                st.toast("분석 완료! 리포트가 생성되었습니다. 🎉", icon="✅")
             except Exception as e: st.error("AI 호출 오류")
 
     st.divider()
@@ -430,6 +442,7 @@ if user_role == "교사" and teacher_auth:
         if len(student_list) > 0:
             selected_student = st.selectbox("분석할 학생을 선택하세요", student_list)
             if st.button(f"'{selected_student}' 학생 세특 생성 🪄"):
+                st.toast(f"'{selected_student}' 학생의 활동을 분석 중입니다... 📝", icon="⏳")
                 with st.spinner("Gemini 2.5 AI 분석 중..."):
                     try:
                         student_data = df_all[df_all['student_name'] == selected_student]
