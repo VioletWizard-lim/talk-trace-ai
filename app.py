@@ -334,7 +334,7 @@ else:
     live_chat_board_auto()
 
 # ==========================================
-# [7] 교사 전용 대시보드 (🔥 화면 증발 완벽 방지 설계)
+# [7] 교사 전용 대시보드 (🔥 st.rerun() 완전 제거! 스크롤 튕김 완벽 해결)
 # ==========================================
 if user_role == "교사" and teacher_auth:
     st.divider()
@@ -343,8 +343,8 @@ if user_role == "교사" and teacher_auth:
     with col_dash_title:
         st.header("👨‍🏫 교사 관리 대시보드")
     with col_dash_refresh:
-        if st.button("🔄 대시보드 새로고침", use_container_width=True):
-            st.rerun()
+        if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
+            st.rerun() # 이 버튼만 예외적으로 전체 새로고침을 허용합니다.
 
     df_all = get_df_from_db("SELECT * FROM debate WHERE room_name = %s", (room_name,))
     
@@ -355,7 +355,7 @@ if user_role == "교사" and teacher_auth:
         if not student_only_df.empty:
             counts = student_only_df['student_name'].astype(str).value_counts().reset_index()
             counts.columns = ['학생 이름', '참여 횟수']
-            counts['학생 이름'] = counts['학생 이름'] + " "
+            counts['학생 이름'] = counts['학생 이름'] + " " 
             fig = px.bar(counts, x='학생 이름', y='참여 횟수', text='참여 횟수', color='학생 이름')
             fig.update_xaxes(type='category', title="") 
             fig.update_layout(yaxis_title="의견 수", dragmode=False, showlegend=False) 
@@ -365,93 +365,167 @@ if user_role == "교사" and teacher_auth:
             
     st.divider()
     
-    # --- 2. Teacher in the loop ---
-    st.subheader(f"💡 AI {act_type} 촉진 (Teacher-in-the-loop)")
-    st.info("AI 제안을 수정 후 전송하세요.")
-    
-    # 💡 [핵심 패치 1] 무거운 작업은 뒤로 미루고 버튼은 가볍게 이름표만 붙입니다!
-    if st.button("🪄 AI 힌트 초안 생성", use_container_width=True, on_click=set_working):
-        st.session_state['run_task'] = 'hint'
+    # --- 2. Teacher in the loop (🔥 스크롤 고정 패치) ---
+    @st.fragment
+    def teacher_hint_section():
+        st.subheader(f"💡 AI {act_type} 촉진 (Teacher-in-the-loop)")
+        st.info("AI 제안을 수정 후 전송하세요.")
         
-    hint_msg_box = st.empty() # AI 알림창이 들어갈 빈 '예약석'
-    
-    col_edit_txt, col_edit_btn = st.columns([8, 2])
-    with col_edit_txt:
-        edited_hint = st.text_input("선생님의 검토 및 수정", value=st.session_state.get('ai_hint_text', ''), help="AI 제안 내용을 수정하세요.", label_visibility="collapsed")
-    with col_edit_btn:
-        if st.button("🚀 학생 화면 전송", use_container_width=True, type="primary"):
-            if edited_hint.strip():
+        # [전송] 버튼을 눌렀을 때 실행될 백그라운드 함수 (화면 튕김 방지)
+        def send_hint():
+            val = st.session_state.get('hint_input_widget', '').strip()
+            if val:
                 now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
                 execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
-                              (room_name, now, "👨‍🏫 선생님 (AI 보조)", edited_hint, "❓ 질문"))
-                st.session_state['ai_hint_text'] = "" 
-                st.rerun()
-
-    st.divider()
-
-    # --- 3. 수업 종료 요약 리포트 ---
-    st.subheader(f"📝 수업 종료 및 전체 {act_type} 요약 리포트")
-    
-    # 💡 [핵심 패치 2] 무거운 작업은 뒤로 미루고 이름표만!
-    if st.button(f"{act_type} 요약 및 베스트 발언 추출 🪄", use_container_width=True, on_click=set_working):
-        st.session_state['run_task'] = 'summary'
+                              (room_name, now, "👨‍🏫 선생님 (AI 보조)", val, "❓ 질문"))
+                st.session_state['hint_input_widget'] = "" # 전송 후 글상자 비우기
         
-    report_msg_box = st.empty() # AI 알림창 예약석
-    
-    if st.session_state.get('ai_report_text'):
-        st.info(f"📊 **AI 수업 {act_type} 요약 리포트**")
-        st.markdown(st.session_state['ai_report_text'])
-
-    st.divider()
-
-    # --- 4. 세특 생성 및 다운로드 ---
-    col3, col4 = st.columns([1, 1])
-    with col3:
-        st.subheader("📥 활동 데이터 다운로드")
-        if not df_all.empty:
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer: df_all.to_excel(writer, index=False)
-            st.download_button(f"{act_type} 전체 활동 로그 (Excel)", data=buffer.getvalue(), file_name=f"{room_name}_log_{get_kst_now().strftime('%Y%m%d_%H%M')}.xlsx")
-
-    with col4:
-        st.subheader("🤖 개인별 AI 세특 초안 생성")
-        student_list = student_only_df['student_name'].unique() if not df_all.empty else []
-        
-        if len(student_list) > 0:
-            selected_student = st.selectbox("학생을 선택하세요", student_list)
+        hint_msg = st.empty()
+        if st.button("🪄 AI 힌트 초안 생성", use_container_width=True):
+            hint_msg.info("👀 AI가 최근 대화 맥락을 읽고 있습니다...")
+            import time; time.sleep(1)
             
-            # 💡 [핵심 패치 3] 무거운 작업은 미루고 누구를 선택했는지 이름표만!
-            if st.button(f"'{selected_student}' 세특 생성 🪄", use_container_width=True, on_click=set_working):
-                st.session_state['run_task'] = 'record'
-                st.session_state['selected_student'] = selected_student
+            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+            context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
+            hint_msg.warning("✍️ AI가 예리한 질문을 작성하고 있습니다...")
+            time.sleep(0.5)
+            
+            prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
+            try:
+                res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+                st.session_state['hint_input_widget'] = res.text.strip().split('\n')[0]
+                hint_msg.success("✅ 힌트 작성 완료!")
+                time.sleep(1)
+            except Exception as e: 
+                hint_msg.error(f"🚨 AI 호출 오류: {e}")
+                time.sleep(2)
+            hint_msg.empty() # 작업 완료 후 알림창 자연스럽게 숨기기 (새로고침 없음!)
+
+        col_edit_txt, col_edit_btn = st.columns([8, 2])
+        with col_edit_txt:
+            # key를 부여하여 st.session_state와 완벽하게 동기화시킵니다.
+            st.text_input("선생님의 검토 및 수정", key="hint_input_widget", label_visibility="collapsed", placeholder="여기에 AI 힌트가 나타납니다.")
+        with col_edit_btn:
+            # on_click 콜백을 사용하여 새로고침 없이 데이터를 DB에 꽂아 넣습니다.
+            st.button("🚀 학생 화면 전송", use_container_width=True, type="primary", on_click=send_hint)
+    
+    teacher_hint_section()
+    st.divider()
+
+    # --- 3. 수업 종료 요약 리포트 (🔥 스크롤 고정 패치) ---
+    @st.fragment
+    def teacher_summary_section():
+        st.subheader(f"📝 수업 종료 및 전체 {act_type} 요약 리포트")
+        report_msg = st.empty()
+        
+        if st.button(f"{act_type} 요약 및 베스트 발언 추출 🪄", use_container_width=True):
+            report_msg.info(f"👀 AI가 1차시 {act_type} 전체 기록을 꼼꼼히 읽고 있습니다...")
+            import time; time.sleep(1) 
+            if not df_all.empty:
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
+                report_msg.warning(f"✍️ AI가 {act_type} 요약 리포트를 작성하고 있습니다...")
+                time.sleep(0.5)
                 
-            record_msg_box = st.empty() # AI 알림창 예약석
-            
-            if st.session_state.get('ai_result_text'):
-                st.success("🤖 **개인별 세특 초안** (보관함에 자동 저장되었습니다)")
-                st.text_area("내용 수정 후 복사하여 사용하세요", value=st.session_state['ai_result_text'], height=200, label_visibility="collapsed")
-        else: st.info("실명 참여 학생이 없습니다.")
+                prompt = f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n[엄격한 규칙]\n1. {act_type}의 전체 맥락을 파악하고 핵심 내용을 딱 3줄로 요약하세요.\n2. 가장 논리적이고 창의적인 주장을 펼친 '학생 이름' 1명과 그 이유를 구체적으로 추출하세요.\n3. 보고서 형식으로 깔끔하게 출력하세요.\n\n기록:\n{full_history}"
+                try:
+                    res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+                    st.session_state['ai_report_text'] = res.text
+                    report_msg.success("✅ 리포트 작성 완료!")
+                    time.sleep(1)
+                except Exception as e: 
+                    report_msg.error(f"🚨 AI 호출 오류: {e}")
+                    time.sleep(2)
+            else:
+                report_msg.error("🚨 분석할 데이터가 없습니다.")
+                time.sleep(2)
+            report_msg.empty()
 
-    st.divider()
-    st.subheader("📂 저장된 세특 기록 보관함")
-    records_df = get_df_from_db("SELECT id, timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
-    
-    if not records_df.empty:
-        st.dataframe(records_df, use_container_width=True, column_config={"id": "No.", "content": st.column_config.TextColumn("세특 내용", width="large")})
-        col_down, col_del = st.columns([1, 1])
-        with col_down:
-            buffer_records = io.BytesIO()
-            with pd.ExcelWriter(buffer_records, engine='openpyxl') as writer: 
-                records_df.drop(columns=['id']).to_excel(writer, index=False)
-            st.download_button("📥 세특 보관함 다운로드 (Excel)", data=buffer_records.getvalue(), file_name=f"{room_name}_세특보관함.xlsx")
+        if st.session_state.get('ai_report_text'):
+            st.info(f"📊 **AI 수업 {act_type} 요약 리포트**")
+            st.markdown(st.session_state['ai_report_text'])
             
-        with col_del:
-            del_id = st.selectbox("🗑️ 삭제할 '고유 번호(No.)' 선택", records_df['id'].tolist())
-            if st.button("선택한 세특 기록 영구 삭제", type="primary"):
+    teacher_summary_section()
+    st.divider()
+
+    # --- 4. 세특 생성 및 다운로드 (🔥 스크롤 고정 패치) ---
+    @st.fragment
+    def teacher_record_section():
+        # [삭제] 버튼을 눌렀을 때 튕김 없이 조용히 DB만 지우는 함수
+        def delete_selected_record():
+            del_id = st.session_state.get('del_record_dropdown')
+            if del_id:
                 execute_query("DELETE FROM records WHERE id = %s", (del_id,))
-                st.success("삭제되었습니다.")
-                st.rerun()
-    else: st.info("저장된 기록이 없습니다.")
+                st.toast("기록이 삭제되었습니다.", icon="🗑️")
+
+        col3, col4 = st.columns([1, 1])
+        with col3:
+            st.subheader("📥 활동 데이터 다운로드")
+            if not df_all.empty:
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer: df_all.to_excel(writer, index=False)
+                st.download_button(f"{act_type} 전체 활동 로그 (Excel)", data=buffer.getvalue(), file_name=f"{room_name}_log_{get_kst_now().strftime('%Y%m%d_%H%M')}.xlsx")
+
+        with col4:
+            st.subheader("🤖 개인별 AI 세특 초안 생성")
+            student_list = student_only_df['student_name'].unique() if not df_all.empty else []
+            
+            if len(student_list) > 0:
+                selected_student = st.selectbox("학생을 선택하세요", student_list)
+                record_msg = st.empty()
+                
+                if st.button(f"'{selected_student}' 세특 생성 🪄", use_container_width=True):
+                    record_msg.info(f"👀 AI가 '{selected_student}' 학생의 활동 기록을 모아 읽고 있습니다...")
+                    import time; time.sleep(1)
+                    try:
+                        student_data = df_all[df_all['student_name'] == selected_student]
+                        debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
+                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                        
+                        record_msg.warning(f"✍️ AI가 '{selected_student}' 학생의 세특 초안을 작성 중입니다...")
+                        time.sleep(0.5)
+                        
+                        prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 {act_type}에 참여한 '{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
+                        response = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+                        st.session_state['ai_result_text'] = response.text
+                        
+                        record_msg.warning("💾 작성 완료! 보관함에 안전하게 저장 중입니다...")
+                        now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+                        execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
+                                      (room_name, now, selected_student, response.text))
+                        record_msg.success("✅ 세특 생성 및 보관함 저장 완료!")
+                        time.sleep(1)
+                    except Exception as e: 
+                        record_msg.error(f"🚨 AI 호출 오류: {e}")
+                        time.sleep(2)
+                    record_msg.empty()
+                
+                if st.session_state.get('ai_result_text'):
+                    st.success("🤖 **개인별 세특 초안** (보관함에 자동 저장되었습니다)")
+                    st.text_area("내용 수정 후 복사하여 사용하세요", value=st.session_state['ai_result_text'], height=200, label_visibility="collapsed")
+            else: st.info("실명 참여 학생이 없습니다.")
+
+        st.divider()
+        st.subheader("📂 저장된 세특 기록 보관함")
+        
+        # 내부에서 실시간으로 DB를 읽어와서 삭제 시 즉각 반영되도록 설계
+        records_df = get_df_from_db("SELECT id, timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
+        
+        if not records_df.empty:
+            st.dataframe(records_df, use_container_width=True, column_config={"id": "No.", "content": st.column_config.TextColumn("세특 내용", width="large")})
+            col_down, col_del = st.columns([1, 1])
+            with col_down:
+                buffer_records = io.BytesIO()
+                with pd.ExcelWriter(buffer_records, engine='openpyxl') as writer: 
+                    records_df.drop(columns=['id']).to_excel(writer, index=False)
+                st.download_button("📥 세특 보관함 다운로드 (Excel)", data=buffer_records.getvalue(), file_name=f"{room_name}_세특보관함.xlsx")
+                
+            with col_del:
+                st.selectbox("🗑️ 삭제할 '고유 번호(No.)' 선택", records_df['id'].tolist(), key="del_record_dropdown")
+                st.button("선택한 세특 기록 영구 삭제", type="primary", on_click=delete_selected_record)
+        else: st.info("저장된 기록이 없습니다.")
+        
+    teacher_record_section()
 
     st.divider()
     st.subheader("🚨 위험 구역 (방 폭파)")
@@ -463,87 +537,4 @@ if user_role == "교사" and teacher_auth:
             execute_query("DELETE FROM records WHERE room_name = %s", (room_name,))
             st.success("성공적으로 파괴되었습니다.")
             st.session_state['ai_result_text'] = ""
-            st.rerun()
-
-
-    # ==========================================
-    # 🔥 [최종병기] UI 증발 방지용 '백그라운드 AI 작업장'
-    # 여기서 모든 무거운 AI 작업을 몰아서 처리합니다! 화면이 절대 날아가지 않습니다.
-    # ==========================================
-    task = st.session_state.get('run_task')
-    
-    if task == 'hint':
-        with hint_msg_box: # 아까 잡아둔 힌트 예약석에 알림 띄우기!
-            hint_msg_box.info("👀 AI가 최근 대화 맥락을 읽고 있습니다...")
-            import time; time.sleep(1)
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
-            
-            hint_msg_box.warning("✍️ AI가 예리한 질문을 작성하고 있습니다...")
-            time.sleep(0.5)
-            prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
-            try:
-                res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                st.session_state['ai_hint_text'] = res.text.strip().split('\n')[0]
-                hint_msg_box.success("✅ 힌트 작성 완료!")
-                time.sleep(1)
-            except Exception as e: 
-                hint_msg_box.error(f"🚨 AI 호출 오류: {e}")
-                time.sleep(2)
-        st.session_state['run_task'] = None
-        st.session_state['is_working'] = False
-        st.rerun()
-        
-    elif task == 'summary':
-        with report_msg_box: # 요약 예약석에 알림 띄우기!
-            report_msg_box.info(f"👀 AI가 1차시 {act_type} 전체 기록을 꼼꼼히 읽고 있습니다...")
-            import time; time.sleep(1) 
-            if not df_all.empty:
-                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
-                report_msg_box.warning(f"✍️ AI가 {act_type} 요약 리포트를 작성하고 있습니다...")
-                time.sleep(0.5)
-                prompt = f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n[엄격한 규칙]\n1. {act_type}의 전체 맥락을 파악하고 핵심 내용을 딱 3줄로 요약하세요.\n2. 가장 논리적이고 창의적인 주장을 펼친 '학생 이름' 1명과 그 이유를 구체적으로 추출하세요.\n3. 보고서 형식으로 깔끔하게 출력하세요.\n\n기록:\n{full_history}"
-                try:
-                    res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                    st.session_state['ai_report_text'] = res.text
-                    report_msg_box.success("✅ 리포트 작성 완료!")
-                    time.sleep(1)
-                except Exception as e: 
-                    report_msg_box.error(f"🚨 AI 호출 오류: {e}")
-                    time.sleep(2)
-            else:
-                report_msg_box.error("🚨 분석할 데이터가 없습니다.")
-                time.sleep(2)
-        st.session_state['run_task'] = None
-        st.session_state['is_working'] = False
-        st.rerun()
-        
-    elif task == 'record':
-        with record_msg_box: # 세특 예약석에 알림 띄우기!
-            sel_stu = st.session_state.get('selected_student', '')
-            record_msg_box.info(f"👀 AI가 '{sel_stu}' 학생의 활동 기록을 모아 읽고 있습니다...")
-            import time; time.sleep(1)
-            try:
-                student_data = df_all[df_all['student_name'] == sel_stu]
-                debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
-                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                
-                record_msg_box.warning(f"✍️ AI가 '{sel_stu}' 학생의 세특 초안을 작성 중입니다...")
-                time.sleep(0.5)
-                prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 {act_type}에 참여한 '{sel_stu}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
-                response = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                st.session_state['ai_result_text'] = response.text
-                
-                record_msg_box.warning("💾 작성 완료! 보관함에 안전하게 저장 중입니다...")
-                now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
-                execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
-                              (room_name, now, sel_stu, response.text))
-                record_msg_box.success("✅ 세특 생성 및 보관함 저장 완료!")
-                time.sleep(1)
-            except Exception as e: 
-                record_msg_box.error(f"🚨 AI 호출 오류: {e}")
-                time.sleep(2)
-        st.session_state['run_task'] = None
-        st.session_state['is_working'] = False
-        st.rerun()
+            st.rerun() # 방 폭파는 화면 전체를 리셋해야 하므로 유일하게 허용!
