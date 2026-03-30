@@ -2,10 +2,21 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime, timedelta
+import logging
 import psycopg2
 import psycopg2.extras
 import google.generativeai as genai
 import plotly.express as px
+
+# ==========================================
+# [0] 로깅 설정
+# ==========================================
+logger = logging.getLogger("talk_trace_ai")
+if not logger.handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    )
 
 # ==========================================
 # [1] 데이터베이스 연결 및 타임존 설정
@@ -28,7 +39,9 @@ def insert_ai_placeholder_atomic(room_name):
             inserted_id = c.fetchone()[0]
             conn.commit() 
             return inserted_id
-    except Exception: return None
+    except Exception:
+        logger.exception("AI placeholder 생성 실패 (room_name=%s)", room_name)
+        return None
     finally:
         if conn is not None: conn.close()
 
@@ -40,7 +53,9 @@ def get_df_from_db(query, params=()):
             c.execute(query, params)
             data = c.fetchall()
             return pd.DataFrame(data, columns=[desc[0] for desc in c.description] if c.description else [])
-    except Exception: return pd.DataFrame()
+    except Exception:
+        logger.exception("DB 조회 실패 (query=%s, params=%s)", query, params)
+        return pd.DataFrame()
     finally:
         if conn is not None: conn.close()
 
@@ -51,6 +66,9 @@ def execute_query(query, params=()):
         with conn.cursor() as c:
             c.execute(query, params)
         conn.commit()
+    except Exception:
+        logger.exception("DB 실행 실패 (query=%s, params=%s)", query, params)
+        raise
     finally:
         if conn is not None: conn.close()
 
@@ -63,7 +81,9 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS records (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT)')
             c.execute('CREATE TABLE IF NOT EXISTS topic (room_name TEXT PRIMARY KEY, title TEXT, mode TEXT, entry_code TEXT DEFAULT \'\')')
         conn.commit()
-    except Exception as e: st.error(f"🚨 DB 연결 실패: {e}")
+    except Exception as e:
+        logger.exception("DB 초기화 실패")
+        st.error(f"🚨 DB 연결 실패: {e}")
     finally:
         if conn is not None: conn.close()
 
@@ -403,7 +423,8 @@ if user_role == "교사" and teacher_auth:
                 st.session_state['hint_input_widget'] = res.text.strip().split('\n')[0]
                 hint_msg.success("✅ 힌트 작성 완료!")
                 time.sleep(1)
-            except Exception as e: 
+            except Exception as e:
+                logger.exception("AI 힌트 생성 실패 (room_name=%s)", room_name)
                 hint_msg.error(f"🚨 AI 호출 오류: {e}")
                 time.sleep(2)
             hint_msg.empty() # 작업 완료 후 알림창 자연스럽게 숨기기 (새로고침 없음!)
@@ -440,7 +461,8 @@ if user_role == "교사" and teacher_auth:
                     st.session_state['ai_report_text'] = res.text
                     report_msg.success("✅ 리포트 작성 완료!")
                     time.sleep(1)
-                except Exception as e: 
+                except Exception as e:
+                    logger.exception("AI 요약 리포트 생성 실패 (room_name=%s)", room_name)
                     report_msg.error(f"🚨 AI 호출 오류: {e}")
                     time.sleep(2)
             else:
@@ -502,7 +524,8 @@ if user_role == "교사" and teacher_auth:
                                       (room_name, now, selected_student, response.text))
                         record_msg.success("✅ 세특 생성 및 보관함 저장 완료!")
                         time.sleep(1)
-                    except Exception as e: 
+                    except Exception as e:
+                        logger.exception("AI 세특 생성 실패 (room_name=%s, student=%s)", room_name, selected_student)
                         record_msg.error(f"🚨 AI 호출 오류: {e}")
                         time.sleep(2)
                     record_msg.empty()
