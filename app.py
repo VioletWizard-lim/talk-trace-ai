@@ -70,7 +70,7 @@ def init_db():
 init_db()
 
 # ==========================================
-# [2] 앱 기본 설정 및 CSS (🔥 위험구역 흐려짐까지 완전 차단!)
+# [2] 앱 기본 설정 및 CSS 
 # ==========================================
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
@@ -80,7 +80,6 @@ st.markdown(
     [data-testid="stStatusWidget"] { visibility: hidden !important; display: none !important; }
     [data-testid="stDecoration"] { display: none !important; }
     
-    /* 💡 [핵심 패치] stExpander, details, summary 등 모든 숨겨진 컨테이너까지 투명도 고정! */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"], [data-testid="stFragment"], 
     [data-testid="stVerticalBlock"], [data-testid="stElementContainer"], 
@@ -231,7 +230,7 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 st.divider()
 
 # ==========================================
-# [6] 실시간 업데이트 영역
+# [6] 실시간 업데이트 영역 
 # ==========================================
 @st.fragment(run_every="5s")
 def live_chat_board():
@@ -242,7 +241,14 @@ def live_chat_board():
             st.plotly_chart(px.pie(df, names="sentiment", hole=0.4, height=300), use_container_width=True, config={'displayModeBar': False})
         else: st.write("데이터 수집 중...")
 
-    st.subheader("💬 실시간 토론 보드")
+    # 💡 [핵심 패치] 교사에게만 보이는 실시간 보드 수동 새로고침 버튼 추가
+    col_board_title, col_board_ref = st.columns([8, 2])
+    with col_board_title:
+        st.subheader("💬 실시간 토론 보드")
+    with col_board_ref:
+        if user_role == "교사" and teacher_auth:
+            # st.fragment 내부의 버튼이므로 클릭하면 이 구역만 즉시 새로고침됩니다!
+            st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
     
     if not df.empty:
         teacher_df = df[df['student_name'].str.contains('선생님', na=False)]
@@ -292,12 +298,11 @@ def live_chat_board():
 live_chat_board()
 
 # ==========================================
-# [7] 교사 전용 대시보드 (🔥 4단계 패치: 수동 새로고침 & 직관적 고정 알림 적용)
+# [7] 교사 전용 대시보드
 # ==========================================
 if user_role == "교사" and teacher_auth:
     st.divider()
     
-    # 💡 [핵심 패치] 대시보드 전용 '수동 새로고침' 버튼 추가!
     col_dash_title, col_dash_refresh = st.columns([8, 2])
     with col_dash_title:
         st.header("👨‍🏫 교사 관리 대시보드")
@@ -306,9 +311,6 @@ if user_role == "교사" and teacher_auth:
             st.rerun()
 
     df_all = get_df_from_db("SELECT * FROM debate WHERE room_name = %s", (room_name,))
-    
-    # 💡 [핵심 패치] 애니메이션 없이 버튼 누르자마자 즉각 뜨는 '고정형 알림판'
-    working_status = st.empty()
     
     st.subheader("📊 학생 참여도 현황")
     if not df_all.empty:
@@ -334,16 +336,16 @@ if user_role == "교사" and teacher_auth:
     col_hint1, col_hint2 = st.columns(2)
     with col_hint1:
         if st.button("🪄 AI 힌트 초안 생성", use_container_width=True):
-            # 💡 [핵심 패치] 누르는 즉시 최상단 알림판에 고정 메시지 출력!
-            working_status.info("⏳ AI가 최근 맥락을 분석 중입니다... (약 3초 소요)")
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
-            prompt = f"당신은 고등학교 토론 조력자입니다. '{current_topic}' 주제로 토론 중입니다. 찬반 양측의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
-            try:
-                res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                st.session_state['ai_hint_text'] = res.text.strip().split('\n')[0]
-                st.rerun()
-            except Exception as e: working_status.error(f"🚨 AI 호출 오류: {e}")
+            # 💡 [핵심 패치] st.spinner를 사용하여 무조건 렌더링되게 보장!
+            with st.spinner("⏳ AI가 최근 맥락을 분석 중입니다... (약 3초 소요)"):
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
+                prompt = f"당신은 고등학교 토론 조력자입니다. '{current_topic}' 주제로 토론 중입니다. 찬반 양측의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
+                try:
+                    res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+                    st.session_state['ai_hint_text'] = res.text.strip().split('\n')[0]
+                except Exception as e: st.error(f"🚨 AI 호출 오류: {e}")
+            st.rerun() # 스피너 작업 완료 후 화면 갱신
                 
     edited_hint = st.text_input("선생님의 검토 및 수정", value=st.session_state['ai_hint_text'], help="AI 제안 내용을 수정하세요.")
     
@@ -360,19 +362,18 @@ if user_role == "교사" and teacher_auth:
 
     st.subheader("📝 수업 종료 및 전체 요약 리포트")
     if st.button("토론 요약 및 베스트 발언 추출 🪄", use_container_width=True):
-        # 💡 [핵심 패치] 누르는 즉시 최상단 알림판에 고정 메시지 출력!
-        working_status.info("⏳ AI가 1차시 토론 전체 기록을 꼼꼼히 읽고 있습니다... (약 10초 소요)")
-        if not df_all.empty:
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
-            prompt = f"'{current_topic}' 주제의 고등학교 찬반 토론 기록입니다.\n\n[엄격한 규칙]\n1. 토론의 전체 맥락을 파악하고 핵심 내용을 딱 3줄로 요약하세요.\n2. 가장 논리적이고 창의적인 주장을 펼친 '학생 이름' 1명과 그 이유를 구체적으로 추출하세요.\n3. 보고서 형식으로 깔끔하게 출력하세요.\n\n기록:\n{full_history}"
-            try:
-                res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                st.session_state['ai_report_text'] = res.text
-                working_status.success("🎉 분석 완료! 리포트가 성공적으로 생성되었습니다.")
-            except Exception as e: working_status.error(f"🚨 AI 호출 오류: {e}")
-        else:
-            working_status.error("🚨 분석할 토론 데이터가 없습니다.")
+        # 💡 [핵심 패치] st.spinner로 안내 문구 무조건 띄우기!
+        with st.spinner("⏳ AI가 1차시 토론 전체 기록을 꼼꼼히 읽고 있습니다... (약 10초 소요)"):
+            if not df_all.empty:
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
+                prompt = f"'{current_topic}' 주제의 고등학교 찬반 토론 기록입니다.\n\n[엄격한 규칙]\n1. 토론의 전체 맥락을 파악하고 핵심 내용을 딱 3줄로 요약하세요.\n2. 가장 논리적이고 창의적인 주장을 펼친 '학생 이름' 1명과 그 이유를 구체적으로 추출하세요.\n3. 보고서 형식으로 깔끔하게 출력하세요.\n\n기록:\n{full_history}"
+                try:
+                    res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+                    st.session_state['ai_report_text'] = res.text
+                except Exception as e: st.error(f"🚨 AI 호출 오류: {e}")
+            else:
+                st.error("🚨 분석할 토론 데이터가 없습니다.")
 
     if 'ai_report_text' not in st.session_state: st.session_state['ai_report_text'] = ""
     if st.session_state['ai_report_text']:
@@ -396,20 +397,20 @@ if user_role == "교사" and teacher_auth:
         if len(student_list) > 0:
             selected_student = st.selectbox("학생을 선택하세요", student_list)
             if st.button(f"'{selected_student}' 세특 생성 🪄", use_container_width=True):
-                # 💡 [핵심 패치] 누르는 즉시 최상단 알림판에 고정 메시지 출력!
-                working_status.info(f"⏳ AI가 '{selected_student}' 학생의 활동을 분석 중입니다... (약 5초 소요)")
-                try:
-                    student_data = df_all[df_all['student_name'] == selected_student]
-                    debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
-                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                    prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 토론에 참여한 '{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
-                    response = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                    st.session_state['ai_result_text'] = response.text
-                    now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
-                    execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
-                                  (room_name, now, selected_student, response.text))
-                    st.rerun()
-                except Exception as e: working_status.error(f"🚨 AI 호출 오류: {e}")
+                # 💡 [핵심 패치] 개인별 세특 생성도 확실한 스피너 안내!
+                with st.spinner(f"⏳ AI가 '{selected_student}' 학생의 활동을 분석 중입니다... (약 5초 소요)"):
+                    try:
+                        student_data = df_all[df_all['student_name'] == selected_student]
+                        debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
+                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                        prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 토론에 참여한 '{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
+                        response = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
+                        st.session_state['ai_result_text'] = response.text
+                        now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+                        execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
+                                      (room_name, now, selected_student, response.text))
+                    except Exception as e: st.error(f"🚨 AI 호출 오류: {e}")
+                st.rerun() # 작업 완료 후 갱신
             
             if st.session_state['ai_result_text']:
                 st.success("🤖 **개인별 세특 초안** (보관함에 자동 저장되었습니다)")
