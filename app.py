@@ -35,6 +35,17 @@ MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
 
+# 1. 가장 먼저 Supabase 연결 뼈대를 만듭니다.
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+# 2. 💡 (중요!) 위에서 만든 뼈대로 'supabase'라는 변수를 탄생시킵니다. (이 줄이 빠져서 났던 에러입니다)
+supabase = init_supabase()
+
+# 3. 이제 탄생한 'supabase'를 이용해 로그인을 시도합니다.
 if 'supabase_auth' not in st.session_state:
     try:
         supabase.auth.sign_in_with_password({
@@ -44,7 +55,7 @@ if 'supabase_auth' not in st.session_state:
         st.session_state['supabase_auth'] = True
     except Exception as e:
         logger.error(f"Supabase 인증 실패: {e}")
-        # 👇 이 부분을 수정해서 실제 에러 내용을 화면에 바로 띄워봅니다!
+        # 에러 원인을 화면에 띄워줍니다.
         st.error(f"🚨 DB 로그인 에러 상세 원인: {e}")
 
 def get_kst_now():
