@@ -50,12 +50,15 @@ def ensure_supabase_login():
     # 이미 세션이 있는지 확인
     curr_session = None
     try:
-        curr_session = supabase.auth.get_session()
+        # get_session() 결과가 None이거나 에러가 나면 로그인이 필요함
+        res = supabase.auth.get_session()
+        # 라이브러리 버전에 따라 res 자체가 세션이거나 res.session일 수 있음
+        curr_session = res.session if hasattr(res, 'session') else res
     except:
         curr_session = None
 
     # 세션이 없으면 로그인 시도
-    if curr_session is None or curr_session.session is None:
+    if not curr_session:
         try:
             supabase.auth.sign_in_with_password({
                 "email": st.secrets["SUPABASE_APP_EMAIL"],
@@ -67,7 +70,6 @@ def ensure_supabase_login():
             st.error(f"🚨 DB 자동 로그인 실패: {e}")
             return False
     return True
-
 # 로그인 실행
 ensure_supabase_login()
 
