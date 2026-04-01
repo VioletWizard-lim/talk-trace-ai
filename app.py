@@ -32,6 +32,7 @@ RECORDS_FETCH_LIMIT = 500
 LIVE_REFRESH_INTERVAL = "2s"
 AI_HINT_ENABLED = st.secrets.get("AI_HINT_ENABLED", True)
 ROOM_DESTROY_ENABLED = st.secrets.get("ROOM_DESTROY_ENABLED", True)
+AUTO_JOIN_ON_REFRESH = st.secrets.get("AUTO_JOIN_ON_REFRESH", True)
 MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
@@ -316,9 +317,15 @@ if not st.session_state['joined']:
                         st.session_state['joined'] = True; st.rerun()
                 elif student_pw: st.error("❌ 암호가 틀렸습니다.")
             else:
+                if AUTO_JOIN_ON_REFRESH:
+                    st.session_state['joined'] = True
+                    st.rerun()
                 if st.button(f"🚀 '{room_name}' 입장하기", type="primary", use_container_width=True):
                     st.session_state['joined'] = True; st.rerun()
         else:
+            if AUTO_JOIN_ON_REFRESH and teacher_auth:
+                st.session_state['joined'] = True
+                st.rerun()
             if st.button(f"🚀 '{room_name}' 관리자 권한으로 입장", type="primary", use_container_width=True):
                 st.session_state['joined'] = True; st.rerun()
     st.stop()
