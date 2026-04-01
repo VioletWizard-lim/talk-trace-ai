@@ -366,9 +366,6 @@ st.divider()
 # [6] 실시간 업데이트 영역
 # ==========================================
 def live_chat_board_core():
-    df = get_recent_debate_df(room_name, LIVE_BOARD_FETCH_LIMIT)
-    if not df.empty and "id" in df.columns:
-        df = df.sort_values("id")
     opinion_df = with_fallback_author_role(df) # 변수명 매칭 확인 (이전 코드에서 student_df 대신 opinion_df 혼용 부분 수정)
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
