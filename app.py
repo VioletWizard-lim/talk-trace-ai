@@ -420,21 +420,21 @@ def live_chat_board_core():
     col_board_title, col_board_ref = st.columns([8, 2])
     with col_board_title:
         st.subheader(f"💬 실시간 {act_type} 보드") 
-    with col_board_ref:
-        if user_role == "교사" and teacher_auth:
-            st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
-    
-    if not df.empty:
+       with col_board_ref:␊
+        if user_role == "교사" and teacher_auth:␊
+            st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")␊
+    ␊
+    if not df.empty:␊
         hint_df = df[(df["author_role"] == '교사') & df["student_name"].astype(str).str.contains("AI 보조", na=False)]
-        if not teacher_df.empty:
-            st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {teacher_df.iloc[0]['content']}")
+        if not hint_df.empty:
+            st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {hint_df.iloc[-1]['content']}")
         opinion_df = df.drop(index=hint_df.index) if not hint_df.empty else df
         
         # 💡 [핵심 패치 1] 삭제 작업을 0.1초 만에 먼저 처리하는 '콜백 함수'
         def delete_chat_msg(msg_id):
             execute_query("DELETE FROM debate WHERE id = %s", (msg_id,))
             log_audit("chat_deleted", room_name=room_name, actor_name=student_name, role=user_role, message_id=msg_id)
-            st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
+            st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")␊
 
         def render_msg(row):
             if user_role == "교사" and teacher_auth:
