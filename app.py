@@ -474,7 +474,7 @@ def live_chat_board_core():
                 st.markdown("### ❓ 질문")
                 with st.container(height=450):
                     for _, row in opinion_df[opinion_df['sentiment'] == '❓ 질문'].iterrows(): render_msg(row)
-else: st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
+    else: st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
 # 💡 [핵심 패치 2] 평소에는 5초 타이머 작동 모드!
 @st.fragment(run_every=LIVE_REFRESH_INTERVAL)
