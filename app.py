@@ -110,7 +110,7 @@ def log_audit(event, room_name="", actor_name="", role="", **extra):
 def get_recent_debate_df(room_name, limit):
     try:
         # 💡 .execute() 결과를 변수에 담아 상태를 확인합니다.
-        res = supabase.table("debate").select("*").eq("room_name", room_name).order("id", desc=True).limit(limit).execute()
+        res = supabase.table("debate").select("*").eq("room_name", room_name).order("id", desc=False).limit(limit).execute()
         
         # 만약 데이터가 비어있다면 사이드바 등에 살짝 힌트를 줍니다.
         if not res.data:
