@@ -8,6 +8,7 @@ import psycopg2.extras
 import google.generativeai as genai
 import plotly.express as px
 import time
+import re
 
 # ==========================================
 # [0] 로깅 설정
@@ -29,6 +30,10 @@ DASHBOARD_FETCH_LIMIT = 2000
 RECORDS_FETCH_LIMIT = 500
 LIVE_REFRESH_INTERVAL = "2s"
 AI_HINT_ENABLED = st.secrets.get("AI_HINT_ENABLED", True)
+ROOM_DESTROY_ENABLED = st.secrets.get("ROOM_DESTROY_ENABLED", True)
+MAX_ROOM_NAME_LEN = 60
+MAX_STUDENT_NAME_LEN = 30
+MAX_TOPIC_LEN = 120
 
 def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
@@ -55,6 +60,18 @@ def normalize_user_text(raw_text, max_len=500):
     if not text:
         return ""
     return text[:max_len]
+
+def normalize_room_name(raw_text):
+    text = normalize_user_text(raw_text, max_len=MAX_ROOM_NAME_LEN)
+    return re.sub(r"\s+", " ", text)
+
+def validate_room_name(room):
+    if not room:
+        return False
+    return re.fullmatch(r"[0-9A-Za-z가-힣 _\\-()]+", room) is not None
+
+def normalize_topic_title(raw_text):
+    return normalize_user_text(raw_text, max_len=MAX_TOPIC_LEN)
 
 def insert_ai_placeholder_atomic(room_name):
     conn = None
@@ -112,6 +129,7 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS debate (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT, sentiment TEXT)')
             c.execute('CREATE TABLE IF NOT EXISTS records (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT)')
             c.execute('CREATE TABLE IF NOT EXISTS topic (room_name TEXT PRIMARY KEY, title TEXT, mode TEXT, entry_code TEXT DEFAULT \'\')')
+            c.execute("ALTER TABLE debate ADD COLUMN IF NOT EXISTS author_role TEXT DEFAULT '학생'")
             c.execute('CREATE INDEX IF NOT EXISTS idx_debate_room_id ON debate (room_name, id DESC)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_records_room_id ON records (room_name, id DESC)')
         conn.commit()
@@ -199,10 +217,14 @@ with st.sidebar:
                 new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
                 
                 if st.button("새 방 개설하기", type="primary"):
-                    if new_room and new_title:
+                    safe_room_name = normalize_room_name(new_room)
+                    safe_title = normalize_topic_title(new_title)
+                    if not validate_room_name(safe_room_name):
+                        st.error("방 이름은 한글/영문/숫자/공백/-/_/괄호만 사용할 수 있습니다.")
+                    elif safe_room_name and safe_title:
                         execute_query("INSERT INTO topic (room_name, title, mode, entry_code) VALUES (%s, %s, %s, %s) ON CONFLICT (room_name) DO NOTHING", 
-                                      (new_room, new_title, new_mode, new_pw))
-                        st.success(f"'{new_room}' 방이 개설되었습니다! 위쪽에서 '기존 방 선택'을 눌러 입장하세요.")
+                                      (safe_room_name, safe_title, new_mode, new_pw))
+                        st.success(f"'{safe_room_name}' 방이 개설되었습니다! 위쪽에서 '기존 방 선택'을 눌러 입장하세요.")
                     else:
                         st.error("방 이름과 주제를 모두 입력해주세요.")
                 room_name = new_room
@@ -301,11 +323,11 @@ with col_stt:
 
 if st.button("의견 제출", use_container_width=True, type="primary"):
     safe_input = normalize_user_text(user_input, max_len=700)
-    safe_student_name = normalize_user_text(student_name, max_len=30) or "익명"
+    safe_student_name = normalize_user_text(student_name, max_len=MAX_STUDENT_NAME_LEN) or "익명"
     if safe_input:
         now = get_kst_now_str()
-        execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
-                      (room_name, now, safe_student_name, safe_input, sentiment))
+        execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment, author_role) VALUES (%s, %s, %s, %s, %s, %s)",
+                      (room_name, now, safe_student_name, safe_input, sentiment, user_role))
         st.session_state['reset_key'] += 1
         st.rerun()
     else:
@@ -335,11 +357,11 @@ def live_chat_board_core():
             st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
     
     if not df.empty:
-        teacher_df = df[df['student_name'].str.contains('선생님', na=False)]
+        teacher_df = df[df.get('author_role', '') == '교사']
         if not teacher_df.empty:
             st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {teacher_df.iloc[0]['content']}")
 
-        student_df = df[~df['student_name'].str.contains('선생님', na=False)]
+        student_df = df[df.get('author_role', '학생') == '학생']
         
         # 💡 [핵심 패치 1] 삭제 작업을 0.1초 만에 먼저 처리하는 '콜백 함수'
         def delete_chat_msg(msg_id):
@@ -419,7 +441,7 @@ if user_role == "교사" and teacher_auth:
     # --- 1. 통계 ---
     st.subheader("📊 학생 참여도 현황")
     if not df_all.empty:
-        student_only_df = df_all[~df_all['student_name'].str.contains('교사|선생님|익명|AI', na=False, regex=True)].copy()
+        student_only_df = df_all[(df_all.get('author_role', '학생') == '학생') & ~df_all['student_name'].str.contains('익명|AI', na=False, regex=True)].copy()
         if not student_only_df.empty:
             counts = student_only_df['student_name'].astype(str).value_counts().reset_index()
             counts.columns = ['학생 이름', '참여 횟수']
@@ -444,11 +466,11 @@ if user_role == "교사" and teacher_auth:
             val = st.session_state.get('hint_input_widget', '').strip()
             if val:
                 now = get_kst_now_str()
-                execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
-                              (room_name, now, "👨‍🏫 선생님 (AI 보조)", val, "❓ 질문"))
+                execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment, author_role) VALUES (%s, %s, %s, %s, %s, %s)",
+                              (room_name, now, "👨‍🏫 선생님 (AI 보조)", val, "❓ 질문", "교사"))
                 st.session_state['hint_input_widget'] = "" # 전송 후 글상자 비우기
-        
-        hint_msg = st.empty()
+
+        hint_msg = st.empty()                
         if AI_HINT_ENABLED:
             if st.button("🪄 AI 힌트 초안 생성", use_container_width=True):
                 hint_msg.info("👀 AI가 최근 대화 맥락을 읽고 있습니다...")
@@ -616,11 +638,14 @@ if user_role == "교사" and teacher_auth:
     st.divider()
     st.subheader("🚨 위험 구역 (방 폭파)")
     with st.expander("이 방 전체 삭제하기 (클릭 시 펼쳐짐)", expanded=False):
-        st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록과 세특 보관함이 완전히 삭제됩니다.")
-        if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True):
-            execute_query("DELETE FROM topic WHERE room_name = %s", (room_name,))
-            execute_query("DELETE FROM debate WHERE room_name = %s", (room_name,))
-            execute_query("DELETE FROM records WHERE room_name = %s", (room_name,))
-            st.success("성공적으로 파괴되었습니다.")
-            st.session_state['ai_result_text'] = ""
-            st.rerun() # 방 폭파는 화면 전체를 리셋해야 하므로 유일하게 허용!
+        if not ROOM_DESTROY_ENABLED:
+            st.warning("운영 안전 모드로 방 폭파 기능이 비활성화되어 있습니다.")
+        else:
+            st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록과 세특 보관함이 완전히 삭제됩니다.")
+            if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True):
+                execute_query("DELETE FROM topic WHERE room_name = %s", (room_name,))
+                execute_query("DELETE FROM debate WHERE room_name = %s", (room_name,))
+                execute_query("DELETE FROM records WHERE room_name = %s", (room_name,))
+                st.success("성공적으로 파괴되었습니다.")
+                st.session_state['ai_result_text'] = ""
+                st.rerun() # 방 폭파는 화면 전체를 리셋해야 하므로 유일하게 허용!
