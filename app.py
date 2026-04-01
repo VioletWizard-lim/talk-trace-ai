@@ -450,29 +450,29 @@ def live_chat_board_core():
                 st.info(row['content'])
             st.write("")
 
-        if current_mode == "⚔️ 찬반 토론":␊
-            col_pro, col_con = st.columns(2)␊
-            with col_pro:␊
-                st.markdown("### 🔵 찬성 측")␊
-                with st.container(height=450):␊
+        if current_mode == "⚔️ 찬반 토론":
+            col_pro, col_con = st.columns(2)
+            with col_pro:
+                st.markdown("### 🔵 찬성 측")
+                with st.container(height=450):
                     for _, row in opinion_df[opinion_df['sentiment'] == '🔵 찬성'].iterrows(): render_msg(row)
-            with col_con:␊
-                st.markdown("### 🔴 반대 측")␊
-                with st.container(height=450):␊
+            with col_con:
+                st.markdown("### 🔴 반대 측")
+                with st.container(height=450):
                     for _, row in opinion_df[opinion_df['sentiment'] == '🔴 반대'].iterrows(): render_msg(row)
-        else:␊
-            col_idea, col_plus, col_q = st.columns(3)␊
-            with col_idea:␊
-                st.markdown("### 💡 아이디어")␊
-                with st.container(height=450):␊
+        else:
+            col_idea, col_plus, col_q = st.columns(3)
+            with col_idea:
+                st.markdown("### 💡 아이디어")
+                with st.container(height=450):
                     for _, row in opinion_df[opinion_df['sentiment'] == '💡 아이디어'].iterrows(): render_msg(row)
-            with col_plus:␊
-                st.markdown("### ➕ 보충")␊
-                with st.container(height=450):␊
+            with col_plus:
+                st.markdown("### ➕ 보충")
+                with st.container(height=450):
                     for _, row in opinion_df[opinion_df['sentiment'] == '➕ 보충'].iterrows(): render_msg(row)
-            with col_q:␊
-                st.markdown("### ❓ 질문")␊
-                with st.container(height=450):␊
+            with col_q:
+                st.markdown("### ❓ 질문")
+                with st.container(height=450):
                     for _, row in opinion_df[opinion_df['sentiment'] == '❓ 질문'].iterrows(): render_msg(row)
 else: st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
