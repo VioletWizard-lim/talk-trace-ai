@@ -1,10 +1,6 @@
 streamlit
-streamlit-autorefresh
-google-genai
-psycopg2-binary
-python-dotenv
 pandas
+supabase
+google-generativeai
 plotly
 openpyxl
-SpeechRecognition
-google-generativeai
