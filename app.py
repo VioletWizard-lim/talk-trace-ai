@@ -410,7 +410,7 @@ def live_chat_board_core():
     if not df.empty:
         teacher_df = df[df["author_role"] == '교사']
         if not teacher_df.empty:
-            st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {teacher_df.iloc[0]['content']}")␊
+            st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {teacher_df.iloc[0]['content']}")
 
         student_df = df[df["author_role"] == '학생']
         
