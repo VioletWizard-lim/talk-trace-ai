@@ -22,11 +22,15 @@ if not logger.handlers:
 # ==========================================
 # [1] 데이터베이스 연결 및 타임존 설정
 # ==========================================
-def get_kst_now():
-    return datetime.utcnow() + timedelta(hours=9)
-
 DATETIME_FMT = "%Y-%m-%d %H:%M:%S"
 AI_MODEL_NAME = "gemini-2.5-flash"
+LIVE_BOARD_FETCH_LIMIT = 300
+DASHBOARD_FETCH_LIMIT = 2000
+RECORDS_FETCH_LIMIT = 500
+
+
+def get_kst_now():
+    return datetime.utcnow() + timedelta(hours=9)
 
 def get_kst_now_str():
     return get_kst_now().strftime(DATETIME_FMT)
@@ -39,6 +43,11 @@ def generate_ai_response(prompt, log_message, **context):
         logger.exception("%s (context=%s)", log_message, context)
         return None
 
+def get_recent_debate_df(room_name, limit):
+    return get_df_from_db(
+        "SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT %s",
+        (room_name, limit),
+    )
 
 def insert_ai_placeholder_atomic(room_name):
     conn = None
@@ -96,6 +105,8 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS debate (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT, sentiment TEXT)')
             c.execute('CREATE TABLE IF NOT EXISTS records (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT)')
             c.execute('CREATE TABLE IF NOT EXISTS topic (room_name TEXT PRIMARY KEY, title TEXT, mode TEXT, entry_code TEXT DEFAULT \'\')')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_debate_room_id ON debate (room_name, id DESC)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_records_room_id ON records (room_name, id DESC)')
         conn.commit()
     except Exception as e:
         logger.exception("DB 초기화 실패")
@@ -295,7 +306,7 @@ st.divider()
 # ==========================================
 # 이 함수는 화면을 그리는 알맹이입니다.
 def live_chat_board_core():
-    df = get_df_from_db("SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC", (room_name,))
+    df = get_recent_debate_df(room_name, LIVE_BOARD_FETCH_LIMIT)
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
         if not df.empty:
@@ -389,7 +400,7 @@ if user_role == "교사" and teacher_auth:
         if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
             st.rerun() # 이 버튼만 예외적으로 전체 새로고침을 허용합니다.
 
-    df_all = get_df_from_db("SELECT * FROM debate WHERE room_name = %s", (room_name,))
+    df_all = get_recent_debate_df(room_name, DASHBOARD_FETCH_LIMIT)
     
     # --- 1. 통계 ---
     st.subheader("📊 학생 참여도 현황")
@@ -562,8 +573,11 @@ if user_role == "교사" and teacher_auth:
         st.subheader("📂 저장된 세특 기록 보관함")
         
         # 내부에서 실시간으로 DB를 읽어와서 삭제 시 즉각 반영되도록 설계
-        records_df = get_df_from_db("SELECT id, timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC", (room_name,))
-        
+        records_df = get_df_from_db(
+            "SELECT id, timestamp, student_name, content FROM records WHERE room_name = %s ORDER BY id DESC LIMIT %s",
+            (room_name, RECORDS_FETCH_LIMIT),
+        )
+
         if not records_df.empty:
             st.dataframe(records_df, use_container_width=True, column_config={"id": "No.", "content": st.column_config.TextColumn("세특 내용", width="large")})
             col_down, col_del = st.columns([1, 1])
