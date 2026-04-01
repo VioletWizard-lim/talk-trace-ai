@@ -176,6 +176,14 @@ def reset_joined_state():
 # [3] 사이드바 (방 관리 - 심플 모드)
 # ==========================================
 with st.sidebar:
+    # --- 🚨 임시 X-ray 검사 코드 시작 ---
+    st.info(f"🔑 로그인 상태: {supabase.auth.get_session() is not None}")
+    try:
+        _test = supabase.table("topic").select("*").execute()
+        st.success(f"📂 불러온 방 개수: {len(_test.data)}개")
+    except Exception as e:
+        st.error(f"💥 조회 에러: {e}")
+    # --- 🚨 임시 X-ray 검사 코드 끝 ---
     st.header("👤 접속 권한")
     user_role = st.radio("모드 선택", ["학생", "교사"], on_change=reset_joined_state)
     st.divider()
