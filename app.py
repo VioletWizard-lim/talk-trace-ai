@@ -434,7 +434,7 @@ def live_chat_board_core():
         def delete_chat_msg(msg_id):
             execute_query("DELETE FROM debate WHERE id = %s", (msg_id,))
             log_audit("chat_deleted", room_name=room_name, actor_name=student_name, role=user_role, message_id=msg_id)
-            st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")␊
+            st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
 
         def render_msg(row):
             if user_role == "교사" and teacher_auth:
