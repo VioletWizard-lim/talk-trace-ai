@@ -35,6 +35,18 @@ MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
 
+if 'supabase_auth' not in st.session_state:
+    try:
+        supabase.auth.sign_in_with_password({
+            "email": st.secrets["SUPABASE_APP_EMAIL"],
+            "password": st.secrets["SUPABASE_APP_PASSWORD"]
+        })
+        st.session_state['supabase_auth'] = True
+    except Exception as e:
+        logger.error(f"Supabase 인증 실패: {e}")
+        # 👇 이 부분을 수정해서 실제 에러 내용을 화면에 바로 띄워봅니다!
+        st.error(f"🚨 DB 로그인 에러 상세 원인: {e}")
+
 def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
 
