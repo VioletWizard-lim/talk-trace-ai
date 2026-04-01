@@ -57,24 +57,6 @@ def get_recent_debate_df(room_name, limit):
     return get_df_from_db(
         "SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT %s",
         (room_name, limit),
-    )def get_kst_now():
-    return datetime.utcnow() + timedelta(hours=9)
-
-def get_kst_now_str():
-    return get_kst_now().strftime(DATETIME_FMT)
-
-def generate_ai_response(prompt, log_message, **context):
-    try:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        return genai.GenerativeModel(AI_MODEL_NAME).generate_content(prompt).text
-    except Exception:
-        logger.exception("%s (context=%s)", log_message, context)
-        return None
-
-def get_recent_debate_df(room_name, limit):
-    return get_df_from_db(
-        "SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT %s",
-        (room_name, limit),
     )
 
 def normalize_user_text(raw_text, max_len=500):
