@@ -73,6 +73,16 @@ def validate_room_name(room):
 def normalize_topic_title(raw_text):
     return normalize_user_text(raw_text, max_len=MAX_TOPIC_LEN)
 
+def log_audit(event, room_name="", actor_name="", role="", **extra):
+    logger.info(
+        "AUDIT event=%s room=%s actor=%s role=%s extra=%s",
+        event,
+        room_name,
+        actor_name,
+        role,
+        extra,
+    )
+
 def insert_ai_placeholder_atomic(room_name):
     conn = None
     try:
@@ -221,13 +231,16 @@ with st.sidebar:
                     safe_title = normalize_topic_title(new_title)
                     if not validate_room_name(safe_room_name):
                         st.error("방 이름은 한글/영문/숫자/공백/-/_/괄호만 사용할 수 있습니다.")
+                        room_name = ""
                     elif safe_room_name and safe_title:
                         execute_query("INSERT INTO topic (room_name, title, mode, entry_code) VALUES (%s, %s, %s, %s) ON CONFLICT (room_name) DO NOTHING", 
                                       (safe_room_name, safe_title, new_mode, new_pw))
                         st.success(f"'{safe_room_name}' 방이 개설되었습니다! 위쪽에서 '기존 방 선택'을 눌러 입장하세요.")
+                        log_audit("room_created", room_name=safe_room_name, actor_name="교사", role="교사", mode=new_mode)
+                        room_name = safe_room_name
                     else:
                         st.error("방 이름과 주제를 모두 입력해주세요.")
-                room_name = new_room
+                        room_name = ""
     else:
         if existing_rooms:
             room_name = st.selectbox("🏠 접속할 방 선택", existing_rooms)
@@ -328,6 +341,7 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
         now = get_kst_now_str()
         execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment, author_role) VALUES (%s, %s, %s, %s, %s, %s)",
                       (room_name, now, safe_student_name, safe_input, sentiment, user_role))
+        log_audit("opinion_submitted", room_name=room_name, actor_name=safe_student_name, role=user_role, sentiment=sentiment)
         st.session_state['reset_key'] += 1
         st.rerun()
     else:
@@ -366,12 +380,13 @@ def live_chat_board_core():
         # 💡 [핵심 패치 1] 삭제 작업을 0.1초 만에 먼저 처리하는 '콜백 함수'
         def delete_chat_msg(msg_id):
             execute_query("DELETE FROM debate WHERE id = %s", (msg_id,))
+            log_audit("chat_deleted", room_name=room_name, actor_name=student_name, role=user_role, message_id=msg_id)
             st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
 
         def render_msg(row):
             if user_role == "교사" and teacher_auth:
                 c_name, c_btn = st.columns([5, 1])
-                with c_name: 
+                with c_name:
                     st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
                 with c_btn:
                     # 💡 [핵심 패치 2] st.rerun()을 지우고 on_click 으로 콜백 함수 연결!
