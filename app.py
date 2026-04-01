@@ -180,10 +180,13 @@ with st.sidebar:
     user_role = st.radio("모드 선택", ["학생", "교사"], on_change=reset_joined_state)
     st.divider()
 
+    # 👇 이 부분을 수정해 주세요!
     try:
         rooms_res = supabase.table("topic").select("room_name").execute()
         existing_rooms = list(set(item['room_name'] for item in rooms_res.data)) if rooms_res.data else []
-    except Exception:
+    except Exception as e:
+        # 에러를 숨기지 말고 사이드바에 빨간 글씨로 출력합니다!
+        st.error(f"🚨 방 목록 조회 에러: {e}")
         existing_rooms = []
     
     room_name = ""
