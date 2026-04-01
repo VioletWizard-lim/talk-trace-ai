@@ -391,9 +391,10 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
     safe_student_name = normalize_user_text(student_name, max_len=MAX_STUDENT_NAME_LEN) or "익명"
     if safe_input:
         now = get_kst_now_str()
+        author_role_for_submit = "교사" if user_role == "교사" else "학생"
         execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment, author_role) VALUES (%s, %s, %s, %s, %s, %s)",
-                      (room_name, now, safe_student_name, safe_input, sentiment, user_role))
-        log_audit("opinion_submitted", room_name=room_name, actor_name=safe_student_name, role=user_role, sentiment=sentiment)
+                      (room_name, now, safe_student_name, safe_input, sentiment, author_role_for_submit))
+        log_audit("opinion_submitted", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, sentiment=sentiment)
         st.session_state['reset_key'] += 1
         st.rerun()
     else:
@@ -424,11 +425,10 @@ def live_chat_board_core():
             st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
     
     if not df.empty:
-        teacher_df = df[df["author_role"] == '교사']
+        hint_df = df[(df["author_role"] == '교사') & df["student_name"].astype(str).str.contains("AI 보조", na=False)]
         if not teacher_df.empty:
             st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {teacher_df.iloc[0]['content']}")
-
-        student_df = df[df["author_role"] == '학생']
+        opinion_df = df.drop(index=hint_df.index) if not hint_df.empty else df
         
         # 💡 [핵심 패치 1] 삭제 작업을 0.1초 만에 먼저 처리하는 '콜백 함수'
         def delete_chat_msg(msg_id):
@@ -450,31 +450,31 @@ def live_chat_board_core():
                 st.info(row['content'])
             st.write("")
 
-        if current_mode == "⚔️ 찬반 토론":
-            col_pro, col_con = st.columns(2)
-            with col_pro:
-                st.markdown("### 🔵 찬성 측")
-                with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '🔵 찬성'].iterrows(): render_msg(row)
-            with col_con:
-                st.markdown("### 🔴 반대 측")
-                with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '🔴 반대'].iterrows(): render_msg(row)
-        else:
-            col_idea, col_plus, col_q = st.columns(3)
-            with col_idea:
-                st.markdown("### 💡 아이디어")
-                with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '💡 아이디어'].iterrows(): render_msg(row)
-            with col_plus:
-                st.markdown("### ➕ 보충")
-                with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '➕ 보충'].iterrows(): render_msg(row)
-            with col_q:
-                st.markdown("### ❓ 질문")
-                with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '❓ 질문'].iterrows(): render_msg(row)
-    else: st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
+        if current_mode == "⚔️ 찬반 토론":␊
+            col_pro, col_con = st.columns(2)␊
+            with col_pro:␊
+                st.markdown("### 🔵 찬성 측")␊
+                with st.container(height=450):␊
+                    for _, row in opinion_df[opinion_df['sentiment'] == '🔵 찬성'].iterrows(): render_msg(row)
+            with col_con:␊
+                st.markdown("### 🔴 반대 측")␊
+                with st.container(height=450):␊
+                    for _, row in opinion_df[opinion_df['sentiment'] == '🔴 반대'].iterrows(): render_msg(row)
+        else:␊
+            col_idea, col_plus, col_q = st.columns(3)␊
+            with col_idea:␊
+                st.markdown("### 💡 아이디어")␊
+                with st.container(height=450):␊
+                    for _, row in opinion_df[opinion_df['sentiment'] == '💡 아이디어'].iterrows(): render_msg(row)
+            with col_plus:␊
+                st.markdown("### ➕ 보충")␊
+                with st.container(height=450):␊
+                    for _, row in opinion_df[opinion_df['sentiment'] == '➕ 보충'].iterrows(): render_msg(row)
+            with col_q:␊
+                st.markdown("### ❓ 질문")␊
+                with st.container(height=450):␊
+                    for _, row in opinion_df[opinion_df['sentiment'] == '❓ 질문'].iterrows(): render_msg(row)
+else: st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
 # 💡 [핵심 패치 2] 평소에는 5초 타이머 작동 모드!
 @st.fragment(run_every=LIVE_REFRESH_INTERVAL)
