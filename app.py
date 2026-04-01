@@ -35,75 +35,49 @@ MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
 
-# 1. 가장 먼저 Supabase 연결 뼈대를 만듭니다.
+# --- Supabase 초기화 함수 ---
 @st.cache_resource
 def init_supabase() -> Client:
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
 
-# 2. 💡 (중요!) 위에서 만든 뼈대로 'supabase'라는 변수를 탄생시킵니다. (이 줄이 빠져서 났던 에러입니다)
+# 1. supabase 변수 생성 (딱 한 번만 실행)
 supabase = init_supabase()
 
-# 💡 세션 상태를 직접 체크하여 로그인이 안 되어 있으면 즉시 시도합니다.
-curr_session = None
-try:
-    curr_session = supabase.auth.get_session()
-except:
+# 2. 자동 로그인 로직 (세션 체크 후 필요할 때만 로그인)
+def ensure_supabase_login():
+    # 이미 세션이 있는지 확인
     curr_session = None
-
-if curr_session is None:
     try:
-        supabase.auth.sign_in_with_password({
-            "email": st.secrets["SUPABASE_APP_EMAIL"],
-            "password": st.secrets["SUPABASE_APP_PASSWORD"]
-        })
-        # 로그인 직후 세션이 바로 반영되지 않을 수 있으므로 한 번 더 확인
-        time.sleep(0.5) 
-    except Exception as e:
-        st.error(f"🚨 Supabase 자동 로그인 실패: {e}")
+        curr_session = supabase.auth.get_session()
+    except:
+        curr_session = None
 
-# 3. 이제 탄생한 'supabase'를 이용해 로그인을 시도합니다.
-if 'supabase_auth' not in st.session_state:
-    try:
-        supabase.auth.sign_in_with_password({
-            "email": st.secrets["SUPABASE_APP_EMAIL"],
-            "password": st.secrets["SUPABASE_APP_PASSWORD"]
-        })
-        st.session_state['supabase_auth'] = True
-    except Exception as e:
-        logger.error(f"Supabase 인증 실패: {e}")
-        # 에러 원인을 화면에 띄워줍니다.
-        st.error(f"🚨 DB 로그인 에러 상세 원인: {e}")
+    # 세션이 없으면 로그인 시도
+    if curr_session is None or curr_session.session is None:
+        try:
+            supabase.auth.sign_in_with_password({
+                "email": st.secrets["SUPABASE_APP_EMAIL"],
+                "password": st.secrets["SUPABASE_APP_PASSWORD"]
+            })
+            time.sleep(0.5) # 로그인 반영 대기
+            return True
+        except Exception as e:
+            st.error(f"🚨 DB 자동 로그인 실패: {e}")
+            return False
+    return True
 
+# 로그인 실행
+ensure_supabase_login()
+
+# --- 기타 유틸리티 함수들 ---
 def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
 
 def get_kst_now_str():
     return get_kst_now().strftime(DATETIME_FMT)
 
-# --- Supabase 초기화 및 자동 로그인 ---
-@st.cache_resource
-def init_supabase() -> Client:
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"] # anon key
-    return create_client(url, key)
-
-supabase = init_supabase()
-
-if 'supabase_auth' not in st.session_state:
-    try:
-        # RLS 'authenticated' 정책을 통과하기 위한 백그라운드 자동 로그인
-        supabase.auth.sign_in_with_password({
-            "email": st.secrets["SUPABASE_APP_EMAIL"],
-            "password": st.secrets["SUPABASE_APP_PASSWORD"]
-        })
-        st.session_state['supabase_auth'] = True
-    except Exception as e:
-        logger.error(f"Supabase 인증 실패: {e}")
-        st.error("데이터베이스 인증에 실패했습니다. 관리자에게 문의하세요.")
-
-# --- 유틸리티 및 AI ---
 def generate_ai_response(prompt, log_message, **context):
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -131,7 +105,6 @@ def with_fallback_author_role(df):
 def log_audit(event, room_name="", actor_name="", role="", **extra):
     logger.info("AUDIT event=%s room=%s actor=%s role=%s extra=%s", event, room_name, actor_name, role, extra)
 
-# --- DB 통신 함수 (REST API) ---
 def get_recent_debate_df(room_name, limit):
     try:
         res = supabase.table("debate").select("*").eq("room_name", room_name).order("id", desc=True).limit(limit).execute()
