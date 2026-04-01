@@ -181,7 +181,7 @@ with st.sidebar:
 # 👇 이 부분을 수정해 줍니다.
     try:        
         # 방법: 가장 최근에 만든 방부터(최신순) 보고 싶다면 위 줄을 지우고 아래 줄을 쓰세요.
-        # rooms_res = supabase.table("topic").select("room_name").order("created_at", desc=True).execute()
+        rooms_res = supabase.table("topic").select("room_name").order("created_at", desc=True).execute()
 
         # 💡 순서를 뒤섞어버리는 set()을 완전히 빼버렸습니다!
         existing_rooms = [item['room_name'] for item in rooms_res.data] if rooms_res.data else []
