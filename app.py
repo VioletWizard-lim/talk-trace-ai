@@ -222,6 +222,7 @@ if 'ai_hint_text' not in st.session_state: st.session_state['ai_hint_text'] = ""
 if 'ai_report_text' not in st.session_state: st.session_state['ai_report_text'] = ""
 if 'current_room' not in st.session_state: st.session_state['current_room'] = ""
 if 'joined' not in st.session_state: st.session_state['joined'] = False
+if 'teacher_auth' not in st.session_state: st.session_state['teacher_auth'] = False
 
 # 💡 [핵심 패치 1] AI가 일하고 있는지 체크하는 변수 생성!
 if 'is_working' not in st.session_state: st.session_state['is_working'] = False
@@ -234,6 +235,7 @@ def set_working():
 
 def reset_joined_state():
     st.session_state['joined'] = False
+    st.session_state['teacher_auth'] = False
 
 # ==========================================
 # [3] 사이드바 (방 관리 - 심플 모드)
@@ -250,11 +252,17 @@ with st.sidebar:
     teacher_auth = False
     
     if user_role == "교사":
-        pw = st.text_input("교사 인증 암호", type="password")
+        pw = st.text_input("교사 인증 암호", type="password", key="teacher_pw_input")
         if pw == st.secrets["TEACHER_PW"]:
-            teacher_auth = True; st.success("인증 성공!")
+            st.session_state['teacher_auth'] = True
+        elif pw:
+            st.session_state['teacher_auth'] = False
+            st.error("❌ 교사 인증 암호가 올바르지 않습니다.")
+        teacher_auth = st.session_state['teacher_auth']
+        if teacher_auth:
+            st.success("인증 성공!")
             room_opt = st.radio("방 관리", ["기존 방 선택", "새 방 만들기"])
-            
+
             if room_opt == "기존 방 선택" and existing_rooms:
                 room_name = st.selectbox("토론/토의방 목록", existing_rooms)
             else:
@@ -279,6 +287,7 @@ with st.sidebar:
                         st.error("방 이름과 주제를 모두 입력해주세요.")
                         room_name = ""
     else:
+        st.session_state['teacher_auth'] = False
         if existing_rooms:
             room_name = st.selectbox("🏠 접속할 방 선택", existing_rooms)
         else:
