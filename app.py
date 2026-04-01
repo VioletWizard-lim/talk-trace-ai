@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import logging
 import psycopg2
 import psycopg2.extras
+from psycopg2.pool import SimpleConnectionPool
 import google.generativeai as genai
 import plotly.express as px
 import time
@@ -34,8 +35,29 @@ ROOM_DESTROY_ENABLED = st.secrets.get("ROOM_DESTROY_ENABLED", True)
 MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
+DB_POOL_MIN_CONN = int(st.secrets.get("DB_POOL_MIN_CONN", 1))
+DB_POOL_MAX_CONN = int(st.secrets.get("DB_POOL_MAX_CONN", 8))
+DB_POOL = None
 
 def get_kst_now():
+    return datetime.utcnow() + timedelta(hours=9)
+
+def get_kst_now_str():
+    return get_kst_now().strftime(DATETIME_FMT)
+
+def generate_ai_response(prompt, log_message, **context):
+    try:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        return genai.GenerativeModel(AI_MODEL_NAME).generate_content(prompt).text
+    except Exception:
+        logger.exception("%s (context=%s)", log_message, context)
+        return None
+
+def get_recent_debate_df(room_name, limit):
+    return get_df_from_db(
+        "SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT %s",
+        (room_name, limit),
+    )def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
 
 def get_kst_now_str():
@@ -83,10 +105,28 @@ def log_audit(event, room_name="", actor_name="", role="", **extra):
         extra,
     )
 
+def init_db_pool():
+    global DB_POOL
+    if DB_POOL is None:
+        DB_POOL = SimpleConnectionPool(
+            DB_POOL_MIN_CONN,
+            DB_POOL_MAX_CONN,
+            st.secrets["SUPABASE_URL"],
+        )
+
+def get_db_conn():
+    if DB_POOL is None:
+        init_db_pool()
+    return DB_POOL.getconn()
+
+def release_db_conn(conn):
+    if conn is not None and DB_POOL is not None:
+        DB_POOL.putconn(conn)
+
 def insert_ai_placeholder_atomic(room_name):
     conn = None
     try:
-        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        conn = get_db_conn()
         with conn.cursor() as c:
             c.execute("SELECT pg_advisory_xact_lock(9999)")
             ten_secs_ago = (get_kst_now() - timedelta(seconds=10)).strftime("%Y-%m-%d %H:%M:%S")
@@ -102,12 +142,12 @@ def insert_ai_placeholder_atomic(room_name):
         logger.exception("AI placeholder 생성 실패 (room_name=%s)", room_name)
         return None
     finally:
-        if conn is not None: conn.close()
+        release_db_conn(conn)
 
 def get_df_from_db(query, params=()):
     conn = None
     try:
-        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        conn = get_db_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
             c.execute(query, params)
             data = c.fetchall()
@@ -129,12 +169,13 @@ def execute_query(query, params=()):
         logger.exception("DB 실행 실패 (query=%s, params=%s)", query, params)
         raise
     finally:
-        if conn is not None: conn.close()
+        release_db_conn(conn)
 
 def init_db():
     conn = None
     try:
-        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        init_db_pool()
+        conn = get_db_conn()
         with conn.cursor() as c:
             c.execute('CREATE TABLE IF NOT EXISTS debate (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT, sentiment TEXT)')
             c.execute('CREATE TABLE IF NOT EXISTS records (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT)')
@@ -147,7 +188,7 @@ def init_db():
         logger.exception("DB 초기화 실패")
         st.error(f"🚨 DB 연결 실패: {e}")
     finally:
-        if conn is not None: conn.close()
+        release_db_conn(conn)
 
 init_db()
 
@@ -483,6 +524,7 @@ if user_role == "교사" and teacher_auth:
                 now = get_kst_now_str()
                 execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment, author_role) VALUES (%s, %s, %s, %s, %s, %s)",
                               (room_name, now, "👨‍🏫 선생님 (AI 보조)", val, "❓ 질문", "교사"))
+                log_audit("teacher_hint_sent", room_name=room_name, actor_name=student_name, role=user_role)
                 st.session_state['hint_input_widget'] = "" # 전송 후 글상자 비우기
 
         hint_msg = st.empty()                
@@ -572,6 +614,7 @@ if user_role == "교사" and teacher_auth:
             del_id = st.session_state.get('del_record_dropdown')
             if del_id:
                 execute_query("DELETE FROM records WHERE id = %s", (del_id,))
+                log_audit("record_deleted", room_name=room_name, actor_name=student_name, role=user_role, record_id=del_id)
                 st.toast("기록이 삭제되었습니다.", icon="🗑️")
 
         col3, col4 = st.columns([1, 1])
@@ -661,6 +704,7 @@ if user_role == "교사" and teacher_auth:
                 execute_query("DELETE FROM topic WHERE room_name = %s", (room_name,))
                 execute_query("DELETE FROM debate WHERE room_name = %s", (room_name,))
                 execute_query("DELETE FROM records WHERE room_name = %s", (room_name,))
+                log_audit("room_destroyed", room_name=room_name, actor_name=student_name, role=user_role)
                 st.success("성공적으로 파괴되었습니다.")
                 st.session_state['ai_result_text'] = ""
                 st.rerun() # 방 폭파는 화면 전체를 리셋해야 하므로 유일하게 허용!
