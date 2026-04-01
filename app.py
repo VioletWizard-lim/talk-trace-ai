@@ -7,7 +7,7 @@ import google.generativeai as genai
 import plotly.express as px
 import time
 import re
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 
 # ==========================================
 # [0] 로깅 설정
@@ -40,7 +40,10 @@ MAX_TOPIC_LEN = 120
 def init_supabase() -> Client:
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
+    
+    # 💡 넉넉하게 60초까지 기다려주도록 옵션 추가
+    opts = ClientOptions(postgrest_client_timeout=60) 
+    return create_client(url, key, options=opts)
 
 # 2. 💡 (중요!) 위에서 만든 뼈대로 'supabase'라는 변수를 탄생시킵니다. (이 줄이 빠져서 났던 에러입니다)
 supabase = init_supabase()
