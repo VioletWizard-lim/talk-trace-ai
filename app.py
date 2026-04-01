@@ -7,6 +7,7 @@ import psycopg2
 import psycopg2.extras
 import google.generativeai as genai
 import plotly.express as px
+import time
 
 # ==========================================
 # [0] 로깅 설정
@@ -24,6 +25,21 @@ if not logger.handlers:
 def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
 
+DATETIME_FMT = "%Y-%m-%d %H:%M:%S"
+AI_MODEL_NAME = "gemini-2.5-flash"
+
+def get_kst_now_str():
+    return get_kst_now().strftime(DATETIME_FMT)
+
+def generate_ai_response(prompt, log_message, **context):
+    try:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        return genai.GenerativeModel(AI_MODEL_NAME).generate_content(prompt).text
+    except Exception:
+        logger.exception("%s (context=%s)", log_message, context)
+        return None
+
+
 def insert_ai_placeholder_atomic(room_name):
     conn = None
     try:
@@ -32,8 +48,8 @@ def insert_ai_placeholder_atomic(room_name):
             c.execute("SELECT pg_advisory_xact_lock(9999)")
             ten_secs_ago = (get_kst_now() - timedelta(seconds=10)).strftime("%Y-%m-%d %H:%M:%S")
             c.execute("SELECT 1 FROM debate WHERE room_name = %s AND student_name LIKE '%%AI%%' AND timestamp > %s", (room_name, ten_secs_ago))
-            if c.fetchone(): return None 
-            now_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+            if c.fetchone(): return None
+            now_str = get_kst_now_str()
             c.execute("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s) RETURNING id",
                       (room_name, now_str, "🤖 AI 조력자", "질문 생성 중...", "❓ 질문"))
             inserted_id = c.fetchone()[0]
@@ -266,7 +282,7 @@ with col_stt:
 
 if st.button("의견 제출", use_container_width=True, type="primary"):
     if user_input.strip():
-        now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+        now = get_kst_now_str()
         execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
                       (room_name, now, student_name, user_input, sentiment))
         st.session_state['reset_key'] += 1
@@ -402,7 +418,7 @@ if user_role == "교사" and teacher_auth:
         def send_hint():
             val = st.session_state.get('hint_input_widget', '').strip()
             if val:
-                now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+                now = get_kst_now_str()
                 execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
                               (room_name, now, "👨‍🏫 선생님 (AI 보조)", val, "❓ 질문"))
                 st.session_state['hint_input_widget'] = "" # 전송 후 글상자 비우기
@@ -410,22 +426,24 @@ if user_role == "교사" and teacher_auth:
         hint_msg = st.empty()
         if st.button("🪄 AI 힌트 초안 생성", use_container_width=True):
             hint_msg.info("👀 AI가 최근 대화 맥락을 읽고 있습니다...")
-            import time; time.sleep(1)
+            time.sleep(1)
             
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
             context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
             hint_msg.warning("✍️ AI가 예리한 질문을 작성하고 있습니다...")
             time.sleep(0.5)
             
             prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
-            try:
-                res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                st.session_state['hint_input_widget'] = res.text.strip().split('\n')[0]
+            res_text = generate_ai_response(
+                prompt,
+                "AI 힌트 생성 실패",
+                room_name=room_name,
+            )
+            if res_text:
+                st.session_state['hint_input_widget'] = res_text.strip().split('\n')[0]
                 hint_msg.success("✅ 힌트 작성 완료!")
                 time.sleep(1)
-            except Exception as e:
-                logger.exception("AI 힌트 생성 실패 (room_name=%s)", room_name)
-                hint_msg.error(f"🚨 AI 호출 오류: {e}")
+            else:
+                hint_msg.error("🚨 AI 호출 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
                 time.sleep(2)
             hint_msg.empty() # 작업 완료 후 알림창 자연스럽게 숨기기 (새로고침 없음!)
 
@@ -448,22 +466,24 @@ if user_role == "교사" and teacher_auth:
         
         if st.button(f"{act_type} 요약 및 베스트 발언 추출 🪄", use_container_width=True):
             report_msg.info(f"👀 AI가 1차시 {act_type} 전체 기록을 꼼꼼히 읽고 있습니다...")
-            import time; time.sleep(1) 
+            time.sleep(1) 
             if not df_all.empty:
-                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                 full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
                 report_msg.warning(f"✍️ AI가 {act_type} 요약 리포트를 작성하고 있습니다...")
                 time.sleep(0.5)
                 
                 prompt = f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n[엄격한 규칙]\n1. {act_type}의 전체 맥락을 파악하고 핵심 내용을 딱 3줄로 요약하세요.\n2. 가장 논리적이고 창의적인 주장을 펼친 '학생 이름' 1명과 그 이유를 구체적으로 추출하세요.\n3. 보고서 형식으로 깔끔하게 출력하세요.\n\n기록:\n{full_history}"
-                try:
-                    res = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                    st.session_state['ai_report_text'] = res.text
+                res_text = generate_ai_response(
+                    prompt,
+                    "AI 요약 리포트 생성 실패",
+                    room_name=room_name,
+                )
+                if res_text:
+                    st.session_state['ai_report_text'] = res_text
                     report_msg.success("✅ 리포트 작성 완료!")
                     time.sleep(1)
-                except Exception as e:
-                    logger.exception("AI 요약 리포트 생성 실패 (room_name=%s)", room_name)
-                    report_msg.error(f"🚨 AI 호출 오류: {e}")
+                else:
+                    report_msg.error("🚨 AI 호출 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
                     time.sleep(2)
             else:
                 report_msg.error("🚨 분석할 데이터가 없습니다.")
@@ -505,28 +525,31 @@ if user_role == "교사" and teacher_auth:
                 
                 if st.button(f"'{selected_student}' 세특 생성 🪄", use_container_width=True):
                     record_msg.info(f"👀 AI가 '{selected_student}' 학생의 활동 기록을 모아 읽고 있습니다...")
-                    import time; time.sleep(1)
+                    time.sleep(1)
                     try:
                         student_data = df_all[df_all['student_name'] == selected_student]
                         debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
-                        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                        
                         record_msg.warning(f"✍️ AI가 '{selected_student}' 학생의 세특 초안을 작성 중입니다...")
                         time.sleep(0.5)
-                        
                         prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 {act_type}에 참여한 '{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
-                        response = genai.GenerativeModel('gemini-2.5-flash').generate_content(prompt)
-                        st.session_state['ai_result_text'] = response.text
-                        
+                        res_text = generate_ai_response(
+                            prompt,
+                            "AI 세특 생성 실패",
+                            room_name=room_name,
+                            student=selected_student,
+                        )
+                        if not res_text:
+                            raise RuntimeError("AI 응답이 비어 있습니다.")
+                        st.session_state['ai_result_text'] = res_text
                         record_msg.warning("💾 작성 완료! 보관함에 안전하게 저장 중입니다...")
-                        now = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+                        now = get_kst_now_str()
                         execute_query("INSERT INTO records (room_name, timestamp, student_name, content) VALUES (%s, %s, %s, %s)",
-                                      (room_name, now, selected_student, response.text))
+                                      (room_name, now, selected_student, res_text))
                         record_msg.success("✅ 세특 생성 및 보관함 저장 완료!")
                         time.sleep(1)
-                    except Exception as e:
-                        logger.exception("AI 세특 생성 실패 (room_name=%s, student=%s)", room_name, selected_student)
-                        record_msg.error(f"🚨 AI 호출 오류: {e}")
+                    except Exception:
+                        logger.exception("세특 생성 후처리 실패 (room_name=%s, student=%s)", room_name, selected_student)
+                        record_msg.error("🚨 AI 호출 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
                         time.sleep(2)
                     record_msg.empty()
                 
