@@ -28,7 +28,7 @@ LIVE_BOARD_FETCH_LIMIT = 300
 DASHBOARD_FETCH_LIMIT = 2000
 RECORDS_FETCH_LIMIT = 500
 LIVE_REFRESH_INTERVAL = "2s"
-
+AI_HINT_ENABLED = st.secrets.get("AI_HINT_ENABLED", True)
 
 def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
@@ -160,6 +160,7 @@ if 'joined' not in st.session_state: st.session_state['joined'] = False
 
 # 💡 [핵심 패치 1] AI가 일하고 있는지 체크하는 변수 생성!
 if 'is_working' not in st.session_state: st.session_state['is_working'] = False
+if 'ai_hint_manual_mode' not in st.session_state: st.session_state['ai_hint_manual_mode'] = False
 
 def set_working():
     st.session_state['is_working'] = True
@@ -448,28 +449,33 @@ if user_role == "교사" and teacher_auth:
                 st.session_state['hint_input_widget'] = "" # 전송 후 글상자 비우기
         
         hint_msg = st.empty()
-        if st.button("🪄 AI 힌트 초안 생성", use_container_width=True):
-            hint_msg.info("👀 AI가 최근 대화 맥락을 읽고 있습니다...")
-            time.sleep(1)
-            
-            context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
-            hint_msg.warning("✍️ AI가 예리한 질문을 작성하고 있습니다...")
-            time.sleep(0.5)
-            
-            prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
-            res_text = generate_ai_response(
-                prompt,
-                "AI 힌트 생성 실패",
-                room_name=room_name,
-            )
-            if res_text:
-                st.session_state['hint_input_widget'] = res_text.strip().split('\n')[0]
-                hint_msg.success("✅ 힌트 작성 완료!")
+        if AI_HINT_ENABLED:
+            if st.button("🪄 AI 힌트 초안 생성", use_container_width=True):
+                hint_msg.info("👀 AI가 최근 대화 맥락을 읽고 있습니다...")
                 time.sleep(1)
-            else:
-                hint_msg.error("🚨 AI 호출 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
-                time.sleep(2)
-            hint_msg.empty() # 작업 완료 후 알림창 자연스럽게 숨기기 (새로고침 없음!)
+                
+                context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
+                hint_msg.warning("✍️ AI가 예리한 질문을 작성하고 있습니다...")
+                time.sleep(0.5)
+                
+                prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
+                res_text = generate_ai_response(
+                    prompt,
+                    "AI 힌트 생성 실패",
+                    room_name=room_name,
+                )
+                if res_text:
+                    st.session_state['hint_input_widget'] = res_text.strip().split('\n')[0]
+                    st.session_state['ai_hint_manual_mode'] = False
+                    hint_msg.success("✅ 힌트 작성 완료!")
+                    time.sleep(1)
+                else:
+                    st.session_state['ai_hint_manual_mode'] = True
+                    hint_msg.error("🚨 AI 호출 오류: 수동 입력 모드로 전환되었습니다.")
+                    time.sleep(2)
+                hint_msg.empty() # 작업 완료 후 알림창 자연스럽게 숨기기 (새로고침 없음!)
+        else:
+            st.session_state['ai_hint_manual_mode'] = True
 
         col_edit_txt, col_edit_btn = st.columns([8, 2])
         with col_edit_txt:
