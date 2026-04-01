@@ -174,24 +174,18 @@ def reset_joined_state():
 # [3] 사이드바 (방 관리 - 심플 모드)
 # ==========================================
 with st.sidebar:
-    # --- 🚨 임시 X-ray 검사 코드 시작 ---
-    st.info(f"🔑 로그인 상태: {supabase.auth.get_session() is not None}")
-    try:
-        _test = supabase.table("topic").select("*").execute()
-        st.success(f"📂 불러온 방 개수: {len(_test.data)}개")
-    except Exception as e:
-        st.error(f"💥 조회 에러: {e}")
-    # --- 🚨 임시 X-ray 검사 코드 끝 ---
     st.header("👤 접속 권한")
     user_role = st.radio("모드 선택", ["학생", "교사"], on_change=reset_joined_state)
     st.divider()
 
-    # 👇 이 부분을 수정해 주세요!
-    try:
-        rooms_res = supabase.table("topic").select("room_name").execute()
-        existing_rooms = list(set(item['room_name'] for item in rooms_res.data)) if rooms_res.data else []
+# 👇 이 부분을 수정해 줍니다.
+    try:        
+        # 방법: 가장 최근에 만든 방부터(최신순) 보고 싶다면 위 줄을 지우고 아래 줄을 쓰세요.
+        # rooms_res = supabase.table("topic").select("room_name").order("created_at", desc=True).execute()
+
+        # 💡 순서를 뒤섞어버리는 set()을 완전히 빼버렸습니다!
+        existing_rooms = [item['room_name'] for item in rooms_res.data] if rooms_res.data else []
     except Exception as e:
-        # 에러를 숨기지 말고 사이드바에 빨간 글씨로 출력합니다!
         st.error(f"🚨 방 목록 조회 에러: {e}")
         existing_rooms = []
     
