@@ -40,13 +40,28 @@ MAX_TOPIC_LEN = 120
 def init_supabase() -> Client:
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
-    
-    # 💡 넉넉하게 60초까지 기다려주도록 옵션 추가
-    opts = ClientOptions(postgrest_client_timeout=60) 
-    return create_client(url, key, options=opts)
+    return create_client(url, key)
 
 # 2. 💡 (중요!) 위에서 만든 뼈대로 'supabase'라는 변수를 탄생시킵니다. (이 줄이 빠져서 났던 에러입니다)
 supabase = init_supabase()
+
+# 💡 세션 상태를 직접 체크하여 로그인이 안 되어 있으면 즉시 시도합니다.
+curr_session = None
+try:
+    curr_session = supabase.auth.get_session()
+except:
+    curr_session = None
+
+if curr_session is None:
+    try:
+        supabase.auth.sign_in_with_password({
+            "email": st.secrets["SUPABASE_APP_EMAIL"],
+            "password": st.secrets["SUPABASE_APP_PASSWORD"]
+        })
+        # 로그인 직후 세션이 바로 반영되지 않을 수 있으므로 한 번 더 확인
+        time.sleep(0.5) 
+    except Exception as e:
+        st.error(f"🚨 Supabase 자동 로그인 실패: {e}")
 
 # 3. 이제 탄생한 'supabase'를 이용해 로그인을 시도합니다.
 if 'supabase_auth' not in st.session_state:
