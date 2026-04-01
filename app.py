@@ -420,11 +420,11 @@ def live_chat_board_core():
     col_board_title, col_board_ref = st.columns([8, 2])
     with col_board_title:
         st.subheader(f"💬 실시간 {act_type} 보드") 
-       with col_board_ref:␊
-        if user_role == "교사" and teacher_auth:␊
-            st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")␊
+       with col_board_ref:
+        if user_role == "교사" and teacher_auth:
+            st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
     ␊
-    if not df.empty:␊
+    if not df.empty:
         hint_df = df[(df["author_role"] == '교사') & df["student_name"].astype(str).str.contains("AI 보조", na=False)]
         if not hint_df.empty:
             st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {hint_df.iloc[-1]['content']}")
