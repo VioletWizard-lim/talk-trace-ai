@@ -5,9 +5,11 @@ from datetime import datetime, timedelta
 import logging
 import psycopg2
 import psycopg2.extras
+from psycopg2.pool import SimpleConnectionPool
 import google.generativeai as genai
 import plotly.express as px
 import time
+import re
 
 # ==========================================
 # [0] 로깅 설정
@@ -29,6 +31,14 @@ DASHBOARD_FETCH_LIMIT = 2000
 RECORDS_FETCH_LIMIT = 500
 LIVE_REFRESH_INTERVAL = "2s"
 AI_HINT_ENABLED = st.secrets.get("AI_HINT_ENABLED", True)
+ROOM_DESTROY_ENABLED = st.secrets.get("ROOM_DESTROY_ENABLED", True)
+AUTO_JOIN_ON_REFRESH = st.secrets.get("AUTO_JOIN_ON_REFRESH", True)
+MAX_ROOM_NAME_LEN = 60
+MAX_STUDENT_NAME_LEN = 30
+MAX_TOPIC_LEN = 120
+DB_POOL_MIN_CONN = int(st.secrets.get("DB_POOL_MIN_CONN", 1))
+DB_POOL_MAX_CONN = int(st.secrets.get("DB_POOL_MAX_CONN", 8))
+DB_POOL = None
 
 def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
@@ -56,10 +66,63 @@ def normalize_user_text(raw_text, max_len=500):
         return ""
     return text[:max_len]
 
+def normalize_room_name(raw_text):
+    text = normalize_user_text(raw_text, max_len=MAX_ROOM_NAME_LEN)
+    return re.sub(r"\s+", " ", text)
+
+def validate_room_name(room):
+    if not room:
+        return False
+    return re.fullmatch(r"[0-9A-Za-z가-힣 _\\-()]+", room) is not None
+
+def normalize_topic_title(raw_text):
+    return normalize_user_text(raw_text, max_len=MAX_TOPIC_LEN)
+
+def with_fallback_author_role(df):
+    if df.empty:
+        return df
+    fixed = df.copy()
+    if "author_role" not in fixed.columns:
+        fixed["author_role"] = "학생"
+        return fixed
+    fixed["author_role"] = fixed["author_role"].fillna("").astype(str).str.strip()
+    teacher_name_hint = fixed["student_name"].fillna("").astype(str).str.contains("교사|선생님", regex=True)
+    fixed.loc[(fixed["author_role"] == "") & teacher_name_hint, "author_role"] = "교사"
+    fixed.loc[fixed["author_role"] == "", "author_role"] = "학생"
+    return fixed
+
+def log_audit(event, room_name="", actor_name="", role="", **extra):
+    logger.info(
+        "AUDIT event=%s room=%s actor=%s role=%s extra=%s",
+        event,
+        room_name,
+        actor_name,
+        role,
+        extra,
+    )
+
+def init_db_pool():
+    global DB_POOL
+    if DB_POOL is None:
+        DB_POOL = SimpleConnectionPool(
+            DB_POOL_MIN_CONN,
+            DB_POOL_MAX_CONN,
+            st.secrets["SUPABASE_URL"],
+        )
+
+def get_db_conn():
+    if DB_POOL is None:
+        init_db_pool()
+    return DB_POOL.getconn()
+
+def release_db_conn(conn):
+    if conn is not None and DB_POOL is not None:
+        DB_POOL.putconn(conn)
+
 def insert_ai_placeholder_atomic(room_name):
     conn = None
     try:
-        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        conn = get_db_conn()
         with conn.cursor() as c:
             c.execute("SELECT pg_advisory_xact_lock(9999)")
             ten_secs_ago = (get_kst_now() - timedelta(seconds=10)).strftime("%Y-%m-%d %H:%M:%S")
@@ -75,12 +138,12 @@ def insert_ai_placeholder_atomic(room_name):
         logger.exception("AI placeholder 생성 실패 (room_name=%s)", room_name)
         return None
     finally:
-        if conn is not None: conn.close()
+        release_db_conn(conn)
 
 def get_df_from_db(query, params=()):
     conn = None
     try:
-        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        conn = get_db_conn()
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
             c.execute(query, params)
             data = c.fetchall()
@@ -89,12 +152,12 @@ def get_df_from_db(query, params=()):
         logger.exception("DB 조회 실패 (query=%s, params=%s)", query, params)
         return pd.DataFrame()
     finally:
-        if conn is not None: conn.close()
+        release_db_conn(conn)
 
 def execute_query(query, params=()):
     conn = None
     try:
-        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        conn = get_db_conn()
         with conn.cursor() as c:
             c.execute(query, params)
         conn.commit()
@@ -102,16 +165,18 @@ def execute_query(query, params=()):
         logger.exception("DB 실행 실패 (query=%s, params=%s)", query, params)
         raise
     finally:
-        if conn is not None: conn.close()
+        release_db_conn(conn)
 
 def init_db():
     conn = None
     try:
-        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        init_db_pool()
+        conn = get_db_conn()
         with conn.cursor() as c:
             c.execute('CREATE TABLE IF NOT EXISTS debate (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT, sentiment TEXT)')
             c.execute('CREATE TABLE IF NOT EXISTS records (id SERIAL PRIMARY KEY, room_name TEXT, timestamp TEXT, student_name TEXT, content TEXT)')
             c.execute('CREATE TABLE IF NOT EXISTS topic (room_name TEXT PRIMARY KEY, title TEXT, mode TEXT, entry_code TEXT DEFAULT \'\')')
+            c.execute("ALTER TABLE debate ADD COLUMN IF NOT EXISTS author_role TEXT DEFAULT '학생'")
             c.execute('CREATE INDEX IF NOT EXISTS idx_debate_room_id ON debate (room_name, id DESC)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_records_room_id ON records (room_name, id DESC)')
         conn.commit()
@@ -119,7 +184,7 @@ def init_db():
         logger.exception("DB 초기화 실패")
         st.error(f"🚨 DB 연결 실패: {e}")
     finally:
-        if conn is not None: conn.close()
+        release_db_conn(conn)
 
 init_db()
 
@@ -157,6 +222,7 @@ if 'ai_hint_text' not in st.session_state: st.session_state['ai_hint_text'] = ""
 if 'ai_report_text' not in st.session_state: st.session_state['ai_report_text'] = ""
 if 'current_room' not in st.session_state: st.session_state['current_room'] = ""
 if 'joined' not in st.session_state: st.session_state['joined'] = False
+if 'teacher_auth' not in st.session_state: st.session_state['teacher_auth'] = False
 
 # 💡 [핵심 패치 1] AI가 일하고 있는지 체크하는 변수 생성!
 if 'is_working' not in st.session_state: st.session_state['is_working'] = False
@@ -169,6 +235,7 @@ def set_working():
 
 def reset_joined_state():
     st.session_state['joined'] = False
+    st.session_state['teacher_auth'] = False
 
 # ==========================================
 # [3] 사이드바 (방 관리 - 심플 모드)
@@ -185,9 +252,15 @@ with st.sidebar:
     teacher_auth = False
     
     if user_role == "교사":
-        pw = st.text_input("교사 인증 암호", type="password")
+        pw = st.text_input("교사 인증 암호", type="password", key="teacher_pw_input")
         if pw == st.secrets["TEACHER_PW"]:
-            teacher_auth = True; st.success("인증 성공!")
+            st.session_state['teacher_auth'] = True
+        elif pw:
+            st.session_state['teacher_auth'] = False
+            st.error("❌ 교사 인증 암호가 올바르지 않습니다.")
+        teacher_auth = st.session_state['teacher_auth']
+        if teacher_auth:
+            st.success("인증 성공!")
             room_opt = st.radio("방 관리", ["기존 방 선택", "새 방 만들기"])
             
             if room_opt == "기존 방 선택" and existing_rooms:
@@ -199,14 +272,22 @@ with st.sidebar:
                 new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
                 
                 if st.button("새 방 개설하기", type="primary"):
-                    if new_room and new_title:
+                    safe_room_name = normalize_room_name(new_room)
+                    safe_title = normalize_topic_title(new_title)
+                    if not validate_room_name(safe_room_name):
+                        st.error("방 이름은 한글/영문/숫자/공백/-/_/괄호만 사용할 수 있습니다.")
+                        room_name = ""
+                    elif safe_room_name and safe_title:
                         execute_query("INSERT INTO topic (room_name, title, mode, entry_code) VALUES (%s, %s, %s, %s) ON CONFLICT (room_name) DO NOTHING", 
-                                      (new_room, new_title, new_mode, new_pw))
-                        st.success(f"'{new_room}' 방이 개설되었습니다! 위쪽에서 '기존 방 선택'을 눌러 입장하세요.")
+                                      (safe_room_name, safe_title, new_mode, new_pw))
+                        st.success(f"'{safe_room_name}' 방이 개설되었습니다! 위쪽에서 '기존 방 선택'을 눌러 입장하세요.")
+                        log_audit("room_created", room_name=safe_room_name, actor_name="교사", role="교사", mode=new_mode)
+                        room_name = safe_room_name
                     else:
                         st.error("방 이름과 주제를 모두 입력해주세요.")
-                room_name = new_room
+                        room_name = ""
     else:
+        st.session_state['teacher_auth'] = False
         if existing_rooms:
             room_name = st.selectbox("🏠 접속할 방 선택", existing_rooms)
         else:
@@ -245,9 +326,15 @@ if not st.session_state['joined']:
                         st.session_state['joined'] = True; st.rerun()
                 elif student_pw: st.error("❌ 암호가 틀렸습니다.")
             else:
+                if AUTO_JOIN_ON_REFRESH:
+                    st.session_state['joined'] = True
+                    st.rerun()
                 if st.button(f"🚀 '{room_name}' 입장하기", type="primary", use_container_width=True):
                     st.session_state['joined'] = True; st.rerun()
         else:
+            if AUTO_JOIN_ON_REFRESH and teacher_auth:
+                st.session_state['joined'] = True
+                st.rerun()
             if st.button(f"🚀 '{room_name}' 관리자 권한으로 입장", type="primary", use_container_width=True):
                 st.session_state['joined'] = True; st.rerun()
     st.stop()
@@ -301,11 +388,13 @@ with col_stt:
 
 if st.button("의견 제출", use_container_width=True, type="primary"):
     safe_input = normalize_user_text(user_input, max_len=700)
-    safe_student_name = normalize_user_text(student_name, max_len=30) or "익명"
+    safe_student_name = normalize_user_text(student_name, max_len=MAX_STUDENT_NAME_LEN) or "익명"
     if safe_input:
         now = get_kst_now_str()
-        execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
-                      (room_name, now, safe_student_name, safe_input, sentiment))
+        author_role_for_submit = "교사" if user_role == "교사" else "학생"
+        execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment, author_role) VALUES (%s, %s, %s, %s, %s, %s)",
+                      (room_name, now, safe_student_name, safe_input, sentiment, author_role_for_submit))
+        log_audit("opinion_submitted", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, sentiment=sentiment)
         st.session_state['reset_key'] += 1
         st.rerun()
     else:
@@ -321,6 +410,7 @@ def live_chat_board_core():
     df = get_recent_debate_df(room_name, LIVE_BOARD_FETCH_LIMIT)
     if not df.empty and "id" in df.columns:
         df = df.sort_values("id")
+    df = with_fallback_author_role(df)
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
         if not df.empty:
@@ -335,15 +425,15 @@ def live_chat_board_core():
             st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
     
     if not df.empty:
-        teacher_df = df[df['student_name'].str.contains('선생님', na=False)]
-        if not teacher_df.empty:
-            st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {teacher_df.iloc[0]['content']}")
-
-        student_df = df[~df['student_name'].str.contains('선생님', na=False)]
+        hint_df = df[(df["author_role"] == '교사') & df["student_name"].astype(str).str.contains("AI 보조", na=False)]
+        if not hint_df.empty:
+            st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {hint_df.iloc[-1]['content']}")
+        opinion_df = df.drop(index=hint_df.index) if not hint_df.empty else df
         
         # 💡 [핵심 패치 1] 삭제 작업을 0.1초 만에 먼저 처리하는 '콜백 함수'
         def delete_chat_msg(msg_id):
             execute_query("DELETE FROM debate WHERE id = %s", (msg_id,))
+            log_audit("chat_deleted", room_name=room_name, actor_name=student_name, role=user_role, message_id=msg_id)
             st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
 
         def render_msg(row):
@@ -365,25 +455,25 @@ def live_chat_board_core():
             with col_pro:
                 st.markdown("### 🔵 찬성 측")
                 with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '🔵 찬성'].iterrows(): render_msg(row)
+                    for _, row in opinion_df[opinion_df['sentiment'] == '🔵 찬성'].iterrows(): render_msg(row)
             with col_con:
                 st.markdown("### 🔴 반대 측")
                 with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '🔴 반대'].iterrows(): render_msg(row)
+                    for _, row in opinion_df[opinion_df['sentiment'] == '🔴 반대'].iterrows(): render_msg(row)
         else:
             col_idea, col_plus, col_q = st.columns(3)
             with col_idea:
                 st.markdown("### 💡 아이디어")
                 with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '💡 아이디어'].iterrows(): render_msg(row)
+                    for _, row in opinion_df[opinion_df['sentiment'] == '💡 아이디어'].iterrows(): render_msg(row)
             with col_plus:
                 st.markdown("### ➕ 보충")
                 with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '➕ 보충'].iterrows(): render_msg(row)
+                    for _, row in opinion_df[opinion_df['sentiment'] == '➕ 보충'].iterrows(): render_msg(row)
             with col_q:
                 st.markdown("### ❓ 질문")
                 with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '❓ 질문'].iterrows(): render_msg(row)
+                    for _, row in opinion_df[opinion_df['sentiment'] == '❓ 질문'].iterrows(): render_msg(row)
     else: st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
 # 💡 [핵심 패치 2] 평소에는 5초 타이머 작동 모드!
@@ -414,12 +504,12 @@ if user_role == "교사" and teacher_auth:
         if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
             st.rerun() # 이 버튼만 예외적으로 전체 새로고침을 허용합니다.
 
-    df_all = get_recent_debate_df(room_name, DASHBOARD_FETCH_LIMIT)
+    df_all = with_fallback_author_role(get_recent_debate_df(room_name, DASHBOARD_FETCH_LIMIT))
     
     # --- 1. 통계 ---
     st.subheader("📊 학생 참여도 현황")
     if not df_all.empty:
-        student_only_df = df_all[~df_all['student_name'].str.contains('교사|선생님|익명|AI', na=False, regex=True)].copy()
+        student_only_df = df_all[(df_all['author_role'] == '학생') & ~df_all['student_name'].str.contains('익명|AI', na=False, regex=True)].copy()
         if not student_only_df.empty:
             counts = student_only_df['student_name'].astype(str).value_counts().reset_index()
             counts.columns = ['학생 이름', '참여 횟수']
@@ -444,8 +534,9 @@ if user_role == "교사" and teacher_auth:
             val = st.session_state.get('hint_input_widget', '').strip()
             if val:
                 now = get_kst_now_str()
-                execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
-                              (room_name, now, "👨‍🏫 선생님 (AI 보조)", val, "❓ 질문"))
+                execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment, author_role) VALUES (%s, %s, %s, %s, %s, %s)",
+                              (room_name, now, "👨‍🏫 선생님 (AI 보조)", val, "❓ 질문", "교사"))
+                log_audit("teacher_hint_sent", room_name=room_name, actor_name=student_name, role=user_role)
                 st.session_state['hint_input_widget'] = "" # 전송 후 글상자 비우기
         
         hint_msg = st.empty()
@@ -535,6 +626,7 @@ if user_role == "교사" and teacher_auth:
             del_id = st.session_state.get('del_record_dropdown')
             if del_id:
                 execute_query("DELETE FROM records WHERE id = %s", (del_id,))
+                log_audit("record_deleted", room_name=room_name, actor_name=student_name, role=user_role, record_id=del_id)
                 st.toast("기록이 삭제되었습니다.", icon="🗑️")
 
         col3, col4 = st.columns([1, 1])
@@ -616,11 +708,15 @@ if user_role == "교사" and teacher_auth:
     st.divider()
     st.subheader("🚨 위험 구역 (방 폭파)")
     with st.expander("이 방 전체 삭제하기 (클릭 시 펼쳐짐)", expanded=False):
-        st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록과 세특 보관함이 완전히 삭제됩니다.")
-        if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True):
-            execute_query("DELETE FROM topic WHERE room_name = %s", (room_name,))
-            execute_query("DELETE FROM debate WHERE room_name = %s", (room_name,))
-            execute_query("DELETE FROM records WHERE room_name = %s", (room_name,))
-            st.success("성공적으로 파괴되었습니다.")
-            st.session_state['ai_result_text'] = ""
-            st.rerun() # 방 폭파는 화면 전체를 리셋해야 하므로 유일하게 허용!
+        if not ROOM_DESTROY_ENABLED:
+            st.warning("운영 안전 모드로 방 폭파 기능이 비활성화되어 있습니다.")
+        else:
+            st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록과 세특 보관함이 완전히 삭제됩니다.")
+            if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True):
+                execute_query("DELETE FROM topic WHERE room_name = %s", (room_name,))
+                execute_query("DELETE FROM debate WHERE room_name = %s", (room_name,))
+                execute_query("DELETE FROM records WHERE room_name = %s", (room_name,))
+                log_audit("room_destroyed", room_name=room_name, actor_name=student_name, role=user_role)
+                st.success("성공적으로 파괴되었습니다.")
+                st.session_state['ai_result_text'] = ""
+                st.rerun() # 방 폭파는 화면 전체를 리셋해야 하므로 유일하게 허용!
