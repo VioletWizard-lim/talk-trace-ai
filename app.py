@@ -77,6 +77,19 @@ def validate_room_name(room):
 def normalize_topic_title(raw_text):
     return normalize_user_text(raw_text, max_len=MAX_TOPIC_LEN)
 
+def with_fallback_author_role(df):
+    if df.empty:
+        return df
+    fixed = df.copy()
+    if "author_role" not in fixed.columns:
+        fixed["author_role"] = "학생"
+        return fixed
+    fixed["author_role"] = fixed["author_role"].fillna("").astype(str).str.strip()
+    teacher_name_hint = fixed["student_name"].fillna("").astype(str).str.contains("교사|선생님", regex=True)
+    fixed.loc[(fixed["author_role"] == "") & teacher_name_hint, "author_role"] = "교사"
+    fixed.loc[fixed["author_role"] == "", "author_role"] = "학생"
+    return fixed
+
 def log_audit(event, room_name="", actor_name="", role="", **extra):
     logger.info(
         "AUDIT event=%s room=%s actor=%s role=%s extra=%s",
@@ -138,12 +151,12 @@ def get_df_from_db(query, params=()):
         logger.exception("DB 조회 실패 (query=%s, params=%s)", query, params)
         return pd.DataFrame()
     finally:
-        if conn is not None: conn.close()
+        release_db_conn(conn)
 
 def execute_query(query, params=()):
     conn = None
     try:
-        conn = psycopg2.connect(st.secrets["SUPABASE_URL"])
+        conn = get_db_conn()
         with conn.cursor() as c:
             c.execute(query, params)
         conn.commit()
@@ -380,6 +393,7 @@ def live_chat_board_core():
     df = get_recent_debate_df(room_name, LIVE_BOARD_FETCH_LIMIT)
     if not df.empty and "id" in df.columns:
         df = df.sort_values("id")
+    df = with_fallback_author_role(df)
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
         if not df.empty:
@@ -394,11 +408,11 @@ def live_chat_board_core():
             st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
     
     if not df.empty:
-        teacher_df = df[df.get('author_role', '') == '교사']
+        teacher_df = df[df["author_role"] == '교사']
         if not teacher_df.empty:
-            st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {teacher_df.iloc[0]['content']}")
+            st.success(f"👨‍🏫 **선생님의 생각 힌트!** ➡️ {teacher_df.iloc[0]['content']}")␊
 
-        student_df = df[df.get('author_role', '학생') == '학생']
+        student_df = df[df["author_role"] == '학생']
         
         # 💡 [핵심 패치 1] 삭제 작업을 0.1초 만에 먼저 처리하는 '콜백 함수'
         def delete_chat_msg(msg_id):
@@ -474,12 +488,12 @@ if user_role == "교사" and teacher_auth:
         if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
             st.rerun() # 이 버튼만 예외적으로 전체 새로고침을 허용합니다.
 
-    df_all = get_recent_debate_df(room_name, DASHBOARD_FETCH_LIMIT)
+    df_all = with_fallback_author_role(get_recent_debate_df(room_name, DASHBOARD_FETCH_LIMIT))
     
     # --- 1. 통계 ---
     st.subheader("📊 학생 참여도 현황")
     if not df_all.empty:
-        student_only_df = df_all[(df_all.get('author_role', '학생') == '학생') & ~df_all['student_name'].str.contains('익명|AI', na=False, regex=True)].copy()
+        student_only_df = df_all[(df_all['author_role'] == '학생') & ~df_all['student_name'].str.contains('익명|AI', na=False, regex=True)].copy()
         if not student_only_df.empty:
             counts = student_only_df['student_name'].astype(str).value_counts().reset_index()
             counts.columns = ['학생 이름', '참여 횟수']
