@@ -27,6 +27,7 @@ AI_MODEL_NAME = "gemini-2.5-flash"
 LIVE_BOARD_FETCH_LIMIT = 300
 DASHBOARD_FETCH_LIMIT = 2000
 RECORDS_FETCH_LIMIT = 500
+LIVE_REFRESH_INTERVAL = "2s"
 
 
 def get_kst_now():
@@ -48,6 +49,12 @@ def get_recent_debate_df(room_name, limit):
         "SELECT * FROM debate WHERE room_name = %s ORDER BY id DESC LIMIT %s",
         (room_name, limit),
     )
+
+def normalize_user_text(raw_text, max_len=500):
+    text = (raw_text or "").strip()
+    if not text:
+        return ""
+    return text[:max_len]
 
 def insert_ai_placeholder_atomic(room_name):
     conn = None
@@ -292,12 +299,16 @@ with col_stt:
     )
 
 if st.button("의견 제출", use_container_width=True, type="primary"):
-    if user_input.strip():
+    safe_input = normalize_user_text(user_input, max_len=700)
+    safe_student_name = normalize_user_text(student_name, max_len=30) or "익명"
+    if safe_input:
         now = get_kst_now_str()
         execute_query("INSERT INTO debate (room_name, timestamp, student_name, content, sentiment) VALUES (%s, %s, %s, %s, %s)",
-                      (room_name, now, student_name, user_input, sentiment))
+                      (room_name, now, safe_student_name, safe_input, sentiment))
         st.session_state['reset_key'] += 1
         st.rerun()
+    else:
+        st.warning("의견 내용을 입력해 주세요.")
 
 st.divider()
 
@@ -307,6 +318,8 @@ st.divider()
 # 이 함수는 화면을 그리는 알맹이입니다.
 def live_chat_board_core():
     df = get_recent_debate_df(room_name, LIVE_BOARD_FETCH_LIMIT)
+    if not df.empty and "id" in df.columns:
+        df = df.sort_values("id")
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
         if not df.empty:
@@ -373,7 +386,7 @@ def live_chat_board_core():
     else: st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
 # 💡 [핵심 패치 2] 평소에는 5초 타이머 작동 모드!
-@st.fragment(run_every="5s")
+@st.fragment(run_every=LIVE_REFRESH_INTERVAL)
 def live_chat_board_auto():
     live_chat_board_core()
 
