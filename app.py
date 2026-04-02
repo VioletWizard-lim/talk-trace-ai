@@ -120,6 +120,23 @@ def get_client_ip():
             return str(raw_ip).split(",")[0].strip()
     return ""
 
+def mask_ip_for_teacher(ip_text):
+    ip = str(ip_text or "").strip()
+    if not ip:
+        return ""
+
+    # IPv4: 첫/마지막 옥텟만 노출, 가운데 2개는 마스킹
+    ipv4_parts = ip.split(".")
+    if len(ipv4_parts) == 4 and all(part.isdigit() for part in ipv4_parts):
+        return f"{ipv4_parts[0]}.XXX.XXX.{ipv4_parts[3]}"
+
+    # IPv6: 앞 2블록 + 마스킹 + 마지막 블록 노출
+    if ":" in ip:
+        ipv6_parts = ip.split(":")
+        if len(ipv6_parts) >= 3:
+            return f"{ipv6_parts[0]}:{ipv6_parts[1]}:XXXX:XXXX:{ipv6_parts[-1]}"
+    return ip
+
 def with_fallback_author_role(df):
     if df.empty: return df
     fixed = df.copy()
@@ -440,7 +457,7 @@ def live_chat_board_core():
                     st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
                     row_ip = str(row.get("ip_address", "")).strip() if hasattr(row, "get") else ""
                     if row_ip:
-                        st.caption(f"IP: `{row_ip}`")
+                        st.caption(f"IP: `{mask_ip_for_teacher(row_ip)}`")
                 with c_btn:
                     st.button("❌", key=f"del_{row['id']}", help="강제 삭제", on_click=delete_chat_msg, args=(row['id'],))
                 st.info(row['content']) 
