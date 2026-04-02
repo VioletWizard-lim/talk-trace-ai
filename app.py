@@ -416,7 +416,7 @@ def live_chat_board_core():
         if user_role == "교사" and teacher_auth:
             st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
     if user_role == "교사" and teacher_auth and not debate_ip_column_available():
-        st.caption("ℹ️ 학생 작성 IP 표시를 사용하려면 debate 테이블에 ip_address 컬럼(TEXT)을 추가해 주세요.")
+        st.caption("ℹ️ 학생 작성 IP 표시를 사용하려면 debate 테이블에 ip_address 컬럼(INET)을 추가해 주세요.")
 
     if not opinion_df.empty:
         teacher_df = opinion_df[opinion_df['student_name'].str.contains('선생님', na=False)]
