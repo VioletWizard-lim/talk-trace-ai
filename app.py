@@ -34,6 +34,7 @@ AUTO_JOIN_ON_REFRESH = st.secrets.get("AUTO_JOIN_ON_REFRESH", True)
 MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
+MAX_ENTRY_CODE_LEN = 60
 
 # --- Supabase 초기화 함수 ---
 @st.cache_resource
@@ -54,7 +55,8 @@ def ensure_supabase_login():
         res = supabase.auth.get_session()
         # 라이브러리 버전에 따라 res 자체가 세션이거나 res.session일 수 있음
         curr_session = res.session if hasattr(res, 'session') else res
-    except:
+    except Exception as e:
+        logger.warning("기존 Supabase 세션 확인 실패: %s", e)
         curr_session = None
 
     # 세션이 없으면 로그인 시도
@@ -188,13 +190,8 @@ with st.sidebar:
         rooms_res = supabase.table("topic").select("room_name").order("room_name", desc=False).execute()
 
         raw_rooms = [item.get("room_name", "") for item in rooms_res.data] if rooms_res.data else []
-        existing_rooms = []
-        seen_rooms = set()
-        for room in raw_rooms:
-            safe_room = normalize_room_name(room)
-            if safe_room and safe_room not in seen_rooms:
-                existing_rooms.append(safe_room)
-                seen_rooms.add(safe_room)
+        # DB의 실제 room_name 값을 그대로 사용해 조회 키 불일치를 방지합니다.
+        existing_rooms = [item.get("room_name", "") for item in rooms_res.data if item.get("room_name", "").strip()] if rooms_res.data else []
     except Exception as e:
         st.error(f"🚨 방 목록 조회 에러: {e}")
         existing_rooms = []
@@ -226,7 +223,7 @@ with st.sidebar:
                 if st.button("새 방 개설하기", type="primary"):
                     safe_new_room = normalize_room_name(new_room)
                     safe_new_title = normalize_user_text(new_title, max_len=MAX_TOPIC_LEN)
-                    safe_new_pw = normalize_user_text(new_pw, max_len=60)
+                    safe_new_pw = normalize_user_text(new_pw, max_len=MAX_ENTRY_CODE_LEN)
                     if safe_new_room and safe_new_title:
                         try:
                             supabase.table("topic").upsert({
@@ -239,7 +236,10 @@ with st.sidebar:
                         except Exception as e:
                             st.error(f"방 개설 실패: {e}")
                     else:
-                        st.error(f"방 이름({MAX_ROOM_NAME_LEN}자 이하)과 주제({MAX_TOPIC_LEN}자 이하)를 모두 입력해주세요.")
+                        st.error(
+                            f"방 이름({MAX_ROOM_NAME_LEN}자 이하)과 주제({MAX_TOPIC_LEN}자 이하)를 모두 입력해주세요. "
+                            f"입장 암호는 {MAX_ENTRY_CODE_LEN}자까지 저장됩니다."
+                        )
                     room_name = ""
     else:
         st.session_state['teacher_auth'] = False
