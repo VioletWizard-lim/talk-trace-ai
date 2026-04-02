@@ -92,6 +92,10 @@ def normalize_user_text(raw_text, max_len=500):
     text = (raw_text or "").strip()
     return text[:max_len] if text else ""
 
+def normalize_room_name(raw_text, max_len=MAX_ROOM_NAME_LEN):
+    text = normalize_user_text(raw_text, max_len=max_len)
+    return re.sub(r"\s+", " ", text).strip() if text else ""
+
 def with_fallback_author_role(df):
     if df.empty: return df
     fixed = df.copy()
@@ -183,8 +187,14 @@ with st.sidebar:
         # 방법 1: 방 이름(가나다/알파벳) 순으로 정렬하고 싶을 때
         rooms_res = supabase.table("topic").select("room_name").order("room_name", desc=False).execute()
 
-        # 💡 순서를 뒤섞어버리는 set()을 완전히 빼버렸습니다!
-        existing_rooms = [item['room_name'] for item in rooms_res.data] if rooms_res.data else []
+        raw_rooms = [item.get("room_name", "") for item in rooms_res.data] if rooms_res.data else []
+        existing_rooms = []
+        seen_rooms = set()
+        for room in raw_rooms:
+            safe_room = normalize_room_name(room)
+            if safe_room and safe_room not in seen_rooms:
+                existing_rooms.append(safe_room)
+                seen_rooms.add(safe_room)
     except Exception as e:
         st.error(f"🚨 방 목록 조회 에러: {e}")
         existing_rooms = []
@@ -214,16 +224,22 @@ with st.sidebar:
                 new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
 
                 if st.button("새 방 개설하기", type="primary"):
-                    if new_room and new_title:
+                    safe_new_room = normalize_room_name(new_room)
+                    safe_new_title = normalize_user_text(new_title, max_len=MAX_TOPIC_LEN)
+                    safe_new_pw = normalize_user_text(new_pw, max_len=60)
+                    if safe_new_room and safe_new_title:
                         try:
                             supabase.table("topic").upsert({
-                                "room_name": new_room, "title": new_title, "mode": new_mode, "entry_code": new_pw
+                                "room_name": safe_new_room,
+                                "title": safe_new_title,
+                                "mode": new_mode,
+                                "entry_code": safe_new_pw
                             }).execute()
-                            st.success(f"'{new_room}' 방이 개설되었습니다! '기존 방 선택'을 눌러 입장하세요.")
+                            st.success(f"'{safe_new_room}' 방이 개설되었습니다! '기존 방 선택'을 눌러 입장하세요.")
                         except Exception as e:
                             st.error(f"방 개설 실패: {e}")
                     else:
-                        st.error("방 이름과 주제를 모두 입력해주세요.")
+                        st.error(f"방 이름({MAX_ROOM_NAME_LEN}자 이하)과 주제({MAX_TOPIC_LEN}자 이하)를 모두 입력해주세요.")
                     room_name = ""
     else:
         st.session_state['teacher_auth'] = False
