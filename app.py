@@ -98,6 +98,28 @@ def normalize_room_name(raw_text, max_len=MAX_ROOM_NAME_LEN):
     text = normalize_user_text(raw_text, max_len=max_len)
     return re.sub(r"\s+", " ", text).strip() if text else ""
 
+@st.cache_data(ttl=300)
+def debate_ip_column_available():
+    try:
+        supabase.table("debate").select("ip_address").limit(1).execute()
+        return True
+    except Exception:
+        return False
+
+def get_client_ip():
+    try:
+        headers = st.context.headers
+    except Exception:
+        return ""
+    if not headers:
+        return ""
+
+    for key in ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "fly-client-ip"]:
+        raw_ip = headers.get(key)
+        if raw_ip:
+            return str(raw_ip).split(",")[0].strip()
+    return ""
+
 def with_fallback_author_role(df):
     if df.empty: return df
     fixed = df.copy()
@@ -189,7 +211,6 @@ with st.sidebar:
         # 방법 1: 방 이름(가나다/알파벳) 순으로 정렬하고 싶을 때
         rooms_res = supabase.table("topic").select("room_name").order("room_name", desc=False).execute()
 
-        raw_rooms = [item.get("room_name", "") for item in rooms_res.data] if rooms_res.data else []
         # DB의 실제 room_name 값을 그대로 사용해 조회 키 불일치를 방지합니다.
         existing_rooms = [item.get("room_name", "") for item in rooms_res.data if item.get("room_name", "").strip()] if rooms_res.data else []
     except Exception as e:
@@ -353,16 +374,20 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
     if safe_input:
         now = get_kst_now_str()
         author_role_for_submit = "교사" if user_role == "교사" else "학생"
+        client_ip = get_client_ip()
+        insert_payload = {
+            "room_name": room_name,
+            "timestamp": now,
+            "student_name": safe_student_name,
+            "content": safe_input,
+            "sentiment": sentiment,
+            "author_role": author_role_for_submit
+        }
+        if debate_ip_column_available() and client_ip:
+            insert_payload["ip_address"] = client_ip
         try:
-            supabase.table("debate").insert({
-                "room_name": room_name,
-                "timestamp": now,
-                "student_name": safe_student_name,
-                "content": safe_input,
-                "sentiment": sentiment,
-                "author_role": author_role_for_submit
-            }).execute()
-            log_audit("opinion_submitted", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, sentiment=sentiment)
+            supabase.table("debate").insert(insert_payload).execute()
+            log_audit("opinion_submitted", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, sentiment=sentiment, client_ip=client_ip if client_ip else "N/A")
             st.session_state['reset_key'] += 1
             st.rerun()
         except Exception as e:
@@ -390,6 +415,8 @@ def live_chat_board_core():
     with col_board_ref:
         if user_role == "교사" and teacher_auth:
             st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
+    if user_role == "교사" and teacher_auth and not debate_ip_column_available():
+        st.caption("ℹ️ 학생 작성 IP 표시를 사용하려면 debate 테이블에 ip_address 컬럼(TEXT)을 추가해 주세요.")
 
     if not opinion_df.empty:
         teacher_df = opinion_df[opinion_df['student_name'].str.contains('선생님', na=False)]
@@ -411,6 +438,9 @@ def live_chat_board_core():
                 c_name, c_btn = st.columns([5, 1])
                 with c_name: 
                     st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
+                    row_ip = str(row.get("ip_address", "")).strip() if hasattr(row, "get") else ""
+                    if row_ip:
+                        st.caption(f"IP: `{row_ip}`")
                 with c_btn:
                     st.button("❌", key=f"del_{row['id']}", help="강제 삭제", on_click=delete_chat_msg, args=(row['id'],))
                 st.info(row['content']) 
