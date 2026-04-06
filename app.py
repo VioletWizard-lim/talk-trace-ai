@@ -150,11 +150,11 @@ st.markdown(
         font-weight: 700;
     }
     .records-db-table-wrap th:nth-child(1), .records-db-table-wrap td:nth-child(1) {
-        width: 6%;
+        width: 5%;
         white-space: nowrap;
     }
     .records-db-table-wrap th:nth-child(2), .records-db-table-wrap td:nth-child(2) {
-        width: 22%;
+        width: 20%;
         white-space: nowrap;
     }
     .records-db-table-wrap th:nth-child(3), .records-db-table-wrap td:nth-child(3) {
@@ -162,7 +162,7 @@ st.markdown(
         white-space: nowrap;
     }
     .records-db-table-wrap th:nth-child(4), .records-db-table-wrap td:nth-child(4) {
-        width: 60%;
+        width: 63%;
         white-space: pre-wrap;
         word-break: break-word;
     }
