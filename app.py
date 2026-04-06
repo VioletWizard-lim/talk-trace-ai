@@ -88,8 +88,7 @@ def log_audit(event, room_name="", actor_name="", role="", **extra):
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
 st.markdown(
-    textwrap.dedent(
-        """
+    """
     <style>
     /* 1) 텍스트 요소에만 바탕체 적용 (전역 상속 금지) */
     .stApp p,
@@ -162,8 +161,7 @@ st.markdown(
 
     .stAlert p { font-size: 20px !important; font-weight: bold; }
     </style>
-    """
-    ),
+    """,
     unsafe_allow_html=True
 )
 
