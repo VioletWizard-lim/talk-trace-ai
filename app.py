@@ -104,13 +104,25 @@ st.markdown(
         font-family: "Batang", "바탕", "BatangChe", serif !important;
     }
 
-    /* 3) 혹시 상위에서 덮였을 때 아이콘 폰트 강제 복원 */
+    /* 3) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
     .material-icons,
     .material-icons-round,
     .material-icons-outlined,
     .material-symbols-rounded,
-    .material-symbols-outlined {
+    .material-symbols-outlined,
+    [class^="material-symbols"],
+    [class*=" material-symbols"],
+    [class^="material-icons"],
+    [class*=" material-icons"] {
         font-family: "Material Icons", "Material Symbols Rounded", "Material Symbols Outlined" !important;
+        font-style: normal !important;
+        font-weight: normal !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        white-space: nowrap !important;
+        direction: ltr !important;
+        -webkit-font-smoothing: antialiased !important;
+        font-feature-settings: "liga" !important;
     }
 
     /* 기존 스타일들 */
