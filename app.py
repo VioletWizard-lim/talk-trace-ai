@@ -89,6 +89,7 @@ st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
 st.markdown(
     """
+    <style>
     /* 1) 텍스트 요소에만 바탕체 적용 (전역 상속 금지) */
     .stApp p,
     .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
