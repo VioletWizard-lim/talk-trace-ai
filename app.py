@@ -90,82 +90,82 @@ st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 st.markdown(
     textwrap.dedent(
         """
-    <style>
-    /* 1) 텍스트 요소에만 바탕체 적용 (전역 상속 금지) */
-    .stApp p,
-    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
-    .stApp label, .stApp input, .stApp textarea, .stApp button,
-    .stApp li, .stApp td, .stApp th,
-    .stApp div[data-testid="stMarkdownContainer"] *:not([class*="material-icons"]):not([class*="material-symbols"]),
-    .stApp span:not([class*="material-icons"]):not([class*="material-symbols"]):not([data-baseweb="icon"]):not([role="img"]) {
-        font-family: "Batang", "바탕", "BatangChe", serif !important;
-    }
-
-    /* 2) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
-    .material-icons,
-    .material-icons-round,
-    .material-icons-outlined,
-    [class^="material-icons"],
-    [class*=" material-icons"] {
-        font-family: "Material Icons" !important;
-        font-style: normal !important;
-        font-weight: normal !important;
-        letter-spacing: normal !important;
-        text-transform: none !important;
-        white-space: nowrap !important;
-        direction: ltr !important;
-        -webkit-font-smoothing: antialiased !important;
-        font-feature-settings: "liga" !important;
-    }
-
-    .material-symbols-rounded,
-    .material-symbols-outlined,
-    [class^="material-symbols"],
-    [class*=" material-symbols"] {
-        font-family: "Material Symbols Rounded", "Material Symbols Outlined" !important;
-        font-style: normal !important;
-        font-weight: normal !important;
-        letter-spacing: normal !important;
-        text-transform: none !important;
-        white-space: nowrap !important;
-        direction: ltr !important;
-        -webkit-font-smoothing: antialiased !important;
-        font-feature-settings: "liga" !important;
-        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24 !important;
-    }
-
-    [data-baseweb="icon"],
-    [data-testid="stSelectbox"] svg,
-    [data-testid="stMultiSelect"] svg,
-    [data-testid="stExpander"] summary svg {
-        font-family: inherit !important;
-    }
-
-    /* 기존 스타일들 */
-    [data-testid="stDecoration"] { display: none !important; }
-
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"],
-    [data-testid="stAppViewBlockContainer"], [data-testid="stFragment"],
-    [data-testid="stVerticalBlock"], [data-testid="stElementContainer"],
-    [data-testid="stExpander"], details, summary,
-    *[data-stale="true"], div[data-stale="true"] {
-        opacity: 1 !important;
-        transition: none !important;
-        filter: none !important;
-        -webkit-filter: none !important;
-    }
-
-    .stTextArea textarea, .stTextInput input, .stSelectbox, .stRadio label,
-    .stMarkdown p, div[data-testid="stChatMessageContent"] {
-        font-size: 18px !important;
-    }
-
-    .stAlert p { font-size: 20px !important; font-weight: bold; }
-    </style>
-    """
-    ),
-    unsafe_allow_html=True
-)
+        <style>
+        /* 1) 텍스트 요소에만 바탕체 적용 (전역 상속 금지) */
+        .stApp p,
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
+        .stApp label, .stApp input, .stApp textarea, .stApp button,
+        .stApp li, .stApp td, .stApp th,
+        .stApp div[data-testid="stMarkdownContainer"] *:not([class*="material-icons"]):not([class*="material-symbols"]),
+        .stApp span:not([class*="material-icons"]):not([class*="material-symbols"]):not([data-baseweb="icon"]):not([role="img"]) {
+            font-family: "Batang", "바탕", "BatangChe", serif !important;
+        }
+    
+        /* 2) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
+        .material-icons,
+        .material-icons-round,
+        .material-icons-outlined,
+        [class^="material-icons"],
+        [class*=" material-icons"] {
+            font-family: "Material Icons" !important;
+            font-style: normal !important;
+            font-weight: normal !important;
+            letter-spacing: normal !important;
+            text-transform: none !important;
+            white-space: nowrap !important;
+            direction: ltr !important;
+            -webkit-font-smoothing: antialiased !important;
+            font-feature-settings: "liga" !important;
+        }
+    
+        .material-symbols-rounded,
+        .material-symbols-outlined,
+        [class^="material-symbols"],
+        [class*=" material-symbols"] {
+            font-family: "Material Symbols Rounded", "Material Symbols Outlined" !important;
+            font-style: normal !important;
+            font-weight: normal !important;
+            letter-spacing: normal !important;
+            text-transform: none !important;
+            white-space: nowrap !important;
+            direction: ltr !important;
+            -webkit-font-smoothing: antialiased !important;
+            font-feature-settings: "liga" !important;
+            font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24 !important;
+        }
+    
+        [data-baseweb="icon"],
+        [data-testid="stSelectbox"] svg,
+        [data-testid="stMultiSelect"] svg,
+        [data-testid="stExpander"] summary svg {
+            font-family: inherit !important;
+        }
+    
+        /* 기존 스타일들 */
+        [data-testid="stDecoration"] { display: none !important; }
+    
+        .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"],
+        [data-testid="stAppViewBlockContainer"], [data-testid="stFragment"],
+        [data-testid="stVerticalBlock"], [data-testid="stElementContainer"],
+        [data-testid="stExpander"], details, summary,
+        *[data-stale="true"], div[data-stale="true"] {
+            opacity: 1 !important;
+            transition: none !important;
+            filter: none !important;
+            -webkit-filter: none !important;
+        }
+    
+        .stTextArea textarea, .stTextInput input, .stSelectbox, .stRadio label,
+        .stMarkdown p, div[data-testid="stChatMessageContent"] {
+            font-size: 18px !important;
+        }
+    
+        .stAlert p { font-size: 20px !important; font-weight: bold; }
+        </style>
+        """
+        ),
+        unsafe_allow_html=True
+    )
 
 if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
 if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] = ""
