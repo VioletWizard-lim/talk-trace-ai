@@ -98,7 +98,19 @@ st.markdown(
     .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
     .stApp label, .stApp input, .stApp textarea, .stApp button,
     .stApp li, .stApp td, .stApp th,
-    .stApp div[data-testid="stMarkdownContainer"] *:not([class*="material-icons"]):not([class*="material-symbols"]) {
+    .stApp div[data-testid="stMarkdownContainer"] *:not([class*="material-icons"]):not([class*="material-symbols"]),
+    .stApp [data-testid="stSelectbox"] div,
+    .stApp [data-testid="stSelectbox"] span,
+    .stApp [data-testid="stSelectbox"] input,
+    .stApp [data-testid="stSelectbox"] *:not(svg),
+    .stApp [data-baseweb="select"] div,
+    .stApp [data-baseweb="select"] span,
+    .stApp [data-baseweb="select"] input,
+    .stApp [data-baseweb="select"] *:not(svg),
+    .stApp [role="listbox"] *,
+    .stApp [data-baseweb="popover"] *,
+    .stApp [data-testid="stDataFrame"] *,
+    .stApp code {
         font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
     }
 
@@ -414,7 +426,7 @@ def live_chat_board_core():
                     st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
                     row_ip = str(row.get("ip_address", "")).strip() if hasattr(row, "get") else ""
                     if row_ip:
-                        st.caption(f"IP: `{mask_ip_for_teacher(row_ip)}`")
+                        st.caption(f"IP: {mask_ip_for_teacher(row_ip)}")
                 with c_btn:
                     st.button("❌", key=f"del_{row['id']}", help="강제 삭제", on_click=delete_chat_msg, args=(row['id'],))
                 st.info(row['content']) 
