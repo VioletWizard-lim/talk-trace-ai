@@ -671,8 +671,14 @@ if user_role == "교사" and teacher_auth:
             records_df = pd.DataFrame()
 
         if not records_df.empty:
-            records_display_df = records_df.rename(columns={"id": "No.", "content": "세특 내용"})
-            st.table(records_display_df)
+            st.dataframe(
+                records_df,
+                use_container_width=True,
+                column_config={
+                    "id": "No.",
+                    "content": st.column_config.TextColumn("세특 내용", width="large"),
+                },
+            )
             col_down, col_del = st.columns([1, 1])
             with col_down:
                 buffer_records = io.BytesIO()
