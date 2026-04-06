@@ -90,11 +90,12 @@ st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 st.markdown(
     """
     <style>
-    /* 전체 폰트: 바탕체 강제 적용 */
+    /* 1) 기본 폰트: 바탕체 */
     :root, html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] {
         font-family: "Batang", "바탕", "BatangChe", serif !important;
     }
 
+    /* 2) 텍스트 요소에만 폰트 적용 (아이콘 폰트는 제외) */
     .stApp p,
     .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
     .stApp label, .stApp input, .stApp textarea, .stApp button,
@@ -103,20 +104,34 @@ st.markdown(
         font-family: "Batang", "바탕", "BatangChe", serif !important;
     }
 
-    /* 로딩 위젯을 숨기지 않아 화면 당겨짐을 방지합니다. */
+    /* 3) 혹시 상위에서 덮였을 때 아이콘 폰트 강제 복원 */
+    .material-icons,
+    .material-icons-round,
+    .material-icons-outlined,
+    .material-symbols-rounded,
+    .material-symbols-outlined {
+        font-family: "Material Icons", "Material Symbols Rounded", "Material Symbols Outlined" !important;
+    }
+
+    /* 기존 스타일들 */
     [data-testid="stDecoration"] { display: none !important; }
-    
+
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"],
-    [data-testid="stAppViewBlockContainer"], [data-testid="stFragment"], 
-    [data-testid="stVerticalBlock"], [data-testid="stElementContainer"], 
+    [data-testid="stAppViewBlockContainer"], [data-testid="stFragment"],
+    [data-testid="stVerticalBlock"], [data-testid="stElementContainer"],
     [data-testid="stExpander"], details, summary,
     *[data-stale="true"], div[data-stale="true"] {
-        opacity: 1 !important; transition: none !important; filter: none !important; -webkit-filter: none !important;
+        opacity: 1 !important;
+        transition: none !important;
+        filter: none !important;
+        -webkit-filter: none !important;
     }
-    
-    .stTextArea textarea, .stTextInput input, .stSelectbox, .stRadio label, .stMarkdown p, div[data-testid="stChatMessageContent"] { 
-        font-size: 18px !important; 
+
+    .stTextArea textarea, .stTextInput input, .stSelectbox, .stRadio label,
+    .stMarkdown p, div[data-testid="stChatMessageContent"] {
+        font-size: 18px !important;
     }
+
     .stAlert p { font-size: 20px !important; font-weight: bold; }
     </style>
     """,
