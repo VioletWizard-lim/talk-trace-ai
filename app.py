@@ -90,14 +90,15 @@ st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 st.markdown(
     """
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&display=swap');
+
     /* 1) 텍스트 요소에만 바탕체 적용 (전역 상속 금지) */
     .stApp p,
     .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
     .stApp label, .stApp input, .stApp textarea, .stApp button,
     .stApp li, .stApp td, .stApp th,
-    .stApp div[data-testid="stMarkdownContainer"] *:not([class*="material-icons"]):not([class*="material-symbols"]),
-    .stApp span:not([class*="material-icons"]):not([class*="material-symbols"]):not([data-baseweb="icon"]):not([role="img"]) {
-        font-family: "Batang", "바탕", "BatangChe", serif !important;
+    .stApp div[data-testid="stMarkdownContainer"] *:not([class*="material-icons"]):not([class*="material-symbols"]) {
+        font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
     }
 
     /* 2) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
