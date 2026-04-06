@@ -90,11 +90,13 @@ st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 st.markdown(
     """
     <style>
-    /* 전체 폰트: 바탕체 우선, 미설치 환경 대비 serif fallback */
-    html, body, [class*="css"], .stApp,
-    .stMarkdown, .stText, .stTextInput, .stTextArea, .stSelectbox,
-    .stRadio, .stButton, .stAlert, .stCaption, .stChatMessage {
-        font-family: "Batang", "BatangChe", serif !important;
+    /* 전체 폰트: 바탕체 강제 적용 */
+    :root, html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] {
+        font-family: "Batang", "바탕", "BatangChe", serif !important;
+    }
+
+    .stApp *:not(code):not(pre) {
+        font-family: "Batang", "바탕", "BatangChe", serif !important;
     }
 
     /* 로딩 위젯을 숨기지 않아 화면 당겨짐을 방지합니다. */
