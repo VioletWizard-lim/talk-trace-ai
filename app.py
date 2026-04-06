@@ -3,11 +3,26 @@ import pandas as pd
 import io
 from datetime import datetime, timedelta
 import logging
-import google.generativeai as genai
 import plotly.express as px
-import time
-import re
-from supabase import create_client, Client, ClientOptions
+
+from db import (
+    debate_ip_column_available,
+    ensure_db_login,
+    fetch_live_messages,
+    fetch_room_entry_code,
+    fetch_room_names,
+    fetch_topic_data,
+    init_db,
+    submit_opinion,
+    upsert_topic_room,
+)
+from services.ai import generate_ai_response
+from validators import (
+    mask_ip_for_teacher,
+    normalize_room_name,
+    normalize_user_text,
+    with_fallback_author_role,
+)
 
 # ==========================================
 # [0] 로깅 설정
@@ -32,48 +47,16 @@ AI_HINT_ENABLED = st.secrets.get("AI_HINT_ENABLED", True)
 ROOM_DESTROY_ENABLED = st.secrets.get("ROOM_DESTROY_ENABLED", True)
 AUTO_JOIN_ON_REFRESH = st.secrets.get("AUTO_JOIN_ON_REFRESH", True)
 MAX_ROOM_NAME_LEN = 60
+MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
 MAX_ENTRY_CODE_LEN = 60
 
-# --- Supabase 초기화 함수 ---
-@st.cache_resource
-def init_supabase() -> Client:
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
-
 # 1. supabase 변수 생성 (딱 한 번만 실행)
-supabase = init_supabase()
+supabase = init_db()
 
 # 2. 자동 로그인 로직 (세션 체크 후 필요할 때만 로그인)
-def ensure_supabase_login():
-    # 이미 세션이 있는지 확인
-    curr_session = None
-    try:
-        # get_session() 결과가 None이거나 에러가 나면 로그인이 필요함
-        res = supabase.auth.get_session()
-        # 라이브러리 버전에 따라 res 자체가 세션이거나 res.session일 수 있음
-        curr_session = res.session if hasattr(res, 'session') else res
-    except Exception as e:
-        logger.warning("기존 Supabase 세션 확인 실패: %s", e)
-        curr_session = None
-
-    # 세션이 없으면 로그인 시도
-    if not curr_session:
-        try:
-            supabase.auth.sign_in_with_password({
-                "email": st.secrets["SUPABASE_APP_EMAIL"],
-                "password": st.secrets["SUPABASE_APP_PASSWORD"]
-            })
-            time.sleep(0.5) # 로그인 반영 대기
-            return True
-        except Exception as e:
-            st.error(f"🚨 DB 자동 로그인 실패: {e}")
-            return False
-    return True
-# 로그인 실행
-ensure_supabase_login()
+ensure_db_login(supabase)
 
 # --- 기타 유틸리티 함수들 ---
 def get_kst_now():
@@ -81,30 +64,6 @@ def get_kst_now():
 
 def get_kst_now_str():
     return get_kst_now().strftime(DATETIME_FMT)
-
-def generate_ai_response(prompt, log_message, **context):
-    try:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        return genai.GenerativeModel(AI_MODEL_NAME).generate_content(prompt).text
-    except Exception:
-        logger.exception("%s (context=%s)", log_message, context)
-        return None
-
-def normalize_user_text(raw_text, max_len=500):
-    text = (raw_text or "").strip()
-    return text[:max_len] if text else ""
-
-def normalize_room_name(raw_text, max_len=MAX_ROOM_NAME_LEN):
-    text = normalize_user_text(raw_text, max_len=max_len)
-    return re.sub(r"\s+", " ", text).strip() if text else ""
-
-@st.cache_data(ttl=300)
-def debate_ip_column_available():
-    try:
-        supabase.table("debate").select("ip_address").limit(1).execute()
-        return True
-    except Exception:
-        return False
 
 def get_client_ip():
     try:
@@ -120,54 +79,8 @@ def get_client_ip():
             return str(raw_ip).split(",")[0].strip()
     return ""
 
-def mask_ip_for_teacher(ip_text):
-    ip = str(ip_text or "").strip()
-    if not ip:
-        return ""
-
-    # IPv4: 첫/마지막 옥텟만 노출, 가운데 2개는 마스킹
-    ipv4_parts = ip.split(".")
-    if len(ipv4_parts) == 4 and all(part.isdigit() for part in ipv4_parts):
-        return f"{ipv4_parts[0]}.XXX.XXX.{ipv4_parts[3]}"
-
-    # IPv6: 앞 2블록 + 마스킹 + 마지막 블록 노출
-    if ":" in ip:
-        ipv6_parts = ip.split(":")
-        if len(ipv6_parts) >= 3:
-            return f"{ipv6_parts[0]}:{ipv6_parts[1]}:XXXX:XXXX:{ipv6_parts[-1]}"
-    return ip
-
-def with_fallback_author_role(df):
-    if df.empty: return df
-    fixed = df.copy()
-    if "author_role" not in fixed.columns:
-        fixed["author_role"] = "학생"
-        return fixed
-    fixed["author_role"] = fixed["author_role"].fillna("").astype(str).str.strip()
-    teacher_name_hint = fixed["student_name"].fillna("").astype(str).str.contains("교사|선생님", regex=True)
-    fixed.loc[(fixed["author_role"] == "") & teacher_name_hint, "author_role"] = "교사"
-    fixed.loc[fixed["author_role"] == "", "author_role"] = "학생"
-    return fixed
-
 def log_audit(event, room_name="", actor_name="", role="", **extra):
     logger.info("AUDIT event=%s room=%s actor=%s role=%s extra=%s", event, room_name, actor_name, role, extra)
-
-def get_recent_debate_df(room_name, limit):
-    try:
-        # 💡 .execute() 결과를 변수에 담아 상태를 확인합니다.
-        res = supabase.table("debate").select("*").eq("room_name", room_name).order("id", desc=True).limit(limit).execute()
-        
-        # 만약 데이터가 비어있다면 사이드바 등에 살짝 힌트를 줍니다.
-        if not res.data:
-            logger.info(f"{room_name} 방에 데이터가 없습니다.")
-            
-        return pd.DataFrame(res.data)
-    except Exception as e:
-        # 🚨 여기서 에러가 나는지 화면에 빨갛게 표시해 봅시다.
-        st.error(f"🚨 데이터 불러오기 실패: {e}")
-        logger.exception("DB 조회 실패: %s", e)
-        return pd.DataFrame()
-
 
 # ==========================================
 # [2] 앱 기본 설정 및 세션/CSS 
@@ -177,6 +90,13 @@ st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 st.markdown(
     """
     <style>
+    /* 전체 폰트: 바탕체 우선, 미설치 환경 대비 serif fallback */
+    html, body, [class*="css"], .stApp,
+    .stMarkdown, .stText, .stTextInput, .stTextArea, .stSelectbox,
+    .stRadio, .stButton, .stAlert, .stCaption, .stChatMessage {
+        font-family: "Batang", "BatangChe", serif !important;
+    }
+
     /* 로딩 위젯을 숨기지 않아 화면 당겨짐을 방지합니다. */
     [data-testid="stDecoration"] { display: none !important; }
     
@@ -223,17 +143,11 @@ with st.sidebar:
     user_role = st.radio("모드 선택", ["학생", "교사"], on_change=reset_joined_state)
     st.divider()
 
-# 👇 이 부분을 수정해 줍니다.
     try:        
-        # 방법 1: 방 이름(가나다/알파벳) 순으로 정렬하고 싶을 때
-        rooms_res = supabase.table("topic").select("room_name").order("room_name", desc=False).execute()
-
-        # DB의 실제 room_name 값을 그대로 사용해 조회 키 불일치를 방지합니다.
-        existing_rooms = [item.get("room_name", "") for item in rooms_res.data if item.get("room_name", "").strip()] if rooms_res.data else []
-    except Exception as e:
-        st.error(f"🚨 방 목록 조회 에러: {e}")
+        existing_rooms = fetch_room_names(supabase)
+    except Exception:
         existing_rooms = []
-    
+        
     room_name = ""
     teacher_auth = False
     
@@ -263,16 +177,15 @@ with st.sidebar:
                     safe_new_title = normalize_user_text(new_title, max_len=MAX_TOPIC_LEN)
                     safe_new_pw = normalize_user_text(new_pw, max_len=MAX_ENTRY_CODE_LEN)
                     if safe_new_room and safe_new_title:
-                        try:
-                            supabase.table("topic").upsert({
-                                "room_name": safe_new_room,
-                                "title": safe_new_title,
-                                "mode": new_mode,
-                                "entry_code": safe_new_pw
-                            }).execute()
+                        res = upsert_topic_room(
+                            supabase=supabase,
+                            room_name=safe_new_room,
+                            title=safe_new_title,
+                            mode=new_mode,
+                            entry_code=safe_new_pw,
+                        )
+                        if res is not None:
                             st.success(f"'{safe_new_room}' 방이 개설되었습니다! '기존 방 선택'을 눌러 입장하세요.")
-                        except Exception as e:
-                            st.error(f"방 개설 실패: {e}")
                     else:
                         st.error(
                             f"방 이름({MAX_ROOM_NAME_LEN}자 이하)과 주제({MAX_TOPIC_LEN}자 이하)를 모두 입력해주세요. "
@@ -310,11 +223,7 @@ if not st.session_state['joined']:
     elif not room_name.strip(): st.error("🚨 접속할 방을 먼저 선택해 주세요.")
     else:
         if user_role == "학생":
-            try:
-                topic_info = supabase.table("topic").select("entry_code").eq("room_name", room_name).execute()
-                real_pw = topic_info.data[0]['entry_code'] if topic_info.data else ""
-            except Exception:
-                real_pw = ""
+            real_pw = fetch_room_entry_code(supabase, room_name)
                 
             if real_pw:
                 student_pw = st.text_input("🔒 방 입장 암호 (선생님께 확인하세요)", type="password")
@@ -337,11 +246,7 @@ if not st.session_state['joined']:
 # ==========================================
 # [5] 메인 화면 (의견 입력부)
 # ==========================================
-try:
-    topic_res = supabase.table("topic").select("title, mode").eq("room_name", room_name).execute()
-    topic_data = topic_res.data[0] if topic_res.data else {}
-except Exception:
-    topic_data = {}
+topic_data = fetch_topic_data(supabase, room_name)
 
 current_topic = topic_data.get('title', "자유 주제로 대화해 봅시다.")
 current_mode = topic_data.get('mode', "⚔️ 찬반 토론")
@@ -403,7 +308,9 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
         if debate_ip_column_available() and client_ip:
             insert_payload["ip_address"] = client_ip
         try:
-            supabase.table("debate").insert(insert_payload).execute()
+            res = submit_opinion(supabase, insert_payload)
+            if res is None:
+                st.stop()
             log_audit("opinion_submitted", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, sentiment=sentiment, client_ip=client_ip if client_ip else "N/A")
             st.session_state['reset_key'] += 1
             st.rerun()
@@ -418,7 +325,7 @@ st.divider()
 # [6] 실시간 업데이트 영역
 # ==========================================
 def live_chat_board_core():
-    df = get_recent_debate_df(room_name, LIVE_BOARD_FETCH_LIMIT)
+    df = fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
     opinion_df = with_fallback_author_role(df) # 변수명 매칭 확인 (이전 코드에서 student_df 대신 opinion_df 혼용 부분 수정)
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
@@ -432,9 +339,7 @@ def live_chat_board_core():
     with col_board_ref:
         if user_role == "교사" and teacher_auth:
             st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
-    if user_role == "교사" and teacher_auth and not debate_ip_column_available():
-        st.caption("ℹ️ 학생 작성 IP 표시를 사용하려면 debate 테이블에 ip_address 컬럼(INET)을 추가해 주세요.")
-
+            
     if not opinion_df.empty:
         teacher_df = opinion_df[opinion_df['student_name'].str.contains('선생님', na=False)]
         if not teacher_df.empty:
@@ -517,7 +422,7 @@ if user_role == "교사" and teacher_auth:
         if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
             st.rerun()
 
-    df_all = with_fallback_author_role(get_recent_debate_df(room_name, DASHBOARD_FETCH_LIMIT))
+    df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
     
     # --- 1. 통계 ---
     st.subheader("📊 학생 참여도 현황")
@@ -562,7 +467,13 @@ if user_role == "교사" and teacher_auth:
                 with st.spinner("✍️ 예리한 질문을 작성하고 있습니다..."):
                     context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
                     prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
-                    res_text = generate_ai_response(prompt, "AI 힌트 생성 실패", room_name=room_name)
+                    res_text = generate_ai_response(
+                        prompt,
+                        model_name=AI_MODEL_NAME,
+                        api_key=st.secrets["GEMINI_API_KEY"],
+                        log_message="AI 힌트 생성 실패",
+                        room_name=room_name,
+                    )
                     if res_text:
                         st.session_state['hint_input_widget'] = res_text.strip().split('\n')[0]
                         st.session_state['ai_hint_manual_mode'] = False
@@ -593,7 +504,13 @@ if user_role == "교사" and teacher_auth:
                 if not df_all.empty:
                     full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
                     prompt = f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n[엄격한 규칙]\n1. {act_type}의 전체 맥락을 파악하고 핵심 내용을 딱 3줄로 요약하세요.\n2. 가장 논리적이고 창의적인 주장을 펼친 '학생 이름' 1명과 그 이유를 구체적으로 추출하세요.\n3. 보고서 형식으로 깔끔하게 출력하세요.\n\n기록:\n{full_history}"
-                    res_text = generate_ai_response(prompt, "AI 요약 리포트 생성 실패", room_name=room_name)
+                    res_text = generate_ai_response(
+                        prompt,
+                        model_name=AI_MODEL_NAME,
+                        api_key=st.secrets["GEMINI_API_KEY"],
+                        log_message="AI 요약 리포트 생성 실패",
+                        room_name=room_name,
+                    )
                     if res_text:
                         st.session_state['ai_report_text'] = res_text
                         st.toast("✅ 리포트 작성 완료!", icon="🎉")
@@ -644,7 +561,14 @@ if user_role == "교사" and teacher_auth:
                             student_data = df_all[df_all['student_name'] == selected_student]
                             debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
                             prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 {act_type}에 참여한 '{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
-                            res_text = generate_ai_response(prompt, "AI 세특 생성 실패", room_name=room_name, student=selected_student)
+                            res_text = generate_ai_response(
+                                prompt,
+                                model_name=AI_MODEL_NAME,
+                                api_key=st.secrets["GEMINI_API_KEY"],
+                                log_message="AI 세특 생성 실패",
+                                room_name=room_name,
+                                student=selected_student,
+                            )
                             
                             if res_text:
                                 st.session_state['ai_result_text'] = res_text
