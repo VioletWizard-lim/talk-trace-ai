@@ -89,27 +89,26 @@ st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
 st.markdown(
     """
-    <style>
-    /* 1) 기본 폰트: 바탕체 */
-    :root, html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] {
-        font-family: "Batang", "바탕", "BatangChe", serif !important;
-    }
-
-    /* 2) 텍스트 요소에만 폰트 적용 (아이콘 폰트는 제외) */
+    /* 1) 텍스트 요소에만 바탕체 적용 (전역 상속 금지) */
     .stApp p,
     .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
     .stApp label, .stApp input, .stApp textarea, .stApp button,
     .stApp li, .stApp td, .stApp th,
-    .stApp span:not([class*="material-icons"]):not([class*="material-symbols"]) {
+    .stApp div[data-testid="stMarkdownContainer"] *:not([class*="material-icons"]):not([class*="material-symbols"]),
+    .stApp span:not([class*="material-icons"]):not([class*="material-symbols"]):not([data-baseweb="icon"]):not([role="img"]) {
         font-family: "Batang", "바탕", "BatangChe", serif !important;
     }
 
-    /* 3) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
+    /* 2) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
     .material-icons,
     .material-icons-round,
     .material-icons-outlined,
     .material-symbols-rounded,
     .material-symbols-outlined,
+    [data-baseweb="icon"],
+    [data-testid="stSelectbox"] svg,
+    [data-testid="stMultiSelect"] svg,
+    [data-testid="stExpander"] summary svg,
     [class^="material-symbols"],
     [class*=" material-symbols"],
     [class^="material-icons"],
