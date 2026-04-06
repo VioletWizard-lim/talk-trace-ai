@@ -151,7 +151,7 @@ st.markdown(
     }
     .records-db-table-wrap td:nth-child(1) { width: 40px; }
     .records-db-table-wrap td:nth-child(2) { width: 150px; white-space: nowrap; }
-    .records-db-table-wrap td:nth-child(3) { width: 10s0px; white-space: nowrap; }
+    .records-db-table-wrap td:nth-child(3) { width: 100px; white-space: nowrap; }
     .records-db-table-wrap td:nth-child(4) {
         white-space: pre-wrap;
         word-break: break-word;
