@@ -95,7 +95,11 @@ st.markdown(
         font-family: "Batang", "바탕", "BatangChe", serif !important;
     }
 
-    .stApp *:not(code):not(pre) {
+    .stApp p,
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
+    .stApp label, .stApp input, .stApp textarea, .stApp button,
+    .stApp li, .stApp td, .stApp th,
+    .stApp span:not([class*="material-icons"]):not([class*="material-symbols"]) {
         font-family: "Batang", "바탕", "BatangChe", serif !important;
     }
 
