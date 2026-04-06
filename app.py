@@ -51,6 +51,7 @@ MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
 MAX_ENTRY_CODE_LEN = 60
+UI_FONT_FAMILY = '"Batang", "바탕", "BatangChe", "Noto Serif KR", serif'
 
 # 1. supabase 변수 생성 (딱 한 번만 실행)
 supabase = init_db()
@@ -314,8 +315,8 @@ with col_input:
 with col_stt:
     st.components.v1.html(
         """
-        <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer;">🎤 음성 입력 시작</button>
-        <p id="status" style="font-size:11px; color:gray; text-align:center; margin-top:5px;">대기 중...</p>
+        <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer; font-family:'Batang','바탕','BatangChe','Noto Serif KR',serif;">🎤 음성 입력 시작</button>
+        <p id="status" style="font-size:11px; color:gray; text-align:center; margin-top:5px; font-family:'Batang','바탕','BatangChe','Noto Serif KR',serif;">대기 중...</p>
         <script>
             const btn = document.getElementById('stt-btn');
             const status = document.getElementById('status');
@@ -379,7 +380,9 @@ def live_chat_board_core():
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
         if not opinion_df.empty:
-            st.plotly_chart(px.pie(opinion_df, names="sentiment", hole=0.4, height=300), use_container_width=True, config={'displayModeBar': False, 'scrollZoom': False})
+            live_pie_fig = px.pie(opinion_df, names="sentiment", hole=0.4, height=300)
+            live_pie_fig.update_layout(font={"family": UI_FONT_FAMILY})
+            st.plotly_chart(live_pie_fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': False})
         else: st.write("데이터 수집 중...")
 
     col_board_title, col_board_ref = st.columns([8, 2])
@@ -483,7 +486,7 @@ if user_role == "교사" and teacher_auth:
             counts['학생 이름'] = counts['학생 이름'] + " " 
             fig = px.bar(counts, x='학생 이름', y='참여 횟수', text='참여 횟수', color='학생 이름')
             fig.update_xaxes(type='category', title="") 
-            fig.update_layout(yaxis_title="의견 수", dragmode=False, showlegend=False) 
+            fig.update_layout(yaxis_title="의견 수", dragmode=False, showlegend=False, font={"family": UI_FONT_FAMILY}) 
             st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': False, 'displayModeBar': False})
         else: st.info("실명 참여 데이터가 없습니다.")
     else: st.info(f"{act_type} 데이터가 없습니다.")
