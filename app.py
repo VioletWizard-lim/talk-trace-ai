@@ -114,6 +114,14 @@ st.markdown(
         font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
     }
 
+    /* 포털(overlay)로 렌더링되는 선택 목록까지 폰트 강제 */
+    [role="listbox"] *,
+    [data-baseweb="popover"] *,
+    [data-baseweb="menu"] *,
+    [data-baseweb="select"] *:not(svg) {
+        font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
+    }
+
     /* 2) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
     .material-icons,
     .material-icons-round,
@@ -498,7 +506,7 @@ if user_role == "교사" and teacher_auth:
             counts['학생 이름'] = counts['학생 이름'] + " " 
             fig = px.bar(counts, x='학생 이름', y='참여 횟수', text='참여 횟수', color='학생 이름')
             fig.update_xaxes(type='category', title="") 
-            fig.update_layout(yaxis_title="의견 수", dragmode=False, showlegend=False, font={"family": UI_FONT_FAMILY}) 
+            fig.update_layout(yaxis_title="의견 수", dragmode=False, showlegend=False, font={"family": UI_FONT_FAMILY})
             st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': False, 'displayModeBar': False})
         else: st.info("실명 참여 데이터가 없습니다.")
     else: st.info(f"{act_type} 데이터가 없습니다.")
@@ -663,7 +671,8 @@ if user_role == "교사" and teacher_auth:
             records_df = pd.DataFrame()
 
         if not records_df.empty:
-            st.dataframe(records_df, use_container_width=True, column_config={"id": "No.", "content": st.column_config.TextColumn("세특 내용", width="large")})
+            records_display_df = records_df.rename(columns={"id": "No.", "content": "세특 내용"})
+            st.table(records_display_df)
             col_down, col_del = st.columns([1, 1])
             with col_down:
                 buffer_records = io.BytesIO()
