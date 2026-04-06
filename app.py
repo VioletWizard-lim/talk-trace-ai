@@ -122,6 +122,42 @@ st.markdown(
         font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
     }
 
+    /* 세특 기록 보관함 전용 테이블(바탕체 고정) */
+    .records-db-table-wrap {
+        overflow-x: auto;
+        border: 1px solid #e6e6e6;
+        border-radius: 10px;
+        background: #fff;
+    }
+    .records-db-table-wrap table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
+    }
+    .records-db-table-wrap th, .records-db-table-wrap td {
+        border-bottom: 1px solid #efefef;
+        border-right: 1px solid #efefef;
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+    }
+    .records-db-table-wrap th:last-child, .records-db-table-wrap td:last-child {
+        border-right: none;
+    }
+    .records-db-table-wrap th {
+        white-space: nowrap;
+        font-weight: 700;
+    }
+    .records-db-table-wrap td:nth-child(1) { width: 90px; }
+    .records-db-table-wrap td:nth-child(2) { width: 220px; white-space: nowrap; }
+    .records-db-table-wrap td:nth-child(3) { width: 140px; white-space: nowrap; }
+    .records-db-table-wrap td:nth-child(4) {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     /* 2) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
     .material-icons,
     .material-icons-round,
@@ -671,14 +707,9 @@ if user_role == "교사" and teacher_auth:
             records_df = pd.DataFrame()
 
         if not records_df.empty:
-            st.dataframe(
-                records_df,
-                use_container_width=True,
-                column_config={
-                    "id": "No.",
-                    "content": st.column_config.TextColumn("세특 내용", width="large"),
-                },
-            )
+            records_display_df = records_df.rename(columns={"id": "No.", "content": "세특 내용"})
+            records_html = records_display_df.to_html(index=False, escape=True)
+            st.markdown(f"<div class='records-db-table-wrap'>{records_html}</div>", unsafe_allow_html=True)
             col_down, col_del = st.columns([1, 1])
             with col_down:
                 buffer_records = io.BytesIO()
