@@ -122,6 +122,33 @@ st.markdown(
         font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
     }
 
+    /* 최후 강제: 아이콘/SVG를 제외한 텍스트 전반 바탕체 적용 */
+    .stApp *:not(svg):not(path):not(i):not([class*="material-icons"]):not([class*="material-symbols"]),
+    body *:not(svg):not(path):not(i):not([class*="material-icons"]):not([class*="material-symbols"]) {
+        font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
+    }
+
+    .records-table-wrap {
+        max-height: 420px;
+        overflow: auto;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        background: #fff;
+    }
+    .records-table-wrap table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
+    }
+    .records-table-wrap th, .records-table-wrap td {
+        border-bottom: 1px solid #f0f0f0;
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
     /* 2) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
     .material-icons,
     .material-icons-round,
