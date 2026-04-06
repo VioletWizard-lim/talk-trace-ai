@@ -154,7 +154,7 @@ st.markdown(
         white-space: nowrap;
     }
     .records-db-table-wrap th:nth-child(2), .records-db-table-wrap td:nth-child(2) {
-        width: 20%;
+        width: 15%;
         white-space: nowrap;
     }
     .records-db-table-wrap th:nth-child(3), .records-db-table-wrap td:nth-child(3) {
@@ -162,7 +162,7 @@ st.markdown(
         white-space: nowrap;
     }
     .records-db-table-wrap th:nth-child(4), .records-db-table-wrap td:nth-child(4) {
-        width: 63%;
+        width: 68%;
         white-space: pre-wrap;
         word-break: break-word;
     }
