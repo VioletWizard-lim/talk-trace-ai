@@ -149,10 +149,20 @@ st.markdown(
         white-space: nowrap;
         font-weight: 700;
     }
-    .records-db-table-wrap td:nth-child(1) { width: 40px; }
-    .records-db-table-wrap td:nth-child(2) { width: 150px; white-space: nowrap; }
-    .records-db-table-wrap td:nth-child(3) { width: 100px; white-space: nowrap; }
-    .records-db-table-wrap td:nth-child(4) {
+    .records-db-table-wrap th:nth-child(1), .records-db-table-wrap td:nth-child(1) {
+        width: 6%;
+        white-space: nowrap;
+    }
+    .records-db-table-wrap th:nth-child(2), .records-db-table-wrap td:nth-child(2) {
+        width: 22%;
+        white-space: nowrap;
+    }
+    .records-db-table-wrap th:nth-child(3), .records-db-table-wrap td:nth-child(3) {
+        width: 12%;
+        white-space: nowrap;
+    }
+    .records-db-table-wrap th:nth-child(4), .records-db-table-wrap td:nth-child(4) {
+        width: 60%;
         white-space: pre-wrap;
         word-break: break-word;
     }
