@@ -122,33 +122,6 @@ st.markdown(
         font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
     }
 
-    /* 최후 강제: 아이콘/SVG를 제외한 텍스트 전반 바탕체 적용 */
-    .stApp *:not(svg):not(path):not(i):not([class*="material-icons"]):not([class*="material-symbols"]),
-    body *:not(svg):not(path):not(i):not([class*="material-icons"]):not([class*="material-symbols"]) {
-        font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
-    }
-
-    .records-table-wrap {
-        max-height: 420px;
-        overflow: auto;
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        background: #fff;
-    }
-    .records-table-wrap table {
-        width: 100%;
-        border-collapse: collapse;
-        font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
-    }
-    .records-table-wrap th, .records-table-wrap td {
-        border-bottom: 1px solid #f0f0f0;
-        padding: 10px 12px;
-        text-align: left;
-        vertical-align: top;
-        white-space: pre-wrap;
-        word-break: break-word;
-    }
-
     /* 2) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
     .material-icons,
     .material-icons-round,
@@ -698,9 +671,14 @@ if user_role == "교사" and teacher_auth:
             records_df = pd.DataFrame()
 
         if not records_df.empty:
-            records_display_df = records_df.rename(columns={"id": "No.", "content": "세특 내용"})
-            records_table_html = records_display_df.to_html(index=False, escape=True)
-            st.markdown(f"<div class='records-table-wrap'>{records_table_html}</div>", unsafe_allow_html=True)
+            st.dataframe(
+                records_df,
+                use_container_width=True,
+                column_config={
+                    "id": "No.",
+                    "content": st.column_config.TextColumn("세특 내용", width="large"),
+                },
+            )
             col_down, col_del = st.columns([1, 1])
             with col_down:
                 buffer_records = io.BytesIO()
