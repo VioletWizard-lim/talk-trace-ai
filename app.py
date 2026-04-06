@@ -149,13 +149,12 @@ st.markdown(
         white-space: nowrap;
         font-weight: 700;
     }
-    .records-db-table-wrap td:nth-child(1) { width: 90px; }
-    .records-db-table-wrap td:nth-child(2) { width: 220px; white-space: nowrap; }
-    .records-db-table-wrap td:nth-child(3) { width: 140px; white-space: nowrap; }
+    .records-db-table-wrap td:nth-child(1) { width: 40px; }
+    .records-db-table-wrap td:nth-child(2) { width: 150px; white-space: nowrap; }
+    .records-db-table-wrap td:nth-child(3) { width: 10s0px; white-space: nowrap; }
     .records-db-table-wrap td:nth-child(4) {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        white-space: pre-wrap;
+        word-break: break-word;
     }
 
     /* 2) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
