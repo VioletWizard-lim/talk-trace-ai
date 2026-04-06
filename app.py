@@ -88,7 +88,8 @@ def log_audit(event, room_name="", actor_name="", role="", **extra):
 st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 
 st.markdown(
-    """
+    textwrap.dedent(
+        """
     <style>
     /* 1) 텍스트 요소에만 바탕체 적용 (전역 상속 금지) */
     .stApp p,
@@ -104,17 +105,9 @@ st.markdown(
     .material-icons,
     .material-icons-round,
     .material-icons-outlined,
-    .material-symbols-rounded,
-    .material-symbols-outlined,
-    [data-baseweb="icon"],
-    [data-testid="stSelectbox"] svg,
-    [data-testid="stMultiSelect"] svg,
-    [data-testid="stExpander"] summary svg,
-    [class^="material-symbols"],
-    [class*=" material-symbols"],
     [class^="material-icons"],
     [class*=" material-icons"] {
-        font-family: "Material Icons", "Material Symbols Rounded", "Material Symbols Outlined" !important;
+        font-family: "Material Icons" !important;
         font-style: normal !important;
         font-weight: normal !important;
         letter-spacing: normal !important;
@@ -123,6 +116,29 @@ st.markdown(
         direction: ltr !important;
         -webkit-font-smoothing: antialiased !important;
         font-feature-settings: "liga" !important;
+    }
+
+    .material-symbols-rounded,
+    .material-symbols-outlined,
+    [class^="material-symbols"],
+    [class*=" material-symbols"] {
+        font-family: "Material Symbols Rounded", "Material Symbols Outlined" !important;
+        font-style: normal !important;
+        font-weight: normal !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        white-space: nowrap !important;
+        direction: ltr !important;
+        -webkit-font-smoothing: antialiased !important;
+        font-feature-settings: "liga" !important;
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24 !important;
+    }
+
+    [data-baseweb="icon"],
+    [data-testid="stSelectbox"] svg,
+    [data-testid="stMultiSelect"] svg,
+    [data-testid="stExpander"] summary svg {
+        font-family: inherit !important;
     }
 
     /* 기존 스타일들 */
@@ -146,7 +162,8 @@ st.markdown(
 
     .stAlert p { font-size: 20px !important; font-weight: bold; }
     </style>
-    """,
+    """
+    ),
     unsafe_allow_html=True
 )
 
