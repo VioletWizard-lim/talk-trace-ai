@@ -117,31 +117,56 @@ def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code):
         return None
 
 def fetch_room_entry_code(supabase: Client, room_name):
-    try:
-        res = (
-            supabase.table("topic")
-            .select("entry_code")
-            .eq("room_name", room_name)
-            .order("id", desc=True)
-            .limit(1)
-            .execute()
-        )
-        return res.data[0]["entry_code"] if res and res.data else ""
-    except Exception as e:
-        if _is_undefined_column_error(e, "entry_code"):
-            logger.warning("topic.entry_code 컬럼이 없어 공개방으로 처리합니다.")
-            return ""
-        st.error(f"방 입장 암호 조회 실패: {e}")
-        logger.exception("방 입장 암호 조회 실패: %s", e)
-        return ""
+    order_candidates = ["id", "created_at", None]
+
+    for order_col in order_candidates:
+        try:
+            query = (
+                supabase.table("topic")
+                .select("entry_code")
+                .eq("room_name", room_name)
+                .limit(1)
+            )
+            if order_col:
+                query = query.order(order_col, desc=True)
+            res = query.execute()
+            return res.data[0]["entry_code"] if res and res.data else ""
+        except Exception as e:
+            if _is_undefined_column_error(e, "entry_code"):
+                logger.warning("topic.entry_code 컬럼이 없어 공개방으로 처리합니다.")
+                return ""
+            if order_col and _is_undefined_column_error(e, order_col):
+                logger.info("topic.%s 컬럼이 없어 다음 정렬 기준으로 재시도합니다.", order_col)
+                continue
+            st.error(f"방 입장 암호 조회 실패: {e}")
+            logger.exception("방 입장 암호 조회 실패: %s", e)
+            return None
+    return None
 
 
 def fetch_topic_data(supabase: Client, room_name):
-    res = execute_query(
-        supabase.table("topic").select("title, mode").eq("room_name", room_name).order("id", desc=True).limit(1),
-        fail_message="주제 조회 실패",
-    )
-    return res.data[0] if res and res.data else {}
+    order_candidates = ["id", "created_at", None]
+
+    for order_col in order_candidates:
+        try:
+            query = (
+                supabase.table("topic")
+                .select("title, mode")
+                .eq("room_name", room_name)
+                .limit(1)
+            )
+            if order_col:
+                query = query.order(order_col, desc=True)
+            res = query.execute()
+            return res.data[0] if res and res.data else {}
+        except Exception as e:
+            if order_col and _is_undefined_column_error(e, order_col):
+                logger.info("topic.%s 컬럼이 없어 다음 정렬 기준으로 재시도합니다.", order_col)
+                continue
+            st.error(f"주제 조회 실패: {e}")
+            logger.exception("주제 조회 실패: %s", e)
+            return {}
+    return {}
 
 
 def fetch_live_messages(supabase: Client, room_name, limit):
