@@ -118,7 +118,14 @@ def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code):
 
 def fetch_room_entry_code(supabase: Client, room_name):
     try:
-        res = supabase.table("topic").select("entry_code").eq("room_name", room_name).execute()
+        res = (
+            supabase.table("topic")
+            .select("entry_code")
+            .eq("room_name", room_name)
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
         return res.data[0]["entry_code"] if res and res.data else ""
     except Exception as e:
         if _is_undefined_column_error(e, "entry_code"):
@@ -131,7 +138,7 @@ def fetch_room_entry_code(supabase: Client, room_name):
 
 def fetch_topic_data(supabase: Client, room_name):
     res = execute_query(
-        supabase.table("topic").select("title, mode").eq("room_name", room_name),
+        supabase.table("topic").select("title, mode").eq("room_name", room_name).order("id", desc=True).limit(1),
         fail_message="주제 조회 실패",
     )
     return res.data[0] if res and res.data else {}
