@@ -323,10 +323,17 @@ with st.sidebar:
     student_name = st.text_input("내 이름", value="익명" if user_role == "학생" else "교사")
     
     if room_name and room_name != st.session_state['current_room']:
+        prev_room = st.session_state['current_room']
         st.session_state['current_room'] = room_name
         st.session_state['ai_hint_text'] = ""
         st.session_state['ai_report_text'] = ""
         st.session_state['ai_result_text'] = ""
+
+        # 이미 입장한 상태에서 방을 바꾸면, 반드시 대기실(암호 확인)부터 다시 거치게 한다.
+        if st.session_state['joined']:
+            st.session_state['joined'] = False
+            log_audit("room_switched_to_lobby", room_name=room_name, actor_name=student_name, role=user_role, previous_room=prev_room)
+            st.rerun()
     
     if st.session_state['joined']:
         st.divider()
