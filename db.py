@@ -132,6 +132,11 @@ def fetch_room_entry_code(supabase: Client, room_name):
             if not res or not res.data:
                 return ""
 
+            raw_values = [item.get("entry_code") for item in res.data]
+            if raw_values and all(value is None for value in raw_values):
+                logger.warning("entry_code 조회 결과가 모두 None입니다. 권한/정책 문제로 판단되어 입장을 차단합니다.")
+                return None
+
             # 동일 room_name 레코드가 여러 개인 환경에서는
             # 비어있지 않은 암호가 하나라도 있으면 암호방으로 취급한다.
             codes = [
