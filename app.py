@@ -351,8 +351,10 @@ if not st.session_state['joined']:
     else:
         if user_role == "학생":
             real_pw = fetch_room_entry_code(supabase, room_name)
-                
-            if real_pw:
+
+            if real_pw is None:
+                st.error("🚨 방 암호 정보를 확인할 수 없어 입장을 차단했습니다. 잠시 후 다시 시도해 주세요.")
+            elif real_pw:
                 student_pw = st.text_input("🔒 방 입장 암호 (선생님께 확인하세요)", type="password")
                 if student_pw == real_pw:
                     if st.button(f"🚀 '{room_name}' 입장하기", type="primary", use_container_width=True):
