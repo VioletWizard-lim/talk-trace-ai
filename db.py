@@ -49,11 +49,18 @@ def execute_query(query, fail_message="DB 작업 실패"):
 
 def _is_undefined_column_error(error: Exception, column_name: str) -> bool:
     msg = str(error).lower()
-    return (
+    has_missing_column_signal = (
         "42703" in msg
-        and "does not exist" in msg
+        or "pgrst204" in msg
+        or "does not exist" in msg
+        or "could not find" in msg
+    )
+    return (
+        has_missing_column_signal
         and column_name.lower() in msg
     )
+
+
 
 @st.cache_data(ttl=300)
 def debate_ip_column_available() -> bool:
