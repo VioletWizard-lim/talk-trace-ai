@@ -14,6 +14,7 @@ from db import (
     fetch_topic_data,
     init_db,
     submit_opinion,
+    topic_entry_code_column_available,
     upsert_topic_room,
 )
 from services.ai import generate_ai_response
@@ -291,7 +292,11 @@ with st.sidebar:
                     safe_new_room = normalize_room_name(new_room)
                     safe_new_title = normalize_user_text(new_title, max_len=MAX_TOPIC_LEN)
                     safe_new_pw = normalize_user_text(new_pw, max_len=MAX_ENTRY_CODE_LEN)
-                    if safe_new_room and safe_new_title:
+                    can_store_room_pw = topic_entry_code_column_available()
+
+                    if safe_new_pw and not can_store_room_pw:
+                        st.error("현재 DB 구조에서는 방 비밀번호 저장을 지원하지 않습니다. 비밀번호를 비우거나 DB에 topic.entry_code 컬럼을 추가해 주세요.")
+                    elif safe_new_room and safe_new_title:
                         res = upsert_topic_room(
                             supabase=supabase,
                             room_name=safe_new_room,
