@@ -39,7 +39,6 @@ def ensure_db_login(supabase: Client) -> bool:
         st.error(f"🚨 DB 자동 로그인 실패: {e}")
         return False
 
-
 def execute_query(query, fail_message="DB 작업 실패"):
     try:
         return query.execute()
@@ -48,6 +47,13 @@ def execute_query(query, fail_message="DB 작업 실패"):
         logger.exception("%s: %s", fail_message, e)
         return None
 
+def _is_undefined_column_error(error: Exception, column_name: str) -> bool:
+    msg = str(error).lower()
+    return (
+        "42703" in msg
+        and "does not exist" in msg
+        and column_name.lower() in msg
+    )
 
 @st.cache_data(ttl=300)
 def debate_ip_column_available() -> bool:
@@ -70,25 +76,41 @@ def fetch_room_names(supabase: Client):
 
 
 def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code):
-    return execute_query(
-        supabase.table("topic").upsert(
-            {
+    payload = {
+        "room_name": room_name,
+        "title": title,
+        "mode": mode,
+        "entry_code": entry_code,
+    }
+    try:
+        return supabase.table("topic").upsert(payload).execute()
+    except Exception as e:
+        if _is_undefined_column_error(e, "entry_code"):
+            logger.warning("topic.entry_code 컬럼이 없어 공개방으로 저장합니다.")
+            legacy_payload = {
                 "room_name": room_name,
                 "title": title,
                 "mode": mode,
-                "entry_code": entry_code,
             }
-        ),
-        fail_message="방 개설 실패",
-    )
-
+            return execute_query(
+                supabase.table("topic").upsert(legacy_payload),
+                fail_message="방 개설 실패",
+            )
+        st.error(f"방 개설 실패: {e}")
+        logger.exception("방 개설 실패: %s", e)
+        return None
 
 def fetch_room_entry_code(supabase: Client, room_name):
-    res = execute_query(
-        supabase.table("topic").select("entry_code").eq("room_name", room_name),
-        fail_message="방 입장 암호 조회 실패",
-    )
-    return res.data[0]["entry_code"] if res and res.data else ""
+    try:
+        res = supabase.table("topic").select("entry_code").eq("room_name", room_name).execute()
+        return res.data[0]["entry_code"] if res and res.data else ""
+    except Exception as e:
+        if _is_undefined_column_error(e, "entry_code"):
+            logger.warning("topic.entry_code 컬럼이 없어 공개방으로 처리합니다.")
+            return ""
+        st.error(f"방 입장 암호 조회 실패: {e}")
+        logger.exception("방 입장 암호 조회 실패: %s", e)
+        return ""
 
 
 def fetch_topic_data(supabase: Client, room_name):
