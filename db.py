@@ -60,8 +60,6 @@ def _is_undefined_column_error(error: Exception, column_name: str) -> bool:
         and column_name.lower() in msg
     )
 
-
-
 @st.cache_data(ttl=300)
 def debate_ip_column_available() -> bool:
     supabase = init_db()
@@ -71,6 +69,17 @@ def debate_ip_column_available() -> bool:
     except Exception:
         return False
 
+@st.cache_data(ttl=300)
+def topic_entry_code_column_available() -> bool:
+    supabase = init_db()
+    try:
+        supabase.table("topic").select("entry_code").limit(1).execute()
+        return True
+    except Exception as e:
+        if _is_undefined_column_error(e, "entry_code"):
+            return False
+        logger.warning("topic.entry_code 컬럼 확인 중 예외 발생: %s", e)
+        return False
 
 def fetch_room_names(supabase: Client):
     res = execute_query(
