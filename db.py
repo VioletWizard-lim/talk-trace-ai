@@ -125,12 +125,24 @@ def fetch_room_entry_code(supabase: Client, room_name):
                 supabase.table("topic")
                 .select("entry_code")
                 .eq("room_name", room_name)
-                .limit(1)
             )
             if order_col:
                 query = query.order(order_col, desc=True)
             res = query.execute()
-            return res.data[0]["entry_code"] if res and res.data else ""
+            if not res or not res.data:
+                return ""
+
+            # 동일 room_name 레코드가 여러 개인 환경에서는
+            # 비어있지 않은 암호가 하나라도 있으면 암호방으로 취급한다.
+            codes = [
+                str(item.get("entry_code", "")).strip()
+                for item in res.data
+                if item.get("entry_code") is not None
+            ]
+            for code in codes:
+                if code:
+                    return code
+            return ""
         except Exception as e:
             if _is_undefined_column_error(e, "entry_code"):
                 logger.warning("topic.entry_code 컬럼이 없어 공개방으로 처리합니다.")
