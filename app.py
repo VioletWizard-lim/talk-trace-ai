@@ -8,8 +8,13 @@ import plotly.express as px
 
 from db import (
     approve_teacher_account,
+    create_teacher_hint,
     debate_ip_column_available,
+    delete_opinion_message,
+    delete_student_record,
+    destroy_room_data,
     ensure_db_login,
+    fetch_student_records,
     fetch_live_messages,
     fetch_pending_teacher_accounts,
     fetch_room_entry_code,
@@ -19,6 +24,7 @@ from db import (
     fetch_topic_data,
     init_db,
     request_teacher_account,
+    save_student_record,
     submit_opinion,
     topic_owner_column_available,
     topic_entry_code_column_available,
@@ -661,7 +667,8 @@ def live_chat_board_core():
         
         def delete_chat_msg(msg_id):
             try:
-                supabase.table("debate").delete().eq("id", msg_id).execute()
+                if delete_opinion_message(supabase, msg_id) is None:
+                    return
                 log_audit("chat_deleted", room_name=room_name, actor_name=student_name, role=user_role, message_id=msg_id)
                 st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
             except Exception as e:
@@ -768,10 +775,12 @@ if user_role == "교사" and teacher_auth:
             if val:
                 now = get_kst_now_str()
                 try:
-                    supabase.table("debate").insert({
+                    res = create_teacher_hint(supabase, {
                         "room_name": room_name, "timestamp": now, "student_name": "👨‍🏫 선생님 (AI 보조)", 
                         "content": val, "sentiment": "❓ 질문", "author_role": "교사"
-                    }).execute()
+                    })
+                    if res is None:
+                        return
                     log_audit("teacher_hint_sent", room_name=room_name, actor_name=student_name, role=user_role)
                     st.session_state['hint_input_widget'] = ""
                 except Exception as e:
@@ -867,7 +876,8 @@ if user_role == "교사" and teacher_auth:
             del_id = st.session_state.get('del_record_dropdown')
             if del_id:
                 try:
-                    supabase.table("records").delete().eq("id", del_id).execute()
+                    if delete_student_record(supabase, del_id) is None:
+                        return
                     log_audit("record_deleted", room_name=room_name, actor_name=student_name, role=user_role, record_id=del_id)
                     st.toast("기록이 삭제되었습니다.", icon="🗑️")
                 except Exception as e:
@@ -907,10 +917,12 @@ if user_role == "교사" and teacher_auth:
                             if res_text:
                                 st.session_state['ai_result_text'] = res_text
                                 now = get_kst_now_str()
-                                supabase.table("records").insert({
+                                save_res = save_student_record(supabase, {
                                     "room_name": room_name, "timestamp": now, 
                                     "student_name": selected_student, "content": res_text
-                                }).execute()
+                                })
+                                if save_res is None:
+                                    raise RuntimeError("보관함 저장 실패")
                                 st.toast("✅ 세특 생성 및 보관함 저장 완료!", icon="🎉")
                             else:
                                 raise RuntimeError("AI 응답 비어있음")
@@ -926,11 +938,7 @@ if user_role == "교사" and teacher_auth:
         st.divider()
         st.subheader("📂 저장된 세특 기록 보관함")
         
-        try:
-            records_res = supabase.table("records").select("id, timestamp, student_name, content").eq("room_name", room_name).order("id", desc=True).limit(RECORDS_FETCH_LIMIT).execute()
-            records_df = pd.DataFrame(records_res.data)
-        except Exception:
-            records_df = pd.DataFrame()
+        records_df = fetch_student_records(supabase, room_name, RECORDS_FETCH_LIMIT)
 
         if not records_df.empty:
             records_display_df = records_df.rename(columns={"id": "No.", "content": "세특 내용"})
@@ -959,9 +967,8 @@ if user_role == "교사" and teacher_auth:
             st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록과 세특 보관함이 완전히 삭제됩니다.")
             if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True):
                 try:
-                    supabase.table("topic").delete().eq("room_name", room_name).execute()
-                    supabase.table("debate").delete().eq("room_name", room_name).execute()
-                    supabase.table("records").delete().eq("room_name", room_name).execute()
+                    if destroy_room_data(supabase, room_name) is None:
+                        st.stop()
                     log_audit("room_destroyed", room_name=room_name, actor_name=student_name, role=user_role)
                     st.success("성공적으로 파괴되었습니다.")
                     st.session_state['ai_result_text'] = ""
