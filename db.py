@@ -82,10 +82,20 @@ def topic_entry_code_column_available() -> bool:
         return False
 
 def fetch_room_names(supabase: Client):
-    res = execute_query(
-        supabase.table("topic").select("room_name").order("room_name", desc=False),
-        fail_message="🚨 방 목록 조회 에러",
-    )
+    try:
+        res = execute_query(
+            supabase.table("topic")
+            .select("room_name")
+            .neq("created_by", "")
+            .not_.is_("created_by", "null")
+            .order("room_name", desc=False),
+            fail_message="🚨 방 목록 조회 에러",
+        )
+    except Exception as e:
+        if _is_undefined_column_error(e, "created_by"):
+            logger.warning("topic.created_by 컬럼이 없어 교사 생성 방만 조회할 수 없습니다.")
+            return []
+        raise
     if not res or not res.data:
         return []
     return [item.get("room_name", "") for item in res.data if item.get("room_name", "").strip()]
@@ -126,7 +136,7 @@ def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code, crea
         "entry_code": entry_code,
     }
     if created_by is not None:
-    payload["created_by"] = str(created_by).strip()
+        payload["created_by"] = str(created_by).strip()
     try:
         return supabase.table("topic").upsert(payload).execute()
     except Exception as e:
