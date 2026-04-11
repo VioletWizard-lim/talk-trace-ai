@@ -60,8 +60,6 @@ MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
 MAX_ENTRY_CODE_LEN = 60
 UI_FONT_FAMILY = "sans-serif"
-ADMIN_ID = "admin"
-ADMIN_PW = "admintest"
 
 # 1. supabase 변수 생성 (딱 한 번만 실행)
 supabase = init_db()
@@ -72,6 +70,9 @@ ensure_db_login(supabase)
 # --- 기타 유틸리티 함수들 ---
 def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
+
+def get_kst_now_str():
+    return get_kst_now().strftime(DATETIME_FMT)
 
 def get_kst_now_str():
     return get_kst_now().strftime(DATETIME_FMT)
@@ -319,12 +320,7 @@ with st.sidebar:
                 safe_teacher_id = normalize_user_text(teacher_id_input, max_len=60)
                 account = fetch_teacher_account(supabase, safe_teacher_id)
                 safe_pw = normalize_user_text(teacher_pw_input, max_len=60)
-                if safe_teacher_id == ADMIN_ID and safe_pw == ADMIN_PW:
-                    st.session_state['teacher_auth'] = True
-                    st.session_state['admin_auth'] = True
-                    st.session_state['teacher_id'] = ADMIN_ID
-                    st.success("✅ 최고관리자(교사 모드) 로그인 성공")
-                elif isinstance(account, dict) and account.get("_query_failed"):
+                if isinstance(account, dict) and account.get("_query_failed"):
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
@@ -363,10 +359,13 @@ with st.sidebar:
                     st.warning("⏳ 최고관리자 승인 후 로그인할 수 있습니다.")
                 else:
                     st.session_state['teacher_auth'] = True
-                    st.session_state['admin_auth'] = False
+                    st.session_state['admin_auth'] = bool(account.get("is_admin", False))
                     st.session_state['teacher_id'] = safe_teacher_id
                     redirect_from_admin_page_if_needed()
-                    st.success("✅ 교사 로그인 성공")
+                    if st.session_state['admin_auth']:
+                        st.success("✅ 관리자 계정 로그인 성공")
+                    else:
+                        st.success("✅ 교사 로그인 성공")
 
         else:
             req_teacher_id = st.text_input("신청할 교사 ID", key="req_teacher_id")
@@ -432,7 +431,7 @@ with st.sidebar:
                             title=safe_new_title,
                             mode=new_mode,
                             entry_code=safe_new_pw,
-                            created_by=teacher_id_for_scope if not admin_auth else ADMIN_ID,
+                            created_by=teacher_id_for_scope,
                         )
                         if res is not None:
                             st.success(f"'{safe_new_room}' 방이 개설되었습니다! '기존 방 선택'을 눌러 입장하세요.")
