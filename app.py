@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
+import html
 from datetime import datetime, timedelta, timezone
 import logging
 import plotly.express as px
@@ -272,9 +273,19 @@ def compact_ai_report_output(text):
     if not cleaned:
         return ""
 
-    # 과도하게 긴 보고서 형태 출력 방지: 핵심 라인만 유지
-    max_lines = 6
-    compact_lines = cleaned[:max_lines]
+    # 모델이 한 줄로 반환한 경우 라벨 기준으로 강제 줄바꿈
+    report_labels = ("핵심요약 1:", "핵심요약 2:", "핵심요약 3:", "베스트 학생:", "선정 이유:")
+    normalized_text = " ".join(cleaned)
+    if report_labels[0] in normalized_text:
+        for label in report_labels[1:]:
+            normalized_text = normalized_text.replace(f" {label}", f"\n{label}")
+            normalized_text = normalized_text.replace(label, f"\n{label}")
+
+    normalized_lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+
+    # 과도하게 긴 보고서 형태 출력 방지: 핵심 5줄만 유지
+    max_lines = 5
+    compact_lines = normalized_lines[:max_lines]
     return "\n".join(compact_lines)
 
 # ==========================================
@@ -840,7 +851,11 @@ if user_role == "교사" and teacher_auth:
 
         if st.session_state.get('ai_report_text'):
             st.info(f"📊 **AI 수업 {act_type} 요약 리포트**")
-            st.markdown(st.session_state['ai_report_text'])
+            report_html = html.escape(st.session_state['ai_report_text']).replace("\n", "<br>")
+            st.markdown(
+                f"<div style='line-height:1.8;'>{report_html}</div>",
+                unsafe_allow_html=True,
+            )
             
     teacher_summary_section()
     st.divider()
