@@ -120,6 +120,18 @@ def topic_created_by_column_available() -> bool:
 def topic_owner_column_available() -> bool:
     return topic_created_by_teacher_id_column_available() or topic_created_by_column_available()
 
+@st.cache_data(ttl=300)
+def teacher_is_admin_column_available() -> bool:
+    supabase = init_db()
+    try:
+        supabase.table("teacher_accounts").select("is_admin").limit(1).execute()
+        return True
+    except Exception as e:
+        if _is_undefined_column_error(e, "is_admin"):
+            return False
+        logger.warning("teacher_accounts.is_admin 컬럼 확인 중 예외 발생: %s", e)
+        return False
+
 def fetch_room_names(supabase: Client):
     if topic_created_by_teacher_id_column_available():
         res = execute_query(
@@ -263,9 +275,14 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     safe_id = str(teacher_id or "").strip()
     if not safe_id:
         return None
+    teacher_select = (
+        "id, teacher_id, teacher_pw, is_approved, approved_at, requested_at, is_admin"
+        if teacher_is_admin_column_available()
+        else "id, teacher_id, teacher_pw, is_approved, approved_at, requested_at"
+    )
     res = execute_query(
         supabase.table("teacher_accounts")
-        .select("id, teacher_id, teacher_pw, is_approved, approved_at, requested_at")
+        .select(teacher_select)
         .eq("teacher_id", safe_id)
         .limit(1),
         fail_message="교사 계정 조회 실패",
@@ -278,7 +295,7 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     # 대소문자 차이로 인한 로그인 실패를 줄이기 위해 2차 조회(대소문자 무시)를 수행합니다.
     ci_res = execute_query(
         supabase.table("teacher_accounts")
-        .select("id, teacher_id, teacher_pw, is_approved, approved_at, requested_at")
+        .select(teacher_select)
         .ilike("teacher_id", safe_id)
         .limit(1),
         fail_message="교사 계정 조회 실패",
@@ -297,6 +314,8 @@ def request_teacher_account(supabase: Client, teacher_id: str, teacher_pw: str):
         "teacher_pw": str(teacher_pw or "").strip(),
         "is_approved": False,
     }
+    if teacher_is_admin_column_available():
+        payload["is_admin"] = False
     return execute_query(supabase.table("teacher_accounts").insert(payload), fail_message="교사 계정 신청 실패")
 
 def fetch_pending_teacher_accounts(supabase: Client):
