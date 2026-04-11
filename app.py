@@ -259,6 +259,13 @@ def redirect_from_admin_page_if_needed():
     if st.session_state.get('page') == "admin_approval" and not st.session_state.get('admin_auth', False):
         st.session_state['page'] = "lobby"
 
+def to_bool_flag(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"true", "t", "1", "yes", "y", "on"}
+
 # ==========================================
 # [3] 홈/네비게이션
 # ==========================================
@@ -381,6 +388,10 @@ with st.sidebar:
                     req_res = request_teacher_account(supabase, safe_id, safe_pw)
                     if req_res is not None:
                         st.success("신청 완료! 최고관리자 승인 후 로그인할 수 있습니다.")
+
+        teacher_auth = st.session_state['teacher_auth']
+        admin_auth = st.session_state['admin_auth']
+        teacher_id_for_scope = st.session_state.get("teacher_id", "")
 
         teacher_auth = st.session_state['teacher_auth']
         admin_auth = st.session_state['admin_auth']
