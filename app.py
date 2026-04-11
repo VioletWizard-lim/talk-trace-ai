@@ -6,13 +6,17 @@ import logging
 import plotly.express as px
 
 from db import (
+    approve_teacher_account,
     debate_ip_column_available,
     ensure_db_login,
     fetch_live_messages,
+    fetch_pending_teacher_accounts,
     fetch_room_entry_code,
     fetch_room_names,
+    fetch_teacher_account,
     fetch_topic_data,
     init_db,
+    request_teacher_account,
     submit_opinion,
     topic_entry_code_column_available,
     upsert_topic_room,
@@ -53,6 +57,8 @@ MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
 MAX_ENTRY_CODE_LEN = 60
 UI_FONT_FAMILY = "sans-serif"
+ADMIN_ID = "admin"
+ADMIN_PW = "admintest"
 
 # 1. supabase 변수 생성 (딱 한 번만 실행)
 supabase = init_db()
@@ -87,7 +93,7 @@ def log_audit(event, room_name="", actor_name="", role="", **extra):
 # ==========================================
 # [2] 앱 기본 설정 및 세션/CSS 
 # ==========================================
-st.set_page_config(page_title="Talk-Trace AI", layout="wide")
+st.set_page_config(page_title="말자취(Talk-Trace) AI", layout="wide")
 
 st.markdown(
     """
@@ -169,6 +175,7 @@ if 'page' not in st.session_state: st.session_state['page'] = "home"
 if 'current_room' not in st.session_state: st.session_state['current_room'] = ""
 if 'joined' not in st.session_state: st.session_state['joined'] = False
 if 'teacher_auth' not in st.session_state: st.session_state['teacher_auth'] = False
+if 'admin_auth' not in st.session_state: st.session_state['admin_auth'] = False
 if 'is_working' not in st.session_state: st.session_state['is_working'] = False
 if 'ai_hint_manual_mode' not in st.session_state: st.session_state['ai_hint_manual_mode'] = False
 
@@ -179,10 +186,7 @@ def set_working():
 def reset_joined_state():
     st.session_state['joined'] = False
     st.session_state['teacher_auth'] = False
-
-def reset_joined_state():
-    st.session_state['joined'] = False
-    st.session_state['teacher_auth'] = False
+    st.session_state['admin_auth'] = False
 
 # ==========================================
 # [3] 홈/네비게이션
@@ -197,7 +201,7 @@ if st.session_state['page'] != "home":
             st.rerun()
 
 if st.session_state['page'] == "home":
-    st.title("🏠 Talk-Trace AI 홈")
+    st.title("🏠 말자취(Talk-Trace) AI 홈")
     st.markdown(
         """
         ### 사용 방법 (간단 안내)
@@ -221,30 +225,61 @@ if st.session_state['page'] == "home":
 # ==========================================
 with st.sidebar:
     st.header("👤 접속 권한")
-    user_role = st.radio("모드 선택", ["학생", "교사"], on_change=reset_joined_state)
+    user_role = st.radio("모드 선택", ["학생", "교사", "최고관리자"], on_change=reset_joined_state)
     st.divider()
 
-    try:        
+    try:
         existing_rooms = fetch_room_names(supabase)
     except Exception:
         existing_rooms = []
-        
+
     room_name = ""
     teacher_auth = False
-    
+    admin_auth = False
+    student_number = ""
+
     if user_role == "교사":
-        pw = st.text_input("교사 인증 암호", type="password", key="teacher_pw_input")
-        if pw == st.secrets["TEACHER_PW"]:
-            st.session_state['teacher_auth'] = True
-        elif pw:
-            st.session_state['teacher_auth'] = False
-            st.error("❌ 교사 인증 암호가 올바르지 않습니다.")
-            
+        auth_mode = st.radio("교사 계정", ["로그인", "ID/PW 신청"], horizontal=True)
+
+        if auth_mode == "로그인":
+            teacher_id_input = st.text_input("교사 ID", key="teacher_id_input")
+            teacher_pw_input = st.text_input("교사 PW", type="password", key="teacher_pw_input")
+            if st.button("교사 로그인", use_container_width=True):
+                account = fetch_teacher_account(supabase, teacher_id_input)
+                safe_pw = normalize_user_text(teacher_pw_input, max_len=60)
+                if not account:
+                    st.session_state['teacher_auth'] = False
+                    st.error("❌ 등록되지 않은 교사 ID입니다.")
+                elif account.get("teacher_pw") != safe_pw:
+                    st.session_state['teacher_auth'] = False
+                    st.error("❌ 비밀번호가 일치하지 않습니다.")
+                elif not account.get("is_approved"):
+                    st.session_state['teacher_auth'] = False
+                    st.warning("⏳ 최고관리자 승인 후 로그인할 수 있습니다.")
+                else:
+                    st.session_state['teacher_auth'] = True
+                    st.success("✅ 교사 로그인 성공")
+
+        else:
+            req_teacher_id = st.text_input("신청할 교사 ID", key="req_teacher_id")
+            req_teacher_pw = st.text_input("신청할 교사 PW", type="password", key="req_teacher_pw")
+            if st.button("교사 계정 신청", type="primary", use_container_width=True):
+                safe_id = normalize_user_text(req_teacher_id, max_len=60)
+                safe_pw = normalize_user_text(req_teacher_pw, max_len=60)
+                if not safe_id or not safe_pw:
+                    st.error("ID/PW를 모두 입력해 주세요.")
+                elif fetch_teacher_account(supabase, safe_id):
+                    st.warning("이미 존재하는 ID입니다. 다른 ID를 사용해 주세요.")
+                else:
+                    req_res = request_teacher_account(supabase, safe_id, safe_pw)
+                    if req_res is not None:
+                        st.success("신청 완료! 최고관리자 승인 후 로그인할 수 있습니다.")
+
         teacher_auth = st.session_state['teacher_auth']
+
         if teacher_auth:
-            st.success("인증 성공!")
             room_opt = st.radio("방 관리", ["기존 방 선택", "새 방 만들기"])
-            
+
             if room_opt == "기존 방 선택" and existing_rooms:
                 room_name = st.selectbox("토론/토의방 목록", existing_rooms)
             else:
@@ -277,16 +312,54 @@ with st.sidebar:
                             f"입장 암호는 {MAX_ENTRY_CODE_LEN}자까지 저장됩니다."
                         )
                     room_name = ""
+
+    elif user_role == "최고관리자":
+        admin_id = st.text_input("최고관리자 ID")
+        admin_pw = st.text_input("최고관리자 PW", type="password")
+        if admin_id == ADMIN_ID and admin_pw == ADMIN_PW:
+            st.session_state['admin_auth'] = True
+            st.success("✅ 최고관리자 인증 성공")
+        elif admin_id or admin_pw:
+            st.session_state['admin_auth'] = False
+            st.error("❌ 최고관리자 계정 정보가 올바르지 않습니다.")
+
+        admin_auth = st.session_state['admin_auth']
+        if admin_auth:
+            st.subheader("📝 교사 계정 승인")
+            pending_accounts = fetch_pending_teacher_accounts(supabase)
+            if not pending_accounts:
+                st.info("승인 대기 중인 교사 계정이 없습니다.")
+            else:
+                for pending in pending_accounts:
+                    acc_id = pending.get("id")
+                    teacher_id = pending.get("teacher_id", "")
+                    cols = st.columns([3, 1])
+                    with cols[0]:
+                        st.write(f"ID: {teacher_id}")
+                    with cols[1]:
+                        if st.button("승인", key=f"approve_{acc_id}"):
+                            res = approve_teacher_account(supabase, acc_id, get_kst_now_str())
+                            if res is not None:
+                                st.success(f"{teacher_id} 계정을 승인했습니다.")
+                                st.rerun()
+
     else:
         st.session_state['teacher_auth'] = False
+        st.session_state['admin_auth'] = False
+        student_number = st.text_input("학번", key="student_number_input", placeholder="예: 1101")
         if existing_rooms:
             room_name = st.selectbox("🏠 접속할 방 선택", existing_rooms)
         else:
             st.warning("선생님이 아직 열어둔 방이 없습니다.")
             room_name = ""
-            
-    student_name = st.text_input("내 이름", value="익명" if user_role == "학생" else "교사")
-    
+
+    if user_role == "학생":
+        student_name = st.text_input("내 이름", value="")
+    elif user_role == "교사":
+        student_name = st.text_input("표시 이름", value="교사")
+    else:
+        student_name = "최고관리자"
+
     if room_name and room_name != st.session_state['current_room']:
         prev_room = st.session_state['current_room']
         st.session_state['current_room'] = room_name
@@ -294,12 +367,11 @@ with st.sidebar:
         st.session_state['ai_report_text'] = ""
         st.session_state['ai_result_text'] = ""
 
-        # 이미 입장한 상태에서 방을 바꾸면, 반드시 대기실(암호 확인)부터 다시 거치게 한다.
         if st.session_state['joined']:
             st.session_state['joined'] = False
             log_audit("room_switched_to_lobby", room_name=room_name, actor_name=student_name, role=user_role, previous_room=prev_room)
             st.rerun()
-    
+
     if st.session_state['joined']:
         st.divider()
         if st.button("🚪 방 나가기 (대기실로)"):
@@ -310,9 +382,14 @@ with st.sidebar:
 # [5] 대기실
 # ==========================================
 if not st.session_state['joined']:
-    st.title("🚪 Talk-Trace AI 대기실")
-    if user_role == "교사" and not teacher_auth: st.warning("🚨 교사 인증 암호를 입력해야 입장할 수 있습니다.")
-    elif not room_name.strip(): st.error("🚨 접속할 방을 먼저 선택해 주세요.")
+    st.title("🚪 말자취(Talk-Trace) AI 대기실")
+    if user_role == "최고관리자":
+        st.info("최고관리자는 사이드바에서 교사 계정 승인만 수행합니다.")
+        st.stop()
+    if user_role == "교사" and not teacher_auth:
+        st.warning("🚨 승인된 교사 계정으로 로그인해야 입장할 수 있습니다.")
+    elif not room_name.strip():
+        st.error("🚨 접속할 방을 먼저 선택해 주세요.")
     else:
         if user_role == "학생":
             student_pw = st.text_input("🔒 방 입장 암호 (공개방이면 비워두세요)", type="password")
@@ -323,6 +400,8 @@ if not st.session_state['joined']:
                     st.error("🚨 방 암호 정보를 확인할 수 없어 입장을 차단했습니다. 잠시 후 다시 시도해 주세요.")
                 elif real_pw and student_pw != real_pw:
                     st.error("❌ 암호가 틀렸습니다.")
+                elif not normalize_user_text(student_number, max_len=20):
+                    st.error("❌ 학번을 입력해야 입장할 수 있습니다.")
                 else:
                     st.session_state['joined'] = True
                     st.rerun()
@@ -342,7 +421,7 @@ current_topic = topic_data.get('title', "자유 주제로 대화해 봅시다.")
 current_mode = topic_data.get('mode', "⚔️ 찬반 토론")
 act_type = "토론" if "토론" in current_mode else "토의"
 
-st.title(f"🎙️ Talk-Trace AI [{room_name}]")
+st.title(f"🎙️ 말자취(Talk-Trace) AI [{room_name}]")
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
 
 st.subheader("🗣️ 내 의견 작성")
@@ -382,7 +461,10 @@ with col_stt:
 
 if st.button("의견 제출", use_container_width=True, type="primary"):
     safe_input = normalize_user_text(user_input, max_len=700)
-    safe_student_name = normalize_user_text(student_name, max_len=MAX_STUDENT_NAME_LEN) or "익명"
+    safe_student_name = normalize_user_text(student_name, max_len=MAX_STUDENT_NAME_LEN)
+    safe_student_number = normalize_user_text(student_number, max_len=20)
+    if user_role == "학생" and (not safe_student_name or safe_student_name == "익명"):
+        safe_student_name = safe_student_number or "학번미입력"
     if safe_input:
         now = get_kst_now_str()
         author_role_for_submit = "교사" if user_role == "교사" else "학생"
