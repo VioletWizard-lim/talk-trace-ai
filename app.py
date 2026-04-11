@@ -92,6 +92,28 @@ def get_client_ip():
 def log_audit(event, room_name="", actor_name="", role="", **extra):
     logger.info("AUDIT event=%s room=%s actor=%s role=%s extra=%s", event, room_name, actor_name, role, extra)
 
+def render_admin_approval_panel():
+    st.subheader("📝 교사 계정 승인")
+    pending_accounts = fetch_pending_teacher_accounts(supabase)
+    if not pending_accounts:
+        st.info("승인 대기 중인 교사 계정이 없습니다.")
+        return
+
+    for pending in pending_accounts:
+        acc_id = pending.get("id")
+        pending_teacher_id = pending.get("teacher_id", "")
+        requested_at = pending.get("requested_at", "") or "-"
+        c_left, c_right = st.columns([3, 2])
+        with c_left:
+            st.write(f"ID: {pending_teacher_id}")
+        with c_right:
+            st.caption(f"신청 시각: {requested_at}")
+            if st.button("승인", key=f"approve_{acc_id}"):
+                res = approve_teacher_account(supabase, acc_id, get_kst_now_str())
+                if res is not None:
+                    st.success(f"{pending_teacher_id} 계정을 승인했습니다.")
+                    st.rerun()
+
 # ==========================================
 # [2] 앱 기본 설정 및 세션/CSS 
 # ==========================================
@@ -316,6 +338,16 @@ with st.sidebar:
         admin_auth = st.session_state['admin_auth']
         teacher_id_for_scope = st.session_state.get("teacher_id", "")
 
+        if teacher_auth and admin_auth:
+            st.caption("관리자 바로가기")
+            if st.button("📝 ID 요청 수락", use_container_width=True):
+                st.session_state['page'] = "admin_approval"
+                st.rerun()
+            if st.button("🚪 말자취(Talk-Trace) AI 대기실", use_container_width=True):
+                st.session_state['page'] = "lobby"
+                st.rerun()
+            st.divider()
+
         if teacher_auth:
             if admin_auth:
                 existing_rooms = all_rooms
@@ -395,6 +427,14 @@ with st.sidebar:
         if st.button("🚪 방 나가기 (대기실로)"):
             st.session_state['joined'] = False
             st.rerun()
+
+if st.session_state['page'] == "admin_approval":
+    st.title("🛠️ 관리자 ID 요청 수락 페이지")
+    if not (user_role == "교사" and teacher_auth and admin_auth):
+        st.warning("최고관리자 로그인 후 이용할 수 있습니다.")
+    else:
+        render_admin_approval_panel()
+    st.stop()
 
 # ==========================================
 # [5] 대기실
@@ -612,27 +652,8 @@ if user_role == "교사" and teacher_auth:
             st.rerun()
 
     if admin_auth:
-        st.subheader("📝 교사 계정 승인")
-        pending_accounts = fetch_pending_teacher_accounts(supabase)
-        if not pending_accounts:
-            st.info("승인 대기 중인 교사 계정이 없습니다.")
-        else:
-            for pending in pending_accounts:
-                acc_id = pending.get("id")
-                pending_teacher_id = pending.get("teacher_id", "")
-                requested_at = pending.get("requested_at", "") or "-"
-                c_left, c_right = st.columns([3, 2])
-                with c_left:
-                    st.write(f"ID: {pending_teacher_id}")
-                with c_right:
-                    st.caption(f"신청 시각: {requested_at}")
-                    if st.button("승인", key=f"approve_{acc_id}"):
-                        res = approve_teacher_account(supabase, acc_id, get_kst_now_str())
-                        if res is not None:
-                            st.success(f"{pending_teacher_id} 계정을 승인했습니다.")
-                            st.rerun()
+        render_admin_approval_panel()
         st.divider()
-
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
     
     # --- 1. 통계 ---
