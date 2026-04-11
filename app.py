@@ -254,6 +254,10 @@ def reset_joined_state():
     st.session_state['admin_auth'] = False
     st.session_state['teacher_id'] = ""
 
+def redirect_from_admin_page_if_needed():
+    if st.session_state.get('page') == "admin_approval" and not st.session_state.get('admin_auth', False):
+        st.session_state['page'] = "lobby"
+
 # ==========================================
 # [3] 홈/네비게이션
 # ==========================================
@@ -324,11 +328,13 @@ with st.sidebar:
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
+                    redirect_from_admin_page_if_needed()
                     st.error("❌ 교사 계정 조회에 실패했습니다. Supabase RLS 정책/권한 및 DB 연결 상태를 확인해 주세요.")
                 elif not account:
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
+                    redirect_from_admin_page_if_needed()
                     st.error("❌ 등록되지 않은 교사 ID입니다.")
                     if not using_service_role_key():
                         st.warning(
@@ -347,16 +353,19 @@ with st.sidebar:
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
+                    redirect_from_admin_page_if_needed()
                     st.error("❌ 비밀번호가 일치하지 않습니다.")
                 elif not account.get("is_approved"):
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
+                    redirect_from_admin_page_if_needed()
                     st.warning("⏳ 최고관리자 승인 후 로그인할 수 있습니다.")
                 else:
                     st.session_state['teacher_auth'] = True
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = safe_teacher_id
+                    redirect_from_admin_page_if_needed()
                     st.success("✅ 교사 로그인 성공")
 
         else:
@@ -438,6 +447,7 @@ with st.sidebar:
         st.session_state['teacher_auth'] = False
         st.session_state['admin_auth'] = False
         st.session_state['teacher_id'] = ""
+        redirect_from_admin_page_if_needed()
         student_number = st.text_input("학번", key="student_number_input", placeholder="예: 1101")
         if all_rooms:
             room_name = st.selectbox("🏠 접속할 방 선택", all_rooms)
@@ -469,11 +479,12 @@ with st.sidebar:
             st.rerun()
 
 if st.session_state['page'] == "admin_approval":
-    st.title("🛠️ 관리자 ID 요청 수락 페이지")
     if not (user_role == "교사" and teacher_auth and admin_auth):
-        st.warning("최고관리자 로그인 후 이용할 수 있습니다.")
-    else:
-        render_admin_approval_panel()
+        st.session_state['page'] = "lobby"
+        st.toast("관리자 페이지에서 나와 대기실로 이동했습니다.", icon="ℹ️")
+        st.rerun()
+    st.title("🛠️ 관리자 ID 요청 수락 페이지")
+    render_admin_approval_panel()
     st.stop()
 
 # ==========================================
