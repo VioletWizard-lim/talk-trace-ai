@@ -810,7 +810,7 @@ if user_role == "교사" and teacher_auth:
                     full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
                     prompt = (
                         f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n"
-                        "[출력 형식 - 반드시 그대로]\n"
+                        "[출력 형식 - 줄 바꿈을 지켜서 반드시 그대로]\n"
                         "핵심요약 1: ...\n"
                         "핵심요약 2: ...\n"
                         "핵심요약 3: ...\n"
