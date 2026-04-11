@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import plotly.express as px
 
@@ -46,6 +46,7 @@ if not logger.handlers:
 # [1] 앱 설정 및 데이터베이스 (Supabase REST API) 연결
 # ==========================================
 DATETIME_FMT = "%Y-%m-%d %H:%M:%S"
+DISPLAY_DATETIME_FMT = "%Y-%m-%d %p %I:%M:%S"
 AI_MODEL_NAME = "gemini-2.5-flash"
 LIVE_BOARD_FETCH_LIMIT = 300
 DASHBOARD_FETCH_LIMIT = 2000
@@ -74,6 +75,38 @@ def get_kst_now():
 
 def get_kst_now_str():
     return get_kst_now().strftime(DATETIME_FMT)
+
+def format_kst_datetime(value):
+    if value is None:
+        return "-"
+
+    kst_tz = timezone(timedelta(hours=9))
+    parsed_dt = None
+
+    if isinstance(value, datetime):
+        parsed_dt = value
+    else:
+        raw = str(value).strip()
+        if not raw:
+            return "-"
+        iso_candidate = raw.replace("Z", "+00:00")
+        try:
+            parsed_dt = datetime.fromisoformat(iso_candidate)
+        except ValueError:
+            for fmt in ("%Y-%m-%d %H:%M:%S.%f", DATETIME_FMT):
+                try:
+                    parsed_dt = datetime.strptime(raw, fmt)
+                    break
+                except ValueError:
+                    continue
+
+    if parsed_dt is None:
+        return str(value)
+
+    if parsed_dt.tzinfo is not None:
+        parsed_dt = parsed_dt.astimezone(kst_tz)
+
+    return parsed_dt.strftime(DISPLAY_DATETIME_FMT)
 
 def get_client_ip():
     try:
@@ -107,7 +140,7 @@ def render_admin_approval_panel():
         with c_left:
             st.write(f"ID: {pending_teacher_id}")
         with c_right:
-            st.caption(f"신청 시각: {requested_at}")
+            st.caption(f"신청 시각: {format_kst_datetime(requested_at)}")
             if st.button("승인", key=f"approve_{acc_id}"):
                 res = approve_teacher_account(supabase, acc_id, get_kst_now_str())
                 if res is not None:
@@ -585,10 +618,11 @@ def live_chat_board_core():
                 st.error(f"삭제 실패: {e}")
 
         def render_msg(row):
+            formatted_timestamp = format_kst_datetime(row.get("timestamp", ""))
             if user_role == "교사" and teacher_auth:
                 c_name, c_btn = st.columns([5, 1])
                 with c_name: 
-                    st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
+                    st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>", unsafe_allow_html=True)
                     row_ip = str(row.get("ip_address", "")).strip() if hasattr(row, "get") else ""
                     if row_ip:
                         st.caption(f"IP: {mask_ip_for_teacher(row_ip)}")
@@ -596,7 +630,7 @@ def live_chat_board_core():
                     st.button("❌", key=f"del_{row['id']}", help="강제 삭제", on_click=delete_chat_msg, args=(row['id'],))
                 st.info(row['content']) 
             else:
-                st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{row['timestamp'][11:]}</span>", unsafe_allow_html=True)
+                st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>", unsafe_allow_html=True)
                 st.info(row['content'])
             st.write("")
 
