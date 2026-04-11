@@ -11,7 +11,8 @@ logger = logging.getLogger("talk_trace_ai")
 
 @st.cache_resource
 def init_db() -> Client:
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    supabase_key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY") or st.secrets["SUPABASE_KEY"]
+    return create_client(st.secrets["SUPABASE_URL"], supabase_key)
 
 
 def ensure_db_login(supabase: Client) -> bool:
@@ -43,7 +44,10 @@ def execute_query(query, fail_message="DB 작업 실패"):
     try:
         return query.execute()
     except Exception as e:
-        st.error(f"{fail_message}: {e}")
+        if _is_rls_permission_error(e):
+            st.error(f"{fail_message}: {e} (RLS 정책 또는 권한 설정을 확인해 주세요)")
+        else:
+            st.error(f"{fail_message}: {e}")
         logger.exception("%s: %s", fail_message, e)
         return None
 
@@ -58,6 +62,15 @@ def _is_undefined_column_error(error: Exception, column_name: str) -> bool:
     return (
         has_missing_column_signal
         and column_name.lower() in msg
+    )
+    
+def _is_rls_permission_error(error: Exception) -> bool:
+    msg = str(error).lower()
+    return (
+        "42501" in msg
+        or "permission denied" in msg
+        or "row-level security" in msg
+        or "violates row-level security policy" in msg
     )
 
 @st.cache_data(ttl=300)
@@ -80,6 +93,22 @@ def topic_entry_code_column_available() -> bool:
             return False
         logger.warning("topic.entry_code 컬럼 확인 중 예외 발생: %s", e)
         return False
+
+@st.cache_data(ttl=300)
+def topic_created_by_teacher_id_column_available() -> bool:
+    supabase = init_db()
+    try:
+        supabase.table("topic").select("created_by_teacher_id").limit(1).execute()
+        return True
+    except Exception as e:
+        if _is_undefined_column_error(e, "created_by_teacher_id"):
+            return False
+        logger.warning("topic.created_by_teacher_id 컬럼 확인 중 예외 발생: %s", e)
+        return False
+
+def topic_owner_column_available() -> bool:
+    return topic_created_by_teacher_id_column_available() or topic_created_by_column_available()
+
 
 @st.cache_data(ttl=300)
 def topic_created_by_teacher_id_column_available() -> bool:
@@ -146,7 +175,8 @@ def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
     if topic_created_by_teacher_id_column_available():
         res = execute_query(
             supabase.table("topic")
-            .select("room_name, created_by")
+            .select("room_name")
+            .eq("created_by_teacher_id", safe_owner)
             .order("room_name", desc=False),
             fail_message="🚨 교사별 방 목록 조회 에러",
         )
@@ -178,6 +208,15 @@ def topic_created_by_column_available() -> bool:
         supabase.table("topic").select("created_by").limit(1).execute()
         return True
     except Exception as e:
+        if _is_undefined_column_error(e, "created_by_teacher_id"):
+            fallback_payload = dict(payload)
+            fallback_payload.pop("created_by_teacher_id", None)
+            if created_by is not None:
+                fallback_payload["created_by"] = str(created_by).strip()
+            return execute_query(
+                supabase.table("topic").upsert(fallback_payload),
+                fail_message="방 개설 실패",
+            )
         if _is_undefined_column_error(e, "created_by"):
             return False
         logger.warning("topic.created_by 컬럼 확인 중 예외 발생: %s", e)
@@ -298,10 +337,17 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     safe_id = str(teacher_id or '').strip()
     if not safe_id:
         return None
-    res = execute_query(
-        supabase.table("teacher_accounts").select("id, teacher_id, teacher_pw, is_approved, approved_at, requested_at").eq("teacher_id", safe_id).limit(1),
-        fail_message="교사 계정 조회 실패",
-    )
+    try:
+        res = execute_query(
+            supabase.table("teacher_accounts").select("id, teacher_id, teacher_pw, is_approved, approved_at, requested_at").eq("teacher_id", safe_id).limit(1),
+            fail_message="교사 계정 조회 실패",
+        )
+    except Exception as e:
+        if _is_rls_permission_error(e):
+            st.error("교사 계정 조회 권한이 없습니다. teacher_accounts RLS 정책(SELECT)을 확인해 주세요.")
+            logger.warning("teacher_accounts 조회 RLS/권한 오류: %s", e)
+            return None
+        raise
     if not res or not res.data:
         return None
     return res.data[0]
@@ -313,14 +359,34 @@ def request_teacher_account(supabase: Client, teacher_id: str, teacher_pw: str):
         "teacher_pw": str(teacher_pw or '').strip(),
         "is_approved": False,
     }
-    return execute_query(supabase.table("teacher_accounts").insert(payload), fail_message="교사 계정 신청 실패")
+    try:
+        return execute_query(supabase.table("teacher_accounts").insert(payload), fail_message="교사 계정 신청 실패")
+    except Exception as e:
+        if _is_rls_permission_error(e):
+            st.error("교사 계정 신청 권한이 없습니다. teacher_accounts RLS 정책(INSERT)을 확인해 주세요.")
+            logger.warning("teacher_accounts INSERT RLS/권한 오류: %s", e)
+            return None
+        raise
 
 
 def fetch_pending_teacher_accounts(supabase: Client):
-    res = execute_query(
-        supabase.table("teacher_accounts").select("id, teacher_id, requested_at, is_approved").eq("is_approved", False).order("id", desc=False),
-        fail_message="승인 대기 계정 조회 실패",
-    )
+    try:
+        res = execute_query(
+            supabase.table("teacher_accounts").select("id, teacher_id, requested_at, is_approved").eq("is_approved", False).order("id", desc=False),
+            fail_message="승인 대기 계정 조회 실패",
+        )
+    except Exception as e:
+    try:
+        return execute_query(
+            supabase.table("teacher_accounts").update({"is_approved": True, "approved_at": approved_at}).eq("id", account_id),
+            fail_message="교사 계정 승인 실패",
+        )
+    except Exception as e:
+        if _is_rls_permission_error(e):
+            st.error("교사 계정 승인 권한이 없습니다. teacher_accounts RLS 정책(UPDATE)을 확인해 주세요.")
+            logger.warning("teacher_accounts UPDATE RLS/권한 오류: %s", e)
+            return None
+        raise
     return res.data if res and res.data else []
 
 
