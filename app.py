@@ -52,7 +52,7 @@ MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
 MAX_ENTRY_CODE_LEN = 60
-UI_FONT_FAMILY = '"Batang", "바탕", "BatangChe", "Noto Serif KR", serif'
+UI_FONT_FAMILY = "sans-serif"
 
 # 1. supabase 변수 생성 (딱 한 번만 실행)
 supabase = init_db()
@@ -92,38 +92,7 @@ st.set_page_config(page_title="Talk-Trace AI", layout="wide")
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&display=swap');
-
-    /* 1) 텍스트 요소에만 바탕체 적용 (전역 상속 금지) */
-    .stApp p,
-    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
-    .stApp label, .stApp input, .stApp textarea, .stApp button,
-    .stApp li, .stApp td, .stApp th,
-    .stApp div[data-testid="stMarkdownContainer"] *:not([class*="material-icons"]):not([class*="material-symbols"]),
-    .stApp [data-testid="stSelectbox"] div,
-    .stApp [data-testid="stSelectbox"] span,
-    .stApp [data-testid="stSelectbox"] input,
-    .stApp [data-testid="stSelectbox"] *:not(svg),
-    .stApp [data-baseweb="select"] div,
-    .stApp [data-baseweb="select"] span,
-    .stApp [data-baseweb="select"] input,
-    .stApp [data-baseweb="select"] *:not(svg),
-    .stApp [role="listbox"] *,
-    .stApp [data-baseweb="popover"] *,
-    .stApp [data-testid="stDataFrame"] *,
-    .stApp code {
-        font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
-    }
-
-    /* 포털(overlay)로 렌더링되는 선택 목록까지 폰트 강제 */
-    [role="listbox"] *,
-    [data-baseweb="popover"] *,
-    [data-baseweb="menu"] *,
-    [data-baseweb="select"] *:not(svg) {
-        font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
-    }
-
-    /* 세특 기록 보관함 전용 테이블(바탕체 고정) */
+    /* 세특 기록 보관함 전용 테이블 */
     .records-db-table-wrap {
         overflow-x: auto;
         border: 1px solid #e6e6e6;
@@ -134,7 +103,6 @@ st.markdown(
         width: 100%;
         border-collapse: collapse;
         table-layout: fixed;
-        font-family: "Batang", "바탕", "BatangChe", "Noto Serif KR", serif !important;
     }
     .records-db-table-wrap th, .records-db-table-wrap td {
         border-bottom: 1px solid #efefef;
@@ -168,46 +136,6 @@ st.markdown(
         word-break: break-word;
     }
 
-    /* 2) 아이콘/리거처 텍스트(예: keyboard_arrow_down) 강제 복원 */
-    .material-icons,
-    .material-icons-round,
-    .material-icons-outlined,
-    [class^="material-icons"],
-    [class*=" material-icons"] {
-        font-family: "Material Icons" !important;
-        font-style: normal !important;
-        font-weight: normal !important;
-        letter-spacing: normal !important;
-        text-transform: none !important;
-        white-space: nowrap !important;
-        direction: ltr !important;
-        -webkit-font-smoothing: antialiased !important;
-        font-feature-settings: "liga" !important;
-    }
-
-    .material-symbols-rounded,
-    .material-symbols-outlined,
-    [class^="material-symbols"],
-    [class*=" material-symbols"] {
-        font-family: "Material Symbols Rounded", "Material Symbols Outlined" !important;
-        font-style: normal !important;
-        font-weight: normal !important;
-        letter-spacing: normal !important;
-        text-transform: none !important;
-        white-space: nowrap !important;
-        direction: ltr !important;
-        -webkit-font-smoothing: antialiased !important;
-        font-feature-settings: "liga" !important;
-        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24 !important;
-    }
-
-    [data-baseweb="icon"],
-    [data-testid="stSelectbox"] svg,
-    [data-testid="stMultiSelect"] svg,
-    [data-testid="stExpander"] summary svg {
-        font-family: inherit !important;
-    }
-
     /* 기존 스타일들 */
     [data-testid="stDecoration"] { display: none !important; }
 
@@ -237,6 +165,7 @@ if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
 if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] = ""
 if 'ai_hint_text' not in st.session_state: st.session_state['ai_hint_text'] = ""
 if 'ai_report_text' not in st.session_state: st.session_state['ai_report_text'] = ""
+if 'page' not in st.session_state: st.session_state['page'] = "home"
 if 'current_room' not in st.session_state: st.session_state['current_room'] = ""
 if 'joined' not in st.session_state: st.session_state['joined'] = False
 if 'teacher_auth' not in st.session_state: st.session_state['teacher_auth'] = False
@@ -251,8 +180,44 @@ def reset_joined_state():
     st.session_state['joined'] = False
     st.session_state['teacher_auth'] = False
 
+def reset_joined_state():
+    st.session_state['joined'] = False
+    st.session_state['teacher_auth'] = False
+
 # ==========================================
-# [3] 사이드바 (방 관리 - 심플 모드)
+# [3] 홈/네비게이션
+# ==========================================
+if st.session_state['page'] != "home":
+    col_home_btn, _ = st.columns([1, 7])
+    with col_home_btn:
+        if st.button("🏠 홈", use_container_width=True):
+            st.session_state['page'] = "home"
+            st.session_state['joined'] = False
+            st.session_state['teacher_auth'] = False
+            st.rerun()
+
+if st.session_state['page'] == "home":
+    st.title("🏠 Talk-Trace AI 홈")
+    st.markdown(
+        """
+        ### 사용 방법 (간단 안내)
+        1. **대기실로 이동** 버튼을 눌러 시작합니다.
+        2. 왼쪽 사이드바에서 **학생/교사 모드**를 선택합니다.
+        3. 접속할 **토론/토의방**을 선택하고 입장합니다.
+        4. 주제에 맞게 의견을 작성하고 제출하면 실시간 보드에 반영됩니다.
+
+        ---
+        - 교사 모드에서는 방 개설/관리 및 대시보드 기능을 사용할 수 있습니다.
+        - 언제든 왼쪽 상단의 **🏠 홈** 버튼으로 이 화면으로 돌아올 수 있습니다.
+        """
+    )
+    if st.button("🚀 대기실로 이동", type="primary", use_container_width=True):
+        st.session_state['page'] = "lobby"
+        st.rerun()
+    st.stop()
+
+# ==========================================
+# [4] 사이드바 (방 관리 - 심플 모드)
 # ==========================================
 with st.sidebar:
     st.header("👤 접속 권한")
@@ -342,7 +307,7 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# [4] 대기실
+# [5] 대기실
 # ==========================================
 if not st.session_state['joined']:
     st.title("🚪 Talk-Trace AI 대기실")
@@ -369,7 +334,7 @@ if not st.session_state['joined']:
     st.stop()
 
 # ==========================================
-# [5] 메인 화면 (의견 입력부)
+# [6] 메인 화면 (의견 입력부)
 # ==========================================
 topic_data = fetch_topic_data(supabase, room_name)
 
@@ -390,8 +355,8 @@ with col_input:
 with col_stt:
     st.components.v1.html(
         """
-        <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer; font-family:'Batang','바탕','BatangChe','Noto Serif KR',serif;">🎤 음성 입력 시작</button>
-        <p id="status" style="font-size:11px; color:gray; text-align:center; margin-top:5px; font-family:'Batang','바탕','BatangChe','Noto Serif KR',serif;">대기 중...</p>
+        <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer;">🎤 음성 입력 시작</button>
+        <p id="status" style="font-size:11px; color:gray; text-align:center; margin-top:5px;">대기 중...</p>
         <script>
             const btn = document.getElementById('stt-btn');
             const status = document.getElementById('status');
@@ -447,7 +412,7 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
 st.divider()
 
 # ==========================================
-# [6] 실시간 업데이트 영역
+# [7] 실시간 업데이트 영역
 # ==========================================
 def live_chat_board_core():
     df = fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
@@ -537,7 +502,7 @@ else:
     live_chat_board_auto()
 
 # ==========================================
-# [7] 교사 전용 대시보드
+# [8] 교사 전용 대시보드
 # ==========================================
 if user_role == "교사" and teacher_auth:
     st.divider()
