@@ -302,7 +302,7 @@ with st.sidebar:
                 existing_rooms = all_rooms
             else:
                 if topic_owner_column_available():
-                    existing_rooms = fetch_room_names_by_owner(supabase, teacher_id_for_scope)␊
+                    existing_rooms = fetch_room_names_by_owner(supabase, teacher_id_for_scope)
                 else:
                     existing_rooms = []
                     st.warning("교사별 방 조회를 위해 topic.created_by_teacher_id(권장) 또는 topic.created_by 컬럼이 필요합니다.")
