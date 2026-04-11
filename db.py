@@ -81,7 +81,40 @@ def topic_entry_code_column_available() -> bool:
         logger.warning("topic.entry_code 컬럼 확인 중 예외 발생: %s", e)
         return False
 
+@st.cache_data(ttl=300)
+def topic_created_by_teacher_id_column_available() -> bool:
+    supabase = init_db()
+    try:
+        supabase.table("topic").select("created_by_teacher_id").limit(1).execute()
+        return True
+    except Exception as e:
+        if _is_undefined_column_error(e, "created_by_teacher_id"):
+            return False
+        logger.warning("topic.created_by_teacher_id 컬럼 확인 중 예외 발생: %s", e)
+        return False
+
+def topic_owner_column_available() -> bool:
+    return topic_created_by_teacher_id_column_available() or topic_created_by_column_available()
+
 def fetch_room_names(supabase: Client):
+    if topic_created_by_teacher_id_column_available():
+        res = execute_query(
+            supabase.table("topic")
+            .select("room_name, created_by_teacher_id")
+            .not_.is_("created_by_teacher_id", "null")
+            .order("room_name", desc=False),
+            fail_message="🚨 방 목록 조회 에러",
+        )
+        if not res or not res.data:
+            return []
+        visible_rooms = []
+        for item in res.data:
+            room = str(item.get("room_name", "")).strip()
+            owner = str(item.get("created_by_teacher_id", "")).strip()
+            if room and owner:
+                visible_rooms.append(room)
+        return visible_rooms
+
     try:
         res = execute_query(
             supabase.table("topic")
@@ -110,6 +143,23 @@ def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
     if not safe_owner:
         return []
 
+    if topic_created_by_teacher_id_column_available():
+        res = execute_query(
+            supabase.table("topic")
+            .select("room_name, created_by")
+            .order("room_name", desc=False),
+            fail_message="🚨 교사별 방 목록 조회 에러",
+        )
+    if not res or not res.data:
+        return []
+    visible_rooms = []
+    for item in res.data:
+        room = str(item.get("room_name", "")).strip()
+        owner = str(item.get("created_by", "")).strip()
+        if room and owner == safe_owner:
+            visible_rooms.append(room)
+    return visible_rooms
+    
     res = execute_query(
         supabase.table("topic")
         .select("room_name")
@@ -145,15 +195,13 @@ def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code, crea
     try:
         return supabase.table("topic").upsert(payload).execute()
     except Exception as e:
-        if _is_undefined_column_error(e, "entry_code") or _is_undefined_column_error(e, "created_by"):
-            logger.warning("topic.entry_code 또는 topic.created_by 컬럼이 없어 레거시 모드로 저장합니다.")
-            legacy_payload = {
-                "room_name": room_name,
-                "title": title,
-                "mode": mode,
-            }
+        if _is_undefined_column_error(e, "created_by_teacher_id"):
+            fallback_payload = dict(payload)
+            fallback_payload.pop("created_by_teacher_id", None)
+            if created_by is not None:
+                fallback_payload["created_by"] = str(created_by).strip()
             return execute_query(
-                supabase.table("topic").upsert(legacy_payload),
+                supabase.table("topic").upsert(fallback_payload),
                 fail_message="방 개설 실패",
             )
         st.error(f"방 개설 실패: {e}")
