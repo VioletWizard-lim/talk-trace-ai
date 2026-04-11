@@ -271,6 +271,60 @@ def fetch_live_messages(supabase: Client, room_name, limit):
 def submit_opinion(supabase: Client, payload):
     return execute_query(supabase.table("debate").insert(payload), fail_message="저장 실패")
 
+def delete_opinion_message(supabase: Client, message_id: int):
+    return execute_query(
+        supabase.table("debate").delete().eq("id", message_id),
+        fail_message="의견 삭제 실패",
+    )
+
+def create_teacher_hint(supabase: Client, payload):
+    return execute_query(
+        supabase.table("debate").insert(payload),
+        fail_message="교사 힌트 전송 실패",
+    )
+
+def save_student_record(supabase: Client, payload):
+    return execute_query(
+        supabase.table("records").insert(payload),
+        fail_message="세특 보관함 저장 실패",
+    )
+
+def delete_student_record(supabase: Client, record_id: int):
+    return execute_query(
+        supabase.table("records").delete().eq("id", record_id),
+        fail_message="세특 기록 삭제 실패",
+    )
+
+def fetch_student_records(supabase: Client, room_name: str, limit: int):
+    res = execute_query(
+        supabase.table("records")
+        .select("id, timestamp, student_name, content")
+        .eq("room_name", room_name)
+        .order("id", desc=True)
+        .limit(limit),
+        fail_message="세특 보관함 조회 실패",
+    )
+    if not res or not res.data:
+        return pd.DataFrame()
+    return pd.DataFrame(res.data)
+
+def destroy_room_data(supabase: Client, room_name: str):
+    topic_res = execute_query(
+        supabase.table("topic").delete().eq("room_name", room_name),
+        fail_message="방 주제 삭제 실패",
+    )
+    debate_res = execute_query(
+        supabase.table("debate").delete().eq("room_name", room_name),
+        fail_message="방 의견 삭제 실패",
+    )
+    records_res = execute_query(
+        supabase.table("records").delete().eq("room_name", room_name),
+        fail_message="방 세특 기록 삭제 실패",
+    )
+    if topic_res is None or debate_res is None or records_res is None:
+        return None
+    return {"topic": topic_res, "debate": debate_res, "records": records_res}
+
 def fetch_teacher_account(supabase: Client, teacher_id: str):
     safe_id = str(teacher_id or "").strip()
     if not safe_id:
