@@ -266,6 +266,17 @@ def to_bool_flag(value):
         return False
     return str(value).strip().lower() in {"true", "t", "1", "yes", "y", "on"}
 
+def compact_ai_report_output(text):
+    raw_lines = [str(line).strip() for line in str(text or "").splitlines()]
+    cleaned = [line for line in raw_lines if line and not line.startswith("#")]
+    if not cleaned:
+        return ""
+
+    # 과도하게 긴 보고서 형태 출력 방지: 핵심 라인만 유지
+    max_lines = 6
+    compact_lines = cleaned[:max_lines]
+    return "\n".join(compact_lines)
+
 # ==========================================
 # [3] 홈/네비게이션
 # ==========================================
@@ -797,7 +808,20 @@ if user_role == "교사" and teacher_auth:
             with st.spinner("✍️ 요약 리포트를 작성하고 있습니다..."):
                 if not df_all.empty:
                     full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
-                    prompt = f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n[엄격한 규칙]\n1. {act_type}의 전체 맥락을 파악하고 핵심 내용을 딱 3줄로 요약하세요.\n2. 가장 논리적이고 창의적인 주장을 펼친 '학생 이름' 1명과 그 이유를 구체적으로 추출하세요.\n3. 보고서 형식으로 깔끔하게 출력하세요.\n\n기록:\n{full_history}"
+                    prompt = (
+                        f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n"
+                        "[출력 형식 - 반드시 그대로]\n"
+                        "핵심요약 1: ...\n"
+                        "핵심요약 2: ...\n"
+                        "핵심요약 3: ...\n"
+                        "베스트 학생: ...\n"
+                        "선정 이유: ...\n\n"
+                        "[엄격한 규칙]\n"
+                        "- 정확히 5줄만 출력합니다.\n"
+                        "- 제목/헤더(#,##,###), 소제목, 불릿(-,*)을 절대 쓰지 않습니다.\n"
+                        "- 불필요한 서론/결론 없이 바로 결과만 출력합니다.\n\n"
+                        f"기록:\n{full_history}"
+                    )
                     res_text = generate_ai_response(
                         prompt,
                         model_name=AI_MODEL_NAME,
@@ -806,7 +830,7 @@ if user_role == "교사" and teacher_auth:
                         room_name=room_name,
                     )
                     if res_text:
-                        st.session_state['ai_report_text'] = res_text
+                        st.session_state['ai_report_text'] = compact_ai_report_output(res_text)
                         st.toast("✅ 리포트 작성 완료!", icon="🎉")
                     else:
                         st.toast("🚨 AI 호출 오류가 발생했습니다.", icon="❌")
