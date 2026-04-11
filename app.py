@@ -21,6 +21,7 @@ from db import (
     submit_opinion,
     topic_owner_column_available,
     topic_entry_code_column_available,
+    using_service_role_key,
     upsert_topic_room,
 )
 from services.ai import generate_ai_response
@@ -267,6 +268,12 @@ with st.sidebar:
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
                     st.error("❌ 등록되지 않은 교사 ID입니다.")
+                    if not using_service_role_key():
+                        st.warning(
+                            "⚠️ 현재 앱이 SERVICE ROLE KEY 없이 동작 중입니다. "
+                            "teacher_accounts 테이블에 RLS 정책이 없으면 Data API 조회 결과가 0건으로 나와 "
+                            "등록된 계정도 미등록으로 보일 수 있습니다."
+                        )
                     try:
                         supabase_url = str(st.secrets.get("SUPABASE_URL", ""))
                         project_ref = supabase_url.split("//", 1)[-1].split(".", 1)[0] if supabase_url else ""
