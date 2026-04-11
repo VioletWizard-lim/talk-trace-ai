@@ -236,7 +236,7 @@ if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
 if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] = ""
 if 'ai_hint_text' not in st.session_state: st.session_state['ai_hint_text'] = ""
 if 'ai_report_text' not in st.session_state: st.session_state['ai_report_text'] = ""
-if 'page' not in st.session_state: st.session_state['page'] = "home"
+if 'page' not in st.session_state: st.session_state['page'] = "lobby"
 if 'current_room' not in st.session_state: st.session_state['current_room'] = ""
 if 'joined' not in st.session_state: st.session_state['joined'] = False
 if 'teacher_auth' not in st.session_state: st.session_state['teacher_auth'] = False
@@ -366,13 +366,13 @@ with st.sidebar:
                     st.warning("⏳ 최고관리자 승인 후 로그인할 수 있습니다.")
                 else:
                     st.session_state['teacher_auth'] = True
-                    st.session_state['admin_auth'] = bool(account.get("is_admin", False))
+                    st.session_state['admin_auth'] = to_bool_flag(account.get("is_admin", False))
                     st.session_state['teacher_id'] = safe_teacher_id
                     redirect_from_admin_page_if_needed()
                     if st.session_state['admin_auth']:
-                        st.success("✅ 관리자 계정 로그인 성공")
+                        st.toast("✅ 관리자 계정 로그인 성공", icon="✅")
                     else:
-                        st.success("✅ 교사 로그인 성공")
+                        st.toast("✅ 교사 로그인 성공", icon="✅")
 
         else:
             req_teacher_id = st.text_input("신청할 교사 ID", key="req_teacher_id")
