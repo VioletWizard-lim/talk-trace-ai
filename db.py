@@ -98,7 +98,13 @@ def fetch_room_names(supabase: Client):
         raise
     if not res or not res.data:
         return []
-    return [item.get("room_name", "") for item in res.data if item.get("room_name", "").strip()]
+    visible_rooms = []
+    for item in res.data:
+        room = str(item.get("room_name", "")).strip()
+        owner = str(item.get("created_by", "")).strip()
+        if room and owner:
+            visible_rooms.append(room)
+    return visible_rooms
 
 def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
     safe_owner = str(owner_teacher_id or "").strip()
