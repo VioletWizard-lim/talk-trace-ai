@@ -199,3 +199,41 @@ def fetch_live_messages(supabase: Client, room_name, limit):
 
 def submit_opinion(supabase: Client, payload):
     return execute_query(supabase.table("debate").insert(payload), fail_message="저장 실패")
+
+
+
+def fetch_teacher_account(supabase: Client, teacher_id: str):
+    safe_id = str(teacher_id or '').strip()
+    if not safe_id:
+        return None
+    res = execute_query(
+        supabase.table("teacher_accounts").select("id, teacher_id, teacher_pw, is_approved, approved_at, requested_at").eq("teacher_id", safe_id).limit(1),
+        fail_message="교사 계정 조회 실패",
+    )
+    if not res or not res.data:
+        return None
+    return res.data[0]
+
+
+def request_teacher_account(supabase: Client, teacher_id: str, teacher_pw: str):
+    payload = {
+        "teacher_id": str(teacher_id or '').strip(),
+        "teacher_pw": str(teacher_pw or '').strip(),
+        "is_approved": False,
+    }
+    return execute_query(supabase.table("teacher_accounts").insert(payload), fail_message="교사 계정 신청 실패")
+
+
+def fetch_pending_teacher_accounts(supabase: Client):
+    res = execute_query(
+        supabase.table("teacher_accounts").select("id, teacher_id, requested_at, is_approved").eq("is_approved", False).order("id", desc=False),
+        fail_message="승인 대기 계정 조회 실패",
+    )
+    return res.data if res and res.data else []
+
+
+def approve_teacher_account(supabase: Client, account_id: int, approved_at: str):
+    return execute_query(
+        supabase.table("teacher_accounts").update({"is_approved": True, "approved_at": approved_at}).eq("id", account_id),
+        fail_message="교사 계정 승인 실패",
+    )
