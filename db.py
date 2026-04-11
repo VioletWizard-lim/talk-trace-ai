@@ -14,6 +14,8 @@ def init_db() -> Client:
     supabase_key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY") or st.secrets["SUPABASE_KEY"]
     return create_client(st.secrets["SUPABASE_URL"], supabase_key)
 
+def using_service_role_key() -> bool:
+    return bool(str(st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "")).strip())
 
 def ensure_db_login(supabase: Client) -> bool:
     curr_session = None
@@ -270,8 +272,6 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     )
     if res is None:
         return {"_query_failed": True}
-    if res is None:
-        return {"_query_failed": True}
     if res.data:
         return res.data[0]
 
@@ -288,6 +288,7 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     if not ci_res.data:
         return None
     return ci_res.data[0]
+
 
 
 def request_teacher_account(supabase: Client, teacher_id: str, teacher_pw: str):
