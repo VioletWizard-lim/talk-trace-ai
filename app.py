@@ -250,13 +250,18 @@ with st.sidebar:
             teacher_pw_input = st.text_input("교사 PW", type="password", key="teacher_pw_input")
             if st.button("교사 로그인", use_container_width=True):
                 safe_teacher_id = normalize_user_text(teacher_id_input, max_len=60)
-                account = fetch_teacher_account(supabase, teacher_id_input)
+                account = fetch_teacher_account(supabase, safe_teacher_id)
                 safe_pw = normalize_user_text(teacher_pw_input, max_len=60)
                 if safe_teacher_id == ADMIN_ID and safe_pw == ADMIN_PW:
                     st.session_state['teacher_auth'] = True
                     st.session_state['admin_auth'] = True
                     st.session_state['teacher_id'] = ADMIN_ID
                     st.success("✅ 최고관리자(교사 모드) 로그인 성공")
+                elif isinstance(account, dict) and account.get("_query_failed"):
+                    st.session_state['teacher_auth'] = False
+                    st.session_state['admin_auth'] = False
+                    st.session_state['teacher_id'] = ""
+                    st.error("❌ 교사 계정 조회에 실패했습니다. Supabase RLS 정책/권한 및 DB 연결 상태를 확인해 주세요.")
                 elif not account:
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
