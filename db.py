@@ -90,19 +90,48 @@ def fetch_room_names(supabase: Client):
         return []
     return [item.get("room_name", "") for item in res.data if item.get("room_name", "").strip()]
 
+def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
+    safe_owner = str(owner_teacher_id or "").strip()
+    if not safe_owner:
+        return []
 
-def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code):
+    res = execute_query(
+        supabase.table("topic")
+        .select("room_name")
+        .eq("created_by", safe_owner)
+        .order("room_name", desc=False),
+        fail_message="🚨 교사별 방 목록 조회 에러",
+    )
+    if not res or not res.data:
+        return []
+    return [item.get("room_name", "") for item in res.data if item.get("room_name", "").strip()]
+
+@st.cache_data(ttl=300)
+def topic_created_by_column_available() -> bool:
+    supabase = init_db()
+    try:
+        supabase.table("topic").select("created_by").limit(1).execute()
+        return True
+    except Exception as e:
+        if _is_undefined_column_error(e, "created_by"):
+            return False
+        logger.warning("topic.created_by 컬럼 확인 중 예외 발생: %s", e)
+        return False
+
+def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code, created_by=None):
     payload = {
         "room_name": room_name,
         "title": title,
         "mode": mode,
         "entry_code": entry_code,
     }
+    if created_by is not None:
+    payload["created_by"] = str(created_by).strip()
     try:
         return supabase.table("topic").upsert(payload).execute()
     except Exception as e:
-        if _is_undefined_column_error(e, "entry_code"):
-            logger.warning("topic.entry_code 컬럼이 없어 공개방으로 저장합니다.")
+        if _is_undefined_column_error(e, "entry_code") or _is_undefined_column_error(e, "created_by"):
+            logger.warning("topic.entry_code 또는 topic.created_by 컬럼이 없어 레거시 모드로 저장합니다.")
             legacy_payload = {
                 "room_name": room_name,
                 "title": title,
