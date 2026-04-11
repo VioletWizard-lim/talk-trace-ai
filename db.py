@@ -270,9 +270,24 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     )
     if res is None:
         return {"_query_failed": True}
-    if not res.data:
+    if res is None:
+        return {"_query_failed": True}
+    if res.data:
+        return res.data[0]
+
+    # 대소문자 차이로 인한 로그인 실패를 줄이기 위해 2차 조회(대소문자 무시)를 수행합니다.
+    ci_res = execute_query(
+        supabase.table("teacher_accounts")
+        .select("id, teacher_id, teacher_pw, is_approved, approved_at, requested_at")
+        .ilike("teacher_id", safe_id)
+        .limit(1),
+        fail_message="교사 계정 조회 실패",
+    )
+    if ci_res is None:
+        return {"_query_failed": True}
+    if not ci_res.data:
         return None
-    return res.data[0]
+    return ci_res.data[0]
 
 
 def request_teacher_account(supabase: Client, teacher_id: str, teacher_pw: str):
