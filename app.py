@@ -267,6 +267,13 @@ with st.sidebar:
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
                     st.error("❌ 등록되지 않은 교사 ID입니다.")
+                    try:
+                        supabase_url = str(st.secrets.get("SUPABASE_URL", ""))
+                        project_ref = supabase_url.split("//", 1)[-1].split(".", 1)[0] if supabase_url else ""
+                        if project_ref:
+                            st.caption(f"현재 앱 연결 DB 프로젝트: `{project_ref}`")
+                    except Exception:
+                        pass
                 elif account.get("teacher_pw") != safe_pw:
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
