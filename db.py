@@ -268,7 +268,9 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
         .limit(1),
         fail_message="교사 계정 조회 실패",
     )
-    if not res or not res.data:
+    if res is None:
+        return {"_query_failed": True}
+    if not res.data:
         return None
     return res.data[0]
 
