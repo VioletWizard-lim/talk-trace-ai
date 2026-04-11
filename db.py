@@ -85,8 +85,7 @@ def fetch_room_names(supabase: Client):
     try:
         res = execute_query(
             supabase.table("topic")
-            .select("room_name")
-            .neq("created_by", "")
+            .select("room_name, created_by")
             .not_.is_("created_by", "null")
             .order("room_name", desc=False),
             fail_message="🚨 방 목록 조회 에러",
