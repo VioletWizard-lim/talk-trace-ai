@@ -810,15 +810,16 @@ if user_role == "교사" and teacher_auth:
                     full_history = "\n".join([f"[{row['student_name']} - {row['sentiment']}] {row['content']}" for _, row in df_all.iterrows()])
                     prompt = (
                         f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n"
-                        "[출력 형식 - 줄 바꿈을 지켜서 반드시 그대로]\n"
+                        "[출력 형식 - 반드시 그대로]\n"
                         "핵심요약 1: ...\n"
                         "핵심요약 2: ...\n"
                         "핵심요약 3: ...\n"
                         "베스트 학생: ...\n"
                         "선정 이유: ...\n\n"
                         "[엄격한 규칙]\n"
+                        "- 줄바꿈을 하여 보기 편하게 합니다.\n"
                         "- 정확히 5줄만 출력합니다.\n"
-                        "- 제목/헤더(#,##,###), 소제목, 불릿(-,*)을 절대 쓰지 않습니다.\n"
+                        "- 제목/헤더(#,##,###), 소제목을 절대 쓰지 않습니다.\n"
                         "- 불필요한 서론/결론 없이 바로 결과만 출력합니다.\n\n"
                         f"기록:\n{full_history}"
                     )
