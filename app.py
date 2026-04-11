@@ -82,6 +82,7 @@ def format_kst_datetime(value):
 
     kst_tz = timezone(timedelta(hours=9))
     parsed_dt = None
+    should_assume_utc = False
 
     if isinstance(value, datetime):
         parsed_dt = value
@@ -89,6 +90,10 @@ def format_kst_datetime(value):
         raw = str(value).strip()
         if not raw:
             return "-"
+        # Supabase timestamptz 문자열이 타임존 없이 내려오는 경우(예: 2026-04-11T14:20:31.063918)
+        # UTC 기준으로 간주해 KST로 변환합니다.
+        if "T" in raw and "+" not in raw and "Z" not in raw:
+            should_assume_utc = True
         iso_candidate = raw.replace("Z", "+00:00")
         try:
             parsed_dt = datetime.fromisoformat(iso_candidate)
@@ -105,6 +110,8 @@ def format_kst_datetime(value):
 
     if parsed_dt.tzinfo is not None:
         parsed_dt = parsed_dt.astimezone(kst_tz)
+    elif should_assume_utc:
+        parsed_dt = parsed_dt.replace(tzinfo=timezone.utc).astimezone(kst_tz)
 
     return parsed_dt.strftime(DISPLAY_DATETIME_FMT)
 
