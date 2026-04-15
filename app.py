@@ -36,6 +36,11 @@ from validators import (
     mask_ip_for_teacher,
     normalize_room_name,
     normalize_user_text,
+    validate_entry_code,
+    validate_opinion_content,
+    validate_room_name,
+    validate_student_name,
+    validate_teacher_credential,
     with_fallback_author_role,
 )
 
@@ -352,9 +357,23 @@ with st.sidebar:
             teacher_id_input = st.text_input("교사 ID", key="teacher_id_input")
             teacher_pw_input = st.text_input("교사 PW", type="password", key="teacher_pw_input")
             if st.button("교사 로그인", use_container_width=True):
-                safe_teacher_id = normalize_user_text(teacher_id_input, max_len=60)
+                id_ok, safe_teacher_id, id_error_code, id_error_message = validate_teacher_credential(
+                    teacher_id_input,
+                    field_name="교사 ID",
+                    max_len=60,
+                )
+                pw_ok, safe_pw, pw_error_code, pw_error_message = validate_teacher_credential(
+                    teacher_pw_input,
+                    field_name="교사 PW",
+                    max_len=60,
+                )
+                if not id_ok:
+                    st.error(f"❌ {id_error_message} ({id_error_code})")
+                    st.stop()
+                if not pw_ok:
+                    st.error(f"❌ {pw_error_message} ({pw_error_code})")
+                    st.stop()
                 account = fetch_teacher_account(supabase, safe_teacher_id)
-                safe_pw = normalize_user_text(teacher_pw_input, max_len=60)
                 if isinstance(account, dict) and account.get("_query_failed"):
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
@@ -408,10 +427,20 @@ with st.sidebar:
             req_teacher_id = st.text_input("신청할 교사 ID", key="req_teacher_id")
             req_teacher_pw = st.text_input("신청할 교사 PW", type="password", key="req_teacher_pw")
             if st.button("교사 계정 신청", type="primary", use_container_width=True):
-                safe_id = normalize_user_text(req_teacher_id, max_len=60)
-                safe_pw = normalize_user_text(req_teacher_pw, max_len=60)
-                if not safe_id or not safe_pw:
-                    st.error("ID/PW를 모두 입력해 주세요.")
+                id_ok, safe_id, id_error_code, id_error_message = validate_teacher_credential(
+                    req_teacher_id,
+                    field_name="교사 ID",
+                    max_len=60,
+                )
+                pw_ok, safe_pw, pw_error_code, pw_error_message = validate_teacher_credential(
+                    req_teacher_pw,
+                    field_name="교사 PW",
+                    max_len=60,
+                )
+                if not id_ok:
+                    st.error(f"❌ {id_error_message} ({id_error_code})")
+                elif not pw_ok:
+                    st.error(f"❌ {pw_error_message} ({pw_error_code})")
                 elif fetch_teacher_account(supabase, safe_id):
                     st.warning("이미 존재하는 ID입니다. 다른 ID를 사용해 주세요.")
                 else:
@@ -458,12 +487,18 @@ with st.sidebar:
                 new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
 
                 if st.button("새 방 개설하기", type="primary"):
-                    safe_new_room = normalize_room_name(new_room)
-                    safe_new_title = normalize_user_text(new_title, max_len=MAX_TOPIC_LEN)
-                    safe_new_pw = normalize_user_text(new_pw, max_len=MAX_ENTRY_CODE_LEN)
+                    room_ok, safe_new_room, room_error_code, room_error_message = validate_room_name(new_room, max_len=MAX_ROOM_NAME_LEN)
+                    title_ok, safe_new_title, title_error_code, title_error_message = validate_opinion_content(new_title, max_len=MAX_TOPIC_LEN)
+                    entry_ok, safe_new_pw, entry_error_code, entry_error_message = validate_entry_code(new_pw, max_len=MAX_ENTRY_CODE_LEN)
                     can_store_room_pw = topic_entry_code_column_available()
 
-                    if safe_new_pw and not can_store_room_pw:
+                    if not room_ok:
+                        st.error(f"❌ {room_error_message} ({room_error_code})")
+                    elif not title_ok:
+                        st.error(f"❌ {title_error_message} ({title_error_code})")
+                    elif not entry_ok:
+                        st.error(f"❌ {entry_error_message} ({entry_error_code})")
+                    elif safe_new_pw and not can_store_room_pw:
                         st.error("현재 DB 구조에서는 방 비밀번호 저장을 지원하지 않습니다. 비밀번호를 비우거나 DB에 topic.entry_code 컬럼을 추가해 주세요.")
                     elif safe_new_room and safe_new_title:
                         res = upsert_topic_room(
@@ -476,11 +511,6 @@ with st.sidebar:
                         )
                         if res is not None:
                             st.success(f"'{safe_new_room}' 방이 개설되었습니다! '기존 방 선택'을 눌러 입장하세요.")
-                    else:
-                        st.error(
-                            f"방 이름({MAX_ROOM_NAME_LEN}자 이하)과 주제({MAX_TOPIC_LEN}자 이하)를 모두 입력해주세요. "
-                            f"입장 암호는 {MAX_ENTRY_CODE_LEN}자까지 저장됩니다."
-                        )
                     room_name = ""
 
     else:
@@ -606,12 +636,15 @@ with col_stt:
     )
 
 if st.button("의견 제출", use_container_width=True, type="primary"):
-    safe_input = normalize_user_text(user_input, max_len=700)
-    safe_student_name = normalize_user_text(student_name, max_len=MAX_STUDENT_NAME_LEN)
-    safe_student_number = normalize_user_text(student_number, max_len=20)
+    input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
+    student_ok, safe_student_name, student_error_code, student_error_message = validate_student_name(student_name, max_len=MAX_STUDENT_NAME_LEN)
+    student_number_ok, safe_student_number, student_number_error_code, student_number_error_message = validate_student_name(student_number, max_len=20)
+    if not student_number_ok and user_role == "학생":
+        st.error(f"❌ {student_number_error_message} ({student_number_error_code})")
+        st.stop()
     if user_role == "학생" and (not safe_student_name or safe_student_name == "익명"):
         safe_student_name = safe_student_number or "학번미입력"
-    if safe_input:
+    if input_ok and safe_input:
         now = get_kst_now_str()
         author_role_for_submit = "교사" if user_role == "교사" else "학생"
         client_ip = get_client_ip()
@@ -635,7 +668,7 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
         except Exception as e:
             st.error(f"저장 실패: {e}")
     else:
-        st.warning("의견 내용을 입력해 주세요.")
+        st.warning(f"{input_error_message} ({input_error_code}))
 
 st.divider()
 
