@@ -2,9 +2,12 @@ import streamlit as st
 import pandas as pd
 import io
 import html
+import os
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 import logging
 import plotly.express as px
+from wordcloud import WordCloud
 
 from db import (
     approve_teacher_account,
@@ -144,6 +147,36 @@ def get_client_ip():
 
 def log_audit(event, room_name="", actor_name="", role="", **extra):
     logger.info("AUDIT event=%s room=%s actor=%s role=%s extra=%s", event, room_name, actor_name, role, extra)
+
+def resolve_wordcloud_font_path():
+    candidate_paths = [
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+        "C:/Windows/Fonts/malgun.ttf",
+    ]
+    for font_path in candidate_paths:
+        if os.path.exists(font_path):
+            return font_path
+    return None
+
+def build_word_frequencies(text_series):
+    tokens = []
+    stopwords = {
+        "그리고", "하지만", "그래서", "정말", "제가", "저는", "너무", "이번", "지금",
+        "그냥", "대한", "대한해", "같은", "합니다", "입니다", "있는", "없는", "수업",
+        "토론", "토의", "의견", "생각", "내용", "때문", "하면", "하면요", "입니다요"
+    }
+    for content in text_series.fillna("").astype(str):
+        for token in content.replace("\n", " ").split():
+            cleaned = token.strip(".,!?\"'`()[]{}:;<>")
+            if len(cleaned) < 2:
+                continue
+            if cleaned in stopwords:
+                continue
+            tokens.append(cleaned)
+    return Counter(tokens)
 
 def render_admin_approval_panel():
     st.subheader("📝 교사 계정 승인")
@@ -681,10 +714,31 @@ def live_chat_board_core():
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
         if not opinion_df.empty:
-            live_pie_fig = px.pie(opinion_df, names="sentiment", hole=0.4, height=300)
-            live_pie_fig.update_layout(font={"family": UI_FONT_FAMILY})
-            st.plotly_chart(live_pie_fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': False})
-        else: st.write("데이터 수집 중...")
+            left_col, right_col = st.columns(2)
+            with left_col:
+                st.caption("감정 분포 그래프")
+                live_pie_fig = px.pie(opinion_df, names="sentiment", hole=0.4, height=320)
+                live_pie_fig.update_layout(font={"family": UI_FONT_FAMILY})
+                st.plotly_chart(live_pie_fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': False})
+            with right_col:
+                st.caption("누적 토의/토론 워드클라우드")
+                frequencies = build_word_frequencies(opinion_df["content"])
+                if frequencies:
+                    font_path = resolve_wordcloud_font_path()
+                    wc = WordCloud(
+                        width=900,
+                        height=500,
+                        background_color="white",
+                        colormap="viridis",
+                        font_path=font_path,
+                    ).generate_from_frequencies(frequencies)
+                    st.image(wc.to_array(), use_container_width=True)
+                    top_words = ", ".join([f"{word}({count})" for word, count in frequencies.most_common(8)])
+                    st.caption(f"상위 키워드: {top_words}")
+                else:
+                    st.info("워드클라우드를 만들 단어가 아직 부족합니다.")
+        else:
+            st.write("데이터 수집 중...")
 
     col_board_title, col_board_ref = st.columns([8, 2])
     with col_board_title:
