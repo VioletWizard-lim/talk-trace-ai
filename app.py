@@ -668,7 +668,7 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
         except Exception as e:
             st.error(f"저장 실패: {e}")
     else:
-        st.warning(f"{input_error_message} ({input_error_code}))
+        st.warning(f"{input_error_message} ({input_error_code})")
 
 st.divider()
 
