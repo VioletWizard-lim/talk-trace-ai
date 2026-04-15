@@ -2,12 +2,10 @@ import streamlit as st
 import pandas as pd
 import io
 import html
-import os
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 import logging
 import plotly.express as px
-from wordcloud import WordCloud
 
 from db import (
     approve_teacher_account,
@@ -148,19 +146,6 @@ def get_client_ip():
 def log_audit(event, room_name="", actor_name="", role="", **extra):
     logger.info("AUDIT event=%s room=%s actor=%s role=%s extra=%s", event, room_name, actor_name, role, extra)
 
-def resolve_wordcloud_font_path():
-    candidate_paths = [
-        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-        "/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-        "/System/Library/Fonts/AppleSDGothicNeo.ttc",
-        "C:/Windows/Fonts/malgun.ttf",
-    ]
-    for font_path in candidate_paths:
-        if os.path.exists(font_path):
-            return font_path
-    return None
-
 def build_word_frequencies(text_series):
     tokens = []
     stopwords = {
@@ -177,6 +162,35 @@ def build_word_frequencies(text_series):
                 continue
             tokens.append(cleaned)
     return Counter(tokens)
+
+def build_wordcloud_html(frequencies, max_words=60):
+    if not frequencies:
+        return ""
+
+    sorted_words = sorted(frequencies.items(), key=lambda item: (-item[1], item[0]))[:max_words]
+    max_count = sorted_words[0][1]
+    min_count = sorted_words[-1][1]
+    span_html = []
+    palette = ["#50327A", "#2A9D8F", "#3A86AF", "#88C057", "#D4C93D"]
+
+    for index, (word, count) in enumerate(sorted_words):
+        if max_count == min_count:
+            font_size = 26
+        else:
+            ratio = (count - min_count) / (max_count - min_count)
+            font_size = int(18 + ratio * 30)
+        color = palette[index % len(palette)]
+        span_html.append(
+            f"<span style='display:inline-block; margin:8px 10px; font-size:{font_size}px; "
+            f"font-weight:700; color:{color}; line-height:1.2;'>{html.escape(word)}</span>"
+        )
+
+    return (
+        "<div style='padding:14px; min-height:280px; border:1px solid #e9e9e9; border-radius:10px; "
+        "background:#ffffff; display:flex; flex-wrap:wrap; align-items:center; justify-content:center;'>"
+        + "".join(span_html) +
+        "</div>"
+    )
 
 def render_admin_approval_panel():
     st.subheader("📝 교사 계정 승인")
@@ -709,30 +723,24 @@ st.divider()
 # [7] 실시간 업데이트 영역
 # ==========================================
 def live_chat_board_core():
-    df = fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
-    opinion_df = with_fallback_author_role(df) # 변수명 매칭 확인 (이전 코드에서 student_df 대신 opinion_df 혼용 부분 수정)
+    board_df = fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
+    opinion_df = with_fallback_author_role(board_df) # 변수명 매칭 확인 (이전 코드에서 student_df 대신 opinion_df 혼용 부분 수정)
+    stats_df = fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT)
+    stats_opinion_df = with_fallback_author_role(stats_df)
     
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
-        if not opinion_df.empty:
+        if not stats_opinion_df.empty:
             left_col, right_col = st.columns(2)
             with left_col:
                 st.caption("감정 분포 그래프")
-                live_pie_fig = px.pie(opinion_df, names="sentiment", hole=0.4, height=320)
+                live_pie_fig = px.pie(stats_opinion_df, names="sentiment", hole=0.4, height=320)
                 live_pie_fig.update_layout(font={"family": UI_FONT_FAMILY})
                 st.plotly_chart(live_pie_fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': False})
             with right_col:
                 st.caption("누적 토의/토론 워드클라우드")
-                frequencies = build_word_frequencies(opinion_df["content"])
+                frequencies = build_word_frequencies(stats_opinion_df["content"])
                 if frequencies:
-                    font_path = resolve_wordcloud_font_path()
-                    wc = WordCloud(
-                        width=900,
-                        height=500,
-                        background_color="white",
-                        colormap="viridis",
-                        font_path=font_path,
-                    ).generate_from_frequencies(frequencies)
-                    st.image(wc.to_array(), use_container_width=True)
+                    st.markdown(build_wordcloud_html(frequencies), unsafe_allow_html=True)
                     top_words = ", ".join([f"{word}({count})" for word, count in frequencies.most_common(8)])
                     st.caption(f"상위 키워드: {top_words}")
                 else:
