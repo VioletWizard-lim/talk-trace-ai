@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import html
+import math
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 import logging
@@ -163,15 +164,37 @@ def build_word_frequencies(text_series):
             tokens.append(cleaned)
     return Counter(tokens)
 
-def build_wordcloud_html(frequencies, max_words=60):
+def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=520):
     if not frequencies:
         return ""
 
     sorted_words = sorted(frequencies.items(), key=lambda item: (-item[1], item[0]))[:max_words]
     max_count = sorted_words[0][1]
     min_count = sorted_words[-1][1]
-    span_html = []
     palette = ["#50327A", "#2A9D8F", "#3A86AF", "#88C057", "#D4C93D"]
+    cx, cy = width / 2, height / 2
+    radius = min(width, height) / 2 - 16
+    placed_rects = []
+    svg_text_nodes = []
+
+    def overlaps(rect):
+        x, y, w, h = rect
+        for ox, oy, ow, oh in placed_rects:
+            if not (x + w + 3 < ox or ox + ow + 3 < x or y + h + 3 < oy or oy + oh + 3 < y):
+                return True
+        return False
+
+    def is_inside_circle(x, y, w, h):
+        test_points = [
+            (x + 2, y + 2),
+            (x + w - 2, y + 2),
+            (x + 2, y + h - 2),
+            (x + w - 2, y + h - 2),
+        ]
+        for px, py in test_points:
+            if math.hypot(px - cx, py - cy) > radius:
+                return False
+        return True
 
     for index, (word, count) in enumerate(sorted_words):
         if max_count == min_count:
@@ -179,17 +202,53 @@ def build_wordcloud_html(frequencies, max_words=60):
         else:
             ratio = (count - min_count) / (max_count - min_count)
             font_size = int(18 + ratio * 30)
+
         color = palette[index % len(palette)]
-        span_html.append(
-            f"<span style='display:inline-block; margin:8px 10px; font-size:{font_size}px; "
-            f"font-weight:700; color:{color}; line-height:1.2;'>{html.escape(word)}</span>"
-        )
+        text_width = max(26, font_size * (0.62 * len(word) + 0.45))
+        text_height = max(22, font_size * 1.05)
+        rotation = 90 if index % 11 == 0 else 0
+        if rotation == 90:
+            text_width, text_height = text_height, text_width
+
+        placed = False
+        for step in range(1, 1400):
+            angle = step * 0.33 + index * 0.21
+            spiral_radius = min(radius - 8, 2 + step * 0.36)
+            x = cx + spiral_radius * math.cos(angle) - text_width / 2
+            y = cy + spiral_radius * math.sin(angle) - text_height / 2
+            rect = (x, y, text_width, text_height)
+            if not is_inside_circle(x, y, text_width, text_height):
+                continue
+            if overlaps(rect):
+                continue
+
+            placed_rects.append(rect)
+            safe_word = html.escape(word)
+            if rotation == 90:
+                tx, ty = x + text_height * 0.8, y + text_width * 0.2
+                svg_text_nodes.append(
+                    f"<text x='{tx:.1f}' y='{ty:.1f}' fill='{color}' font-size='{font_size}' "
+                    f"font-weight='700' transform='rotate(90 {tx:.1f} {ty:.1f})'>{safe_word}</text>"
+                )
+            else:
+                tx, ty = x + 2, y + text_height * 0.82
+                svg_text_nodes.append(
+                    f"<text x='{tx:.1f}' y='{ty:.1f}' fill='{color}' font-size='{font_size}' "
+                    f"font-weight='700'>{safe_word}</text>"
+                )
+            placed = True
+            break
+
+        if not placed:
+            continue
 
     return (
-        "<div style='padding:14px; min-height:280px; border:1px solid #e9e9e9; border-radius:10px; "
-        "background:#ffffff; display:flex; flex-wrap:wrap; align-items:center; justify-content:center;'>"
-        + "".join(span_html) +
-        "</div>"
+        "<div style='padding:12px; border:1px solid #e9e9e9; border-radius:10px; background:#ffffff;'>"
+        f"<svg viewBox='0 0 {width} {height}' style='width:100%; height:auto; display:block;' "
+        "xmlns='http://www.w3.org/2000/svg'>"
+        f"<circle cx='{cx:.1f}' cy='{cy:.1f}' r='{radius:.1f}' fill='#ffffff' />"
+        + "".join(svg_text_nodes) +
+        "</svg></div>"
     )
 
 def render_admin_approval_panel():
@@ -740,7 +799,7 @@ def live_chat_board_core():
                 st.caption("누적 토의/토론 워드클라우드")
                 frequencies = build_word_frequencies(stats_opinion_df["content"])
                 if frequencies:
-                    st.markdown(build_wordcloud_html(frequencies), unsafe_allow_html=True)
+                    st.markdown(build_circular_wordcloud_html(frequencies), unsafe_allow_html=True)
                     top_words = ", ".join([f"{word}({count})" for word, count in frequencies.most_common(8)])
                     st.caption(f"상위 키워드: {top_words}")
                 else:
