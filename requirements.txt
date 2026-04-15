@@ -4,3 +4,4 @@ supabase
 google-generativeai
 plotly
 openpyxl
+wordcloud
