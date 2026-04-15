@@ -398,7 +398,9 @@ with st.sidebar:
                     st.session_state['teacher_id'] = safe_teacher_id
                     redirect_from_admin_page_if_needed()
                     if st.session_state['admin_auth']:
+                        st.session_state['page'] = "admin_approval"
                         st.toast("✅ 관리자 계정 로그인 성공", icon="✅")
+                        st.rerun()
                     else:
                         st.toast("✅ 교사 로그인 성공", icon="✅")
 
