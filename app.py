@@ -177,10 +177,27 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
     placed_rects = []
     svg_text_nodes = []
 
+    def estimate_text_units(word):
+        units = 0.0
+        for ch in word:
+            code = ord(ch)
+            if 0xAC00 <= code <= 0xD7A3:  # 한글 음절
+                units += 1.0
+            elif 0x3130 <= code <= 0x318F:  # 한글 자모
+                units += 0.95
+            elif 0x4E00 <= code <= 0x9FFF:  # CJK
+                units += 1.0
+            elif ch.isascii() and (ch.isalpha() or ch.isdigit()):
+                units += 0.62
+            else:
+                units += 0.75
+        return max(units, 1.0)
+
     def overlaps(rect):
         x, y, w, h = rect
+        padding = 6
         for ox, oy, ow, oh in placed_rects:
-            if not (x + w + 3 < ox or ox + ow + 3 < x or y + h + 3 < oy or oy + oh + 3 < y):
+            if not (x + w + padding < ox or ox + ow + padding < x or y + h + padding < oy or oy + oh + padding < y):
                 return True
         return False
 
@@ -204,16 +221,14 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
             font_size = int(18 + ratio * 30)
 
         color = palette[index % len(palette)]
-        text_width = max(26, font_size * (0.62 * len(word) + 0.45))
-        text_height = max(22, font_size * 1.05)
-        rotation = 90 if index % 11 == 0 else 0
-        if rotation == 90:
-            text_width, text_height = text_height, text_width
+        text_units = estimate_text_units(word)
+        text_width = max(30, font_size * (text_units + 0.8))
+        text_height = max(24, font_size * 1.22)
 
         placed = False
-        for step in range(1, 1400):
+        for step in range(1, 2200):
             angle = step * 0.33 + index * 0.21
-            spiral_radius = min(radius - 8, 2 + step * 0.36)
+            spiral_radius = min(radius - 8, 2 + step * 0.31)
             x = cx + spiral_radius * math.cos(angle) - text_width / 2
             y = cy + spiral_radius * math.sin(angle) - text_height / 2
             rect = (x, y, text_width, text_height)
@@ -224,18 +239,11 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
 
             placed_rects.append(rect)
             safe_word = html.escape(word)
-            if rotation == 90:
-                tx, ty = x + text_height * 0.8, y + text_width * 0.2
-                svg_text_nodes.append(
-                    f"<text x='{tx:.1f}' y='{ty:.1f}' fill='{color}' font-size='{font_size}' "
-                    f"font-weight='700' transform='rotate(90 {tx:.1f} {ty:.1f})'>{safe_word}</text>"
-                )
-            else:
-                tx, ty = x + 2, y + text_height * 0.82
-                svg_text_nodes.append(
-                    f"<text x='{tx:.1f}' y='{ty:.1f}' fill='{color}' font-size='{font_size}' "
-                    f"font-weight='700'>{safe_word}</text>"
-                )
+            tx, ty = x + 2, y + text_height * 0.82
+            svg_text_nodes.append(
+                f"<text x='{tx:.1f}' y='{ty:.1f}' fill='{color}' font-size='{font_size}' "
+                f"font-weight='700'>{safe_word}</text>"
+            )
             placed = True
             break
 
