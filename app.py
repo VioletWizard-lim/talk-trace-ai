@@ -3,6 +3,7 @@ import pandas as pd
 import io
 import html
 import math
+import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 import logging
@@ -152,11 +153,29 @@ def build_word_frequencies(text_series):
     stopwords = {
         "그리고", "하지만", "그래서", "정말", "제가", "저는", "너무", "이번", "지금",
         "그냥", "대한", "대한해", "같은", "합니다", "입니다", "있는", "없는", "수업",
-        "토론", "토의", "의견", "생각", "내용", "때문", "하면", "하면요", "입니다요", "있다", "않으면" "많은"
+        "토론", "토의", "의견", "생각", "내용", "때문", "하면", "하면요", "입니다요", "있다", "않으면", "많은"
     }
+    particle_suffixes = [
+        "에게서", "으로는", "이라고", "라면", "처럼", "까지는", "으로도", "에서", "에게", "으로", "로써",
+        "로서", "보다", "까지", "부터", "만큼", "이나", "라도", "이며", "이고", "에서", "으로", "이라",
+        "라고", "와", "과", "을", "를", "이", "가", "은", "는", "에", "도", "만", "로", "랑", "나"
+    ]
+
+    def normalize_token(token):
+        cleaned = re.sub(r"^[^\w가-힣]+|[^\w가-힣]+$", "", token)
+        if len(cleaned) < 2:
+            return ""
+
+        normalized = cleaned
+        for suffix in particle_suffixes:
+            if normalized.endswith(suffix) and len(normalized) > len(suffix) + 1:
+                normalized = normalized[: -len(suffix)]
+                break
+        return normalized
+
     for content in text_series.fillna("").astype(str):
         for token in content.replace("\n", " ").split():
-            cleaned = token.strip(".,!?\"'`()[]{}:;<>")
+            cleaned = normalize_token(token)
             if len(cleaned) < 2:
                 continue
             if cleaned in stopwords:
