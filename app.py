@@ -171,9 +171,8 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
     sorted_words = sorted(frequencies.items(), key=lambda item: (-item[1], item[0]))[:max_words]
     max_count = sorted_words[0][1]
     min_count = sorted_words[-1][1]
-    palette = ["#50327A", "#2A9D8F", "#3A86AF", "#88C057", "#D4C93D"]
+    palette = ["#00695C", "#0077B6", "#0B3D91", "#1F8EFA", "#A3CFE2"]
     cx, cy = width / 2, height / 2
-    radius = min(width, height) / 2 - 16
     placed_rects = []
     svg_text_nodes = []
 
@@ -195,54 +194,48 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
 
     def overlaps(rect):
         x, y, w, h = rect
-        padding = 6
+        padding = 2
         for ox, oy, ow, oh in placed_rects:
             if not (x + w + padding < ox or ox + ow + padding < x or y + h + padding < oy or oy + oh + padding < y):
                 return True
         return False
 
-    def is_inside_circle(x, y, w, h):
-        test_points = [
-            (x + 2, y + 2),
-            (x + w - 2, y + 2),
-            (x + 2, y + h - 2),
-            (x + w - 2, y + h - 2),
-        ]
-        for px, py in test_points:
-            if math.hypot(px - cx, py - cy) > radius:
-                return False
-        return True
+    def is_inside_canvas(x, y, w, h):
+        margin = 10
+        return x >= margin and y >= margin and (x + w) <= (width - margin) and (y + h) <= (height - margin)
 
     for index, (word, count) in enumerate(sorted_words):
         if max_count == min_count:
-            font_size = 26
+            font_size = 28
         else:
             ratio = (count - min_count) / (max_count - min_count)
-            font_size = int(18 + ratio * 30)
+            eased_ratio = ratio ** 0.85
+            font_size = int(18 + eased_ratio * 86)
+        font_size = min(font_size, 140)
 
         color = palette[index % len(palette)]
         text_units = estimate_text_units(word)
-        text_width = max(30, font_size * (text_units + 0.8))
+        text_width = max(32, font_size * (text_units + 0.62))
         text_height = max(24, font_size * 1.22)
 
         placed = False
-        for step in range(1, 2200):
-            angle = step * 0.33 + index * 0.21
-            spiral_radius = min(radius - 8, 2 + step * 0.31)
+        for step in range(1, 3200):
+            angle = step * 0.4 + index * 0.18
+            spiral_radius = 2 + step * 0.42
             x = cx + spiral_radius * math.cos(angle) - text_width / 2
             y = cy + spiral_radius * math.sin(angle) - text_height / 2
             rect = (x, y, text_width, text_height)
-            if not is_inside_circle(x, y, text_width, text_height):
+            if not is_inside_canvas(x, y, text_width, text_height):
                 continue
             if overlaps(rect):
                 continue
 
             placed_rects.append(rect)
             safe_word = html.escape(word)
-            tx, ty = x + 2, y + text_height * 0.82
+            tx, ty = x + 1.5, y + text_height * 0.84
             svg_text_nodes.append(
                 f"<text x='{tx:.1f}' y='{ty:.1f}' fill='{color}' font-size='{font_size}' "
-                f"font-weight='700'>{safe_word}</text>"
+                f"font-weight='800' letter-spacing='-0.01em'>{safe_word}</text>"
             )
             placed = True
             break
@@ -251,10 +244,10 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
             continue
 
     return (
-        "<div style='padding:12px; border:1px solid #e9e9e9; border-radius:10px; background:#ffffff;'>"
+        "<div style='padding:10px; border:1px solid #e9e9e9; border-radius:10px; background:#f3f5f7;'>"
         f"<svg viewBox='0 0 {width} {height}' style='width:100%; height:auto; display:block;' "
         "xmlns='http://www.w3.org/2000/svg'>"
-        f"<circle cx='{cx:.1f}' cy='{cy:.1f}' r='{radius:.1f}' fill='#ffffff' />"
+        "<rect x='0' y='0' width='100%' height='100%' fill='#f3f5f7' />"
         + "".join(svg_text_nodes) +
         "</svg></div>"
     )
