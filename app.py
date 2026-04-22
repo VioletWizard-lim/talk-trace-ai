@@ -130,8 +130,26 @@ def get_client_ip():
             return str(raw_ip).split(",")[0].strip()
     return ""
 
-def log_audit(event, room_name="", actor_name="", role="", **extra):
-    logger.info("AUDIT event=%s room=%s actor=%s role=%s extra=%s", event, room_name, actor_name, role, extra)
+def log_audit(event, room_name="", actor_name="", role="", error_code=None, **extra):
+    """
+    감사 로그 표준 포맷:
+    event      : 발생한 이벤트 (opinion_submitted, chat_deleted, room_destroyed 등)
+    room_name  : 대상 방 이름
+    actor_name : 행위자 이름/학번
+    role       : 행위자 역할 (학생 / 교사)
+    error_code : 에러 발생 시 코드 (정상 이벤트는 None)
+    extra      : 추가 컨텍스트 (sentiment, client_ip 등)
+    """
+    if error_code:
+        logger.warning(
+            "AUDIT event=%s room=%s actor=%s role=%s error_code=%s extra=%s",
+            event, room_name, actor_name, role, error_code, extra
+        )
+    else:
+        logger.info(
+            "AUDIT event=%s room=%s actor=%s role=%s extra=%s",
+            event, room_name, actor_name, role, extra
+        )
 
 def build_word_frequencies(text_series):
     tokens = []
@@ -677,6 +695,7 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
             st.session_state['reset_key'] += 1
             st.rerun()
         except Exception as e:
+            log_audit("opinion_submit_failed", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, error_code="SUBMIT_FAILED")
             st.error(f"저장 실패: {e}")
     else:
         st.warning(f"{input_error_message} ({input_error_code})")
@@ -738,6 +757,7 @@ def live_chat_board_core():
                 log_audit("chat_deleted", room_name=room_name, actor_name=student_name, role=user_role, message_id=msg_id)
                 st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
             except Exception as e:
+                log_audit("opinion_submit_failed", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, error_code="SUBMIT_FAILED")
                 st.error(f"삭제 실패: {e}")
 
         def render_msg(row):
@@ -848,6 +868,7 @@ if user_role == "교사" and teacher_auth:
                     log_audit("teacher_hint_sent", room_name=room_name, actor_name=student_name, role=user_role)
                     st.session_state['hint_input_widget'] = ""
                 except Exception as e:
+                    log_audit("opinion_submit_failed", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, error_code="SUBMIT_FAILED")
                     st.error(f"힌트 전송 실패: {e}")
 
         if AI_HINT_ENABLED:
@@ -926,6 +947,7 @@ if user_role == "교사" and teacher_auth:
                     log_audit("record_deleted", room_name=room_name, actor_name=student_name, role=user_role, record_id=del_id)
                     st.toast("기록이 삭제되었습니다.", icon="🗑️")
                 except Exception as e:
+                    log_audit("opinion_submit_failed", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, error_code="SUBMIT_FAILED")
                     st.error(f"기록 삭제 실패: {e}")
 
         col3, col4 = st.columns([1, 1])
@@ -1006,4 +1028,5 @@ if user_role == "교사" and teacher_auth:
                     st.session_state['ai_result_text'] = ""
                     st.rerun()
                 except Exception as e:
+                    log_audit("opinion_submit_failed", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, error_code="SUBMIT_FAILED")
                     st.error(f"삭제 중 오류 발생: {e}")
