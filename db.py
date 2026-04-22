@@ -5,17 +5,22 @@ import pandas as pd
 import streamlit as st
 from supabase import Client, create_client
 
-
 logger = logging.getLogger("talk_trace_ai")
 
+
+# ==========================================
+# [1] DB 초기화 및 인증
+# ==========================================
 
 @st.cache_resource
 def init_db() -> Client:
     supabase_key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY") or st.secrets["SUPABASE_KEY"]
     return create_client(st.secrets["SUPABASE_URL"], supabase_key)
 
+
 def using_service_role_key() -> bool:
     return bool(str(st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "")).strip())
+
 
 def ensure_db_login(supabase: Client) -> bool:
     curr_session = None
@@ -42,6 +47,10 @@ def ensure_db_login(supabase: Client) -> bool:
         return False
 
 
+# ==========================================
+# [2] 에러 분류 헬퍼
+# ==========================================
+
 def _is_undefined_column_error(error: Exception, column_name: str) -> bool:
     msg = str(error).lower()
     has_missing_column_signal = (
@@ -51,7 +60,8 @@ def _is_undefined_column_error(error: Exception, column_name: str) -> bool:
         or "could not find" in msg
     )
     return has_missing_column_signal and column_name.lower() in msg
-    
+
+
 def _is_rls_permission_error(error: Exception) -> bool:
     msg = str(error).lower()
     return (
@@ -60,6 +70,7 @@ def _is_rls_permission_error(error: Exception) -> bool:
         or "row-level security" in msg
         or "violates row-level security policy" in msg
     )
+
 
 def execute_query(query, fail_message="DB 작업 실패"):
     try:
@@ -78,65 +89,79 @@ def execute_query(query, fail_message="DB 작업 실패"):
             st.error(f"🚨 {fail_message}: {e} (오류코드: DB_ERROR)")
         return None
 
+
+# ==========================================
+# [3] ✅ 컬럼 존재 확인 — 통합 함수 (Phase 2 핵심 개선)
+#
+# 기존: 컬럼마다 별도 쿼리 5회 → 앱 재시작 시 Supabase 5번 호출
+# 개선: 단일 함수로 한 번에 체크 후 딕셔너리로 캐싱 → 1회 호출로 통일
+# TTL: 스키마는 재배포 전까지 안 바뀌므로 3600초(1시간)로 연장
+# ==========================================
+
 @st.cache_data(ttl=3600)
+def check_schema_columns() -> dict:
+    """
+    모든 컬럼 존재 여부를 한 번에 확인하여 딕셔너리로 반환합니다.
+
+    Returns
+    -------
+    {
+        "debate.ip_address": bool,
+        "topic.entry_code": bool,
+        "topic.created_by_teacher_id": bool,
+        "topic.created_by": bool,
+        "teacher_accounts.is_admin": bool,
+    }
+    """
+    supabase = init_db()
+    results = {}
+
+    checks = [
+        ("debate.ip_address",               lambda: supabase.table("debate").select("ip_address").limit(1).execute()),
+        ("topic.entry_code",                lambda: supabase.table("topic").select("entry_code").limit(1).execute()),
+        ("topic.created_by_teacher_id",     lambda: supabase.table("topic").select("created_by_teacher_id").limit(1).execute()),
+        ("topic.created_by",                lambda: supabase.table("topic").select("created_by").limit(1).execute()),
+        ("teacher_accounts.is_admin",       lambda: supabase.table("teacher_accounts").select("is_admin").limit(1).execute()),
+    ]
+
+    for key, query_fn in checks:
+        try:
+            query_fn()
+            results[key] = True
+        except Exception as e:
+            results[key] = False
+            logger.info("컬럼 미존재 확인 [%s]: %s", key, e)
+
+    logger.info("schema_columns 체크 완료: %s", results)
+    return results
+
+
+# ── 하위 호환성 유지용 래퍼 함수들 ──
+# app.py에서 기존 함수명으로 호출하는 코드를 수정 없이 그대로 사용 가능
+
 def debate_ip_column_available() -> bool:
-    supabase = init_db()
-    try:
-        supabase.table("debate").select("ip_address").limit(1).execute()
-        return True
-    except Exception:
-        return False
+    return check_schema_columns().get("debate.ip_address", False)
 
-@st.cache_data(ttl=3600)
 def topic_entry_code_column_available() -> bool:
-    supabase = init_db()
-    try:
-        supabase.table("topic").select("entry_code").limit(1).execute()
-        return True
-    except Exception as e:
-        if _is_undefined_column_error(e, "entry_code"):
-            return False
-        logger.warning("topic.entry_code 컬럼 확인 중 예외 발생: %s", e)
-        return False
+    return check_schema_columns().get("topic.entry_code", False)
 
-@st.cache_data(ttl=3600)
 def topic_created_by_teacher_id_column_available() -> bool:
-    supabase = init_db()
-    try:
-        supabase.table("topic").select("created_by_teacher_id").limit(1).execute()
-        return True
-    except Exception as e:
-        if _is_undefined_column_error(e, "created_by_teacher_id"):
-            return False
-        logger.warning("topic.created_by_teacher_id 컬럼 확인 중 예외 발생: %s", e)
-        return False
+    return check_schema_columns().get("topic.created_by_teacher_id", False)
 
-@st.cache_data(ttl=3600)
 def topic_created_by_column_available() -> bool:
-    supabase = init_db()
-    try:
-        supabase.table("topic").select("created_by").limit(1).execute()
-        return True
-    except Exception as e:
-        if _is_undefined_column_error(e, "created_by"):
-            return False
-        logger.warning("topic.created_by 컬럼 확인 중 예외 발생: %s", e)
-        return False
+    return check_schema_columns().get("topic.created_by", False)
 
 def topic_owner_column_available() -> bool:
-    return topic_created_by_teacher_id_column_available() or topic_created_by_column_available()
+    schema = check_schema_columns()
+    return schema.get("topic.created_by_teacher_id", False) or schema.get("topic.created_by", False)
 
-@st.cache_data(ttl=3600)
 def teacher_is_admin_column_available() -> bool:
-    supabase = init_db()
-    try:
-        supabase.table("teacher_accounts").select("is_admin").limit(1).execute()
-        return True
-    except Exception as e:
-        if _is_undefined_column_error(e, "is_admin"):
-            return False
-        logger.warning("teacher_accounts.is_admin 컬럼 확인 중 예외 발생: %s", e)
-        return False
+    return check_schema_columns().get("teacher_accounts.is_admin", False)
+
+
+# ==========================================
+# [4] 방(topic) 관련 쿼리
+# ==========================================
 
 def fetch_room_names(supabase: Client):
     if topic_created_by_teacher_id_column_available():
@@ -170,6 +195,7 @@ def fetch_room_names(supabase: Client):
         if str(item.get("room_name", "")).strip() and str(item.get("created_by", "")).strip()
     ]
 
+
 def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
     safe_owner = str(owner_teacher_id or "").strip()
     if not safe_owner:
@@ -186,7 +212,7 @@ def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
         if not res or not res.data:
             return []
         return [item.get("room_name", "") for item in res.data if str(item.get("room_name", "")).strip()]
-    
+
     res = execute_query(
         supabase.table("topic")
         .select("room_name")
@@ -197,6 +223,7 @@ def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
     if not res or not res.data:
         return []
     return [item.get("room_name", "") for item in res.data if str(item.get("room_name", "")).strip()]
+
 
 def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code, created_by=None):
     payload = {
@@ -209,17 +236,19 @@ def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code, crea
         payload["created_by_teacher_id"] = str(created_by).strip()
     elif created_by is not None:
         payload["created_by"] = str(created_by).strip()
+
     return execute_query(supabase.table("topic").upsert(payload), fail_message="방 개설 실패")
+
 
 def fetch_room_entry_code(supabase: Client, room_name):
     order_candidates = ["id", "created_at", None]
-
     for order_col in order_candidates:
         try:
             query = supabase.table("topic").select("entry_code").eq("room_name", room_name)
             if order_col:
                 query = query.order(order_col, desc=True)
             res = query.execute()
+
             if not res or not res.data:
                 return ""
 
@@ -232,6 +261,7 @@ def fetch_room_entry_code(supabase: Client, room_name):
                 if code:
                     return code
             return ""
+
         except Exception as e:
             if _is_undefined_column_error(e, "entry_code"):
                 logger.warning("topic.entry_code 컬럼이 없어 공개방으로 처리합니다.")
@@ -247,7 +277,6 @@ def fetch_room_entry_code(supabase: Client, room_name):
 
 def fetch_topic_data(supabase: Client, room_name):
     order_candidates = ["id", "created_at", None]
-
     for order_col in order_candidates:
         try:
             query = supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
@@ -264,6 +293,11 @@ def fetch_topic_data(supabase: Client, room_name):
             return {}
     return {}
 
+
+# ==========================================
+# [5] 토론(debate) 관련 쿼리
+# ==========================================
+
 def fetch_live_messages(supabase: Client, room_name, limit):
     res = execute_query(
         supabase.table("debate").select("*").eq("room_name", room_name).order("id", desc=True).limit(limit),
@@ -274,8 +308,10 @@ def fetch_live_messages(supabase: Client, room_name, limit):
         return pd.DataFrame()
     return pd.DataFrame(res.data)
 
+
 def submit_opinion(supabase: Client, payload):
     return execute_query(supabase.table("debate").insert(payload), fail_message="저장 실패")
+
 
 def delete_opinion_message(supabase: Client, message_id: int):
     return execute_query(
@@ -283,11 +319,17 @@ def delete_opinion_message(supabase: Client, message_id: int):
         fail_message="의견 삭제 실패",
     )
 
+
 def create_teacher_hint(supabase: Client, payload):
     return execute_query(
         supabase.table("debate").insert(payload),
         fail_message="교사 힌트 전송 실패",
     )
+
+
+# ==========================================
+# [6] 세특 기록(records) 관련 쿼리
+# ==========================================
 
 def save_student_record(supabase: Client, payload):
     return execute_query(
@@ -295,11 +337,13 @@ def save_student_record(supabase: Client, payload):
         fail_message="세특 보관함 저장 실패",
     )
 
+
 def delete_student_record(supabase: Client, record_id: int):
     return execute_query(
         supabase.table("records").delete().eq("id", record_id),
         fail_message="세특 기록 삭제 실패",
     )
+
 
 def fetch_student_records(supabase: Client, room_name: str, limit: int):
     res = execute_query(
@@ -313,6 +357,7 @@ def fetch_student_records(supabase: Client, room_name: str, limit: int):
     if not res or not res.data:
         return pd.DataFrame()
     return pd.DataFrame(res.data)
+
 
 def destroy_room_data(supabase: Client, room_name: str):
     topic_res = execute_query(
@@ -331,15 +376,22 @@ def destroy_room_data(supabase: Client, room_name: str):
         return None
     return {"topic": topic_res, "debate": debate_res, "records": records_res}
 
+
+# ==========================================
+# [7] 교사 계정(teacher_accounts) 관련 쿼리
+# ==========================================
+
 def fetch_teacher_account(supabase: Client, teacher_id: str):
     safe_id = str(teacher_id or "").strip()
     if not safe_id:
         return None
+
     teacher_select = (
         "id, teacher_id, teacher_pw, is_approved, approved_at, requested_at, is_admin"
         if teacher_is_admin_column_available()
         else "id, teacher_id, teacher_pw, is_approved, approved_at, requested_at"
     )
+
     res = execute_query(
         supabase.table("teacher_accounts")
         .select(teacher_select)
@@ -352,7 +404,7 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     if res.data:
         return res.data[0]
 
-    # 대소문자 차이로 인한 로그인 실패를 줄이기 위해 2차 조회(대소문자 무시)를 수행합니다.
+    # 대소문자 차이로 인한 로그인 실패를 줄이기 위해 2차 조회(대소문자 무시)
     ci_res = execute_query(
         supabase.table("teacher_accounts")
         .select(teacher_select)
@@ -367,7 +419,6 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     return ci_res.data[0]
 
 
-
 def request_teacher_account(supabase: Client, teacher_id: str, teacher_pw: str):
     payload = {
         "teacher_id": str(teacher_id or "").strip(),
@@ -377,6 +428,7 @@ def request_teacher_account(supabase: Client, teacher_id: str, teacher_pw: str):
     if teacher_is_admin_column_available():
         payload["is_admin"] = False
     return execute_query(supabase.table("teacher_accounts").insert(payload), fail_message="교사 계정 신청 실패")
+
 
 def fetch_pending_teacher_accounts(supabase: Client):
     res = execute_query(
