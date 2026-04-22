@@ -58,7 +58,7 @@ if not logger.handlers:
     )
 
 # ==========================================
-# [1] 앱 설정 및 데이터베이스 (Supabase REST API) 연결
+# [1] 앱 설정 및 데이터베이스 연결
 # ==========================================
 DATETIME_FMT = "%Y-%m-%d %H:%M:%S"
 DISPLAY_DATETIME_FMT = "%Y-%m-%d %p %I:%M:%S"
@@ -76,36 +76,27 @@ MAX_TOPIC_LEN = 120
 MAX_ENTRY_CODE_LEN = 60
 UI_FONT_FAMILY = "sans-serif"
 
-# 1. supabase 변수 생성 (딱 한 번만 실행)
 supabase = init_db()
-
-# 2. 자동 로그인 로직 (세션 체크 후 필요할 때만 로그인)
 ensure_db_login(supabase)
 
-# --- 기타 유틸리티 함수들 ---
 def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
 
-# ✅ 수정 1: 중복 정의 제거 — get_kst_now_str() 하나만 유지
 def get_kst_now_str():
     return get_kst_now().strftime(DATETIME_FMT)
 
 def format_kst_datetime(value):
     if value is None:
         return "-"
-
     kst_tz = timezone(timedelta(hours=9))
     parsed_dt = None
     should_assume_utc = False
-
     if isinstance(value, datetime):
         parsed_dt = value
     else:
         raw = str(value).strip()
         if not raw:
             return "-"
-        # Supabase timestamptz 문자열이 타임존 없이 내려오는 경우(예: 2026-04-11T14:20:31.063918)
-        # UTC 기준으로 간주해 KST로 변환합니다.
         if "T" in raw and "+" not in raw and "Z" not in raw:
             should_assume_utc = True
         iso_candidate = raw.replace("Z", "+00:00")
@@ -118,15 +109,12 @@ def format_kst_datetime(value):
                     break
                 except ValueError:
                     continue
-
     if parsed_dt is None:
         return str(value)
-
     if parsed_dt.tzinfo is not None:
         parsed_dt = parsed_dt.astimezone(kst_tz)
     elif should_assume_utc:
         parsed_dt = parsed_dt.replace(tzinfo=timezone.utc).astimezone(kst_tz)
-
     return parsed_dt.strftime(DISPLAY_DATETIME_FMT)
 
 def get_client_ip():
@@ -136,7 +124,6 @@ def get_client_ip():
         return ""
     if not headers:
         return ""
-
     for key in ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "fly-client-ip"]:
         raw_ip = headers.get(key)
         if raw_ip:
@@ -158,7 +145,6 @@ def build_word_frequencies(text_series):
         "로서", "보다", "까지", "부터", "만큼", "이나", "라도", "이며", "이고", "에서", "으로", "이라",
         "라고", "와", "과", "을", "를", "이", "가", "은", "는", "에", "도", "만", "로", "랑", "나"
     ]
-
     def normalize_token(token):
         cleaned = re.sub(r"^[^\w가-힣]+|[^\w가-힣]+$", "", token)
         if len(cleaned) < 2:
@@ -169,7 +155,6 @@ def build_word_frequencies(text_series):
                 normalized = normalized[: -len(suffix)]
                 break
         return normalized
-
     for content in text_series.fillna("").astype(str):
         for token in content.replace("\n", " ").split():
             cleaned = normalize_token(token)
@@ -183,7 +168,6 @@ def build_word_frequencies(text_series):
 def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=520):
     if not frequencies:
         return ""
-
     sorted_words = sorted(frequencies.items(), key=lambda item: (-item[1], item[0]))[:max_words]
     max_count = sorted_words[0][1]
     min_count = sorted_words[-1][1]
@@ -191,23 +175,16 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
     cx, cy = width / 2, height / 2
     placed_rects = []
     svg_text_nodes = []
-
     def estimate_text_units(word):
         units = 0.0
         for ch in word:
             code = ord(ch)
-            if 0xAC00 <= code <= 0xD7A3:  # 한글 음절
-                units += 1.0
-            elif 0x3130 <= code <= 0x318F:  # 한글 자모
-                units += 0.95
-            elif 0x4E00 <= code <= 0x9FFF:  # CJK
-                units += 1.0
-            elif ch.isascii() and (ch.isalpha() or ch.isdigit()):
-                units += 0.62
-            else:
-                units += 0.75
+            if 0xAC00 <= code <= 0xD7A3: units += 1.0
+            elif 0x3130 <= code <= 0x318F: units += 0.95
+            elif 0x4E00 <= code <= 0x9FFF: units += 1.0
+            elif ch.isascii() and (ch.isalpha() or ch.isdigit()): units += 0.62
+            else: units += 0.75
         return max(units, 1.0)
-
     def overlaps(rect):
         x, y, w, h = rect
         padding = 2
@@ -215,11 +192,9 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
             if not (x + w + padding < ox or ox + ow + padding < x or y + h + padding < oy or oy + oh + padding < y):
                 return True
         return False
-
     def is_inside_canvas(x, y, w, h):
         margin = 10
         return x >= margin and y >= margin and (x + w) <= (width - margin) and (y + h) <= (height - margin)
-
     for index, (word, count) in enumerate(sorted_words):
         if max_count == min_count:
             font_size = 28
@@ -228,12 +203,10 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
             eased_ratio = ratio ** 0.85
             font_size = int(18 + eased_ratio * 86)
         font_size = min(font_size, 140)
-
         color = palette[index % len(palette)]
         text_units = estimate_text_units(word)
         text_width = max(32, font_size * (text_units + 0.62))
         text_height = max(24, font_size * 1.22)
-
         placed = False
         for step in range(1, 3200):
             angle = step * 0.4 + index * 0.18
@@ -241,11 +214,8 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
             x = cx + spiral_radius * math.cos(angle) - text_width / 2
             y = cy + spiral_radius * math.sin(angle) - text_height / 2
             rect = (x, y, text_width, text_height)
-            if not is_inside_canvas(x, y, text_width, text_height):
-                continue
-            if overlaps(rect):
-                continue
-
+            if not is_inside_canvas(x, y, text_width, text_height): continue
+            if overlaps(rect): continue
             placed_rects.append(rect)
             safe_word = html.escape(word)
             tx, ty = x + 1.5, y + text_height * 0.84
@@ -255,10 +225,8 @@ def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=5
             )
             placed = True
             break
-
         if not placed:
             continue
-
     return (
         "<div style='padding:10px; border:1px solid #e9e9e9; border-radius:10px; background:#f3f5f7;'>"
         f"<svg viewBox='0 0 {width} {height}' style='width:100%; height:auto; display:block;' "
@@ -274,7 +242,6 @@ def render_admin_approval_panel():
     if not pending_accounts:
         st.info("승인 대기 중인 교사 계정이 없습니다.")
         return
-
     for pending in pending_accounts:
         acc_id = pending.get("id")
         pending_teacher_id = pending.get("teacher_id", "")
@@ -294,73 +261,28 @@ def render_admin_approval_panel():
 # [2] 앱 기본 설정 및 세션/CSS
 # ==========================================
 st.set_page_config(page_title="말자취(Talk-Trace) AI", layout="wide")
-
 st.markdown(
     """
     <style>
-    /* 세특 기록 보관함 전용 테이블 */
-    .records-db-table-wrap {
-        overflow-x: auto;
-        border: 1px solid #e6e6e6;
-        border-radius: 10px;
-        background: #fff;
-    }
-    .records-db-table-wrap table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-    }
-    .records-db-table-wrap th, .records-db-table-wrap td {
-        border-bottom: 1px solid #efefef;
-        border-right: 1px solid #efefef;
-        padding: 10px 12px;
-        text-align: left;
-        vertical-align: top;
-    }
-    .records-db-table-wrap th:last-child, .records-db-table-wrap td:last-child {
-        border-right: none;
-    }
-    .records-db-table-wrap th {
-        white-space: nowrap;
-        font-weight: 700;
-    }
-    .records-db-table-wrap th:nth-child(1), .records-db-table-wrap td:nth-child(1) {
-        width: 5%;
-        white-space: nowrap;
-    }
-    .records-db-table-wrap th:nth-child(2), .records-db-table-wrap td:nth-child(2) {
-        width: 15%;
-        white-space: nowrap;
-    }
-    .records-db-table-wrap th:nth-child(3), .records-db-table-wrap td:nth-child(3) {
-        width: 12%;
-        white-space: nowrap;
-    }
-    .records-db-table-wrap th:nth-child(4), .records-db-table-wrap td:nth-child(4) {
-        width: 68%;
-        white-space: pre-wrap;
-        word-break: break-word;
-    }
-
-    /* 기존 스타일들 */
+    .records-db-table-wrap { overflow-x: auto; border: 1px solid #e6e6e6; border-radius: 10px; background: #fff; }
+    .records-db-table-wrap table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .records-db-table-wrap th, .records-db-table-wrap td { border-bottom: 1px solid #efefef; border-right: 1px solid #efefef; padding: 10px 12px; text-align: left; vertical-align: top; }
+    .records-db-table-wrap th:last-child, .records-db-table-wrap td:last-child { border-right: none; }
+    .records-db-table-wrap th { white-space: nowrap; font-weight: 700; }
+    .records-db-table-wrap th:nth-child(1), .records-db-table-wrap td:nth-child(1) { width: 5%; white-space: nowrap; }
+    .records-db-table-wrap th:nth-child(2), .records-db-table-wrap td:nth-child(2) { width: 15%; white-space: nowrap; }
+    .records-db-table-wrap th:nth-child(3), .records-db-table-wrap td:nth-child(3) { width: 12%; white-space: nowrap; }
+    .records-db-table-wrap th:nth-child(4), .records-db-table-wrap td:nth-child(4) { width: 68%; white-space: pre-wrap; word-break: break-word; }
     [data-testid="stDecoration"] { display: none !important; }
-
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"], [data-testid="stFragment"],
     [data-testid="stVerticalBlock"], [data-testid="stElementContainer"],
     [data-testid="stExpander"], details, summary,
     *[data-stale="true"], div[data-stale="true"] {
-        opacity: 1 !important;
-        transition: none !important;
-        filter: none !important;
-        -webkit-filter: none !important;
+        opacity: 1 !important; transition: none !important; filter: none !important; -webkit-filter: none !important;
     }
-
     .stTextArea textarea, .stTextInput input, .stSelectbox, .stRadio label,
-    .stMarkdown p, div[data-testid="stChatMessageContent"] {
-        font-size: 18px !important;
-    }
-
+    .stMarkdown p, div[data-testid="stChatMessageContent"] { font-size: 18px !important; }
     .stAlert p { font-size: 20px !important; font-weight: bold; }
     </style>
     """,
@@ -395,29 +317,22 @@ def redirect_from_admin_page_if_needed():
         st.session_state['page'] = "lobby"
 
 def to_bool_flag(value):
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return False
+    if isinstance(value, bool): return value
+    if value is None: return False
     return str(value).strip().lower() in {"true", "t", "1", "yes", "y", "on"}
 
 def compact_ai_report_output(text):
     raw_lines = [str(line).strip() for line in str(text or "").splitlines()]
     cleaned = [line for line in raw_lines if line and not line.startswith("#")]
-    if not cleaned:
-        return ""
-
+    if not cleaned: return ""
     report_labels = ("핵심요약 1:", "핵심요약 2:", "핵심요약 3:", "베스트 학생:", "선정 이유:")
     normalized_text = " ".join(cleaned)
     if report_labels[0] in normalized_text:
         for label in report_labels[1:]:
             normalized_text = normalized_text.replace(f" {label}", f"\n{label}")
             normalized_text = normalized_text.replace(label, f"\n{label}")
-
     normalized_lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
-    max_lines = 5
-    compact_lines = normalized_lines[:max_lines]
-    return "\n".join(compact_lines)
+    return "\n".join(normalized_lines[:5])
 
 # ==========================================
 # [3] 홈/네비게이션
@@ -440,7 +355,6 @@ if st.session_state['page'] == "home":
         2. 왼쪽 사이드바에서 **학생/교사 모드**를 선택합니다.
         3. 접속할 **토론/토의방**을 선택하고 입장합니다.
         4. 주제에 맞게 의견을 작성하고 제출하면 실시간 보드에 반영됩니다.
-
         ---
         - 교사 모드에서는 방 개설/관리 및 대시보드 기능을 사용할 수 있습니다.
         - 언제든 왼쪽 상단의 **🏠 홈** 버튼으로 이 화면으로 돌아올 수 있습니다.
@@ -452,7 +366,7 @@ if st.session_state['page'] == "home":
     st.stop()
 
 # ==========================================
-# [4] 사이드바 (방 관리 - 심플 모드)
+# [4] 사이드바
 # ==========================================
 with st.sidebar:
     st.header("👤 접속 권한")
@@ -474,23 +388,14 @@ with st.sidebar:
         auth_mode = st.radio("교사 계정", ["로그인", "ID/PW 신청"], horizontal=True)
 
         if auth_mode == "로그인":
-            # ✅ 수정 2: st.form으로 감싸서 엔터키로 로그인 가능하도록 수정
             with st.form("teacher_login_form"):
                 teacher_id_input = st.text_input("교사 ID", key="teacher_id_input")
                 teacher_pw_input = st.text_input("교사 PW", type="password", key="teacher_pw_input")
                 login_submitted = st.form_submit_button("교사 로그인", use_container_width=True)
 
             if login_submitted:
-                id_ok, safe_teacher_id, id_error_code, id_error_message = validate_teacher_credential(
-                    teacher_id_input,
-                    field_name="교사 ID",
-                    max_len=60,
-                )
-                pw_ok, safe_pw, pw_error_code, pw_error_message = validate_teacher_credential(
-                    teacher_pw_input,
-                    field_name="교사 PW",
-                    max_len=60,
-                )
+                id_ok, safe_teacher_id, id_error_code, id_error_message = validate_teacher_credential(teacher_id_input, field_name="교사 ID", max_len=60)
+                pw_ok, safe_pw, pw_error_code, pw_error_message = validate_teacher_credential(teacher_pw_input, field_name="교사 PW", max_len=60)
                 if not id_ok:
                     st.error(f"❌ {id_error_message} ({id_error_code})")
                     st.stop()
@@ -546,21 +451,12 @@ with st.sidebar:
                         st.rerun()
                     else:
                         st.toast("✅ 교사 로그인 성공", icon="✅")
-
         else:
             req_teacher_id = st.text_input("신청할 교사 ID", key="req_teacher_id")
             req_teacher_pw = st.text_input("신청할 교사 PW", type="password", key="req_teacher_pw")
             if st.button("교사 계정 신청", type="primary", use_container_width=True):
-                id_ok, safe_id, id_error_code, id_error_message = validate_teacher_credential(
-                    req_teacher_id,
-                    field_name="교사 ID",
-                    max_len=60,
-                )
-                pw_ok, safe_pw, pw_error_code, pw_error_message = validate_teacher_credential(
-                    req_teacher_pw,
-                    field_name="교사 PW",
-                    max_len=60,
-                )
+                id_ok, safe_id, id_error_code, id_error_message = validate_teacher_credential(req_teacher_id, field_name="교사 ID", max_len=60)
+                pw_ok, safe_pw, pw_error_code, pw_error_message = validate_teacher_credential(req_teacher_pw, field_name="교사 PW", max_len=60)
                 if not id_ok:
                     st.error(f"❌ {id_error_message} ({id_error_code})")
                 elif not pw_ok:
@@ -576,7 +472,6 @@ with st.sidebar:
         admin_auth = st.session_state['admin_auth']
         teacher_id_for_scope = st.session_state.get("teacher_id", "")
 
-        # ✅ 수정 3: 로그아웃 버튼 추가
         if teacher_auth:
             st.caption(f"🔐 {teacher_id_for_scope} 로그인 중")
             if st.button("🚪 로그아웃", use_container_width=True):
@@ -609,7 +504,6 @@ with st.sidebar:
                     st.warning("교사별 방 조회를 위해 topic.created_by_teacher_id(권장) 또는 topic.created_by 컬럼이 필요합니다.")
 
             room_opt = st.radio("방 관리", ["기존 방 선택", "새 방 만들기"])
-
             if room_opt == "기존 방 선택" and existing_rooms:
                 room_name = st.selectbox("토론/토의방 목록", existing_rooms)
             else:
@@ -617,13 +511,11 @@ with st.sidebar:
                 new_title = st.text_input("주제 직접 입력 (예: 인공지능 윤리)")
                 new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"], horizontal=True)
                 new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
-
                 if st.button("새 방 개설하기", type="primary"):
                     room_ok, safe_new_room, room_error_code, room_error_message = validate_room_name(new_room, max_len=MAX_ROOM_NAME_LEN)
                     title_ok, safe_new_title, title_error_code, title_error_message = validate_opinion_content(new_title, max_len=MAX_TOPIC_LEN)
                     entry_ok, safe_new_pw, entry_error_code, entry_error_message = validate_entry_code(new_pw, max_len=MAX_ENTRY_CODE_LEN)
                     can_store_room_pw = topic_entry_code_column_available()
-
                     if not room_ok:
                         st.error(f"❌ {room_error_message} ({room_error_code})")
                     elif not title_ok:
@@ -631,20 +523,15 @@ with st.sidebar:
                     elif not entry_ok:
                         st.error(f"❌ {entry_error_message} ({entry_error_code})")
                     elif safe_new_pw and not can_store_room_pw:
-                        st.error("현재 DB 구조에서는 방 비밀번호 저장을 지원하지 않습니다. 비밀번호를 비우거나 DB에 topic.entry_code 컬럼을 추가해 주세요.")
+                        st.error("현재 DB 구조에서는 방 비밀번호 저장을 지원하지 않습니다.")
                     elif safe_new_room and safe_new_title:
                         res = upsert_topic_room(
-                            supabase=supabase,
-                            room_name=safe_new_room,
-                            title=safe_new_title,
-                            mode=new_mode,
-                            entry_code=safe_new_pw,
-                            created_by=teacher_id_for_scope,
+                            supabase=supabase, room_name=safe_new_room, title=safe_new_title,
+                            mode=new_mode, entry_code=safe_new_pw, created_by=teacher_id_for_scope,
                         )
                         if res is not None:
                             st.success(f"'{safe_new_room}' 방이 개설되었습니다! '기존 방 선택'을 눌러 입장하세요.")
                     room_name = ""
-
     else:
         st.session_state['teacher_auth'] = False
         st.session_state['admin_auth'] = False
@@ -668,7 +555,6 @@ with st.sidebar:
         st.session_state['ai_hint_text'] = ""
         st.session_state['ai_report_text'] = ""
         st.session_state['ai_result_text'] = ""
-
         if st.session_state['joined']:
             st.session_state['joined'] = False
             log_audit("room_switched_to_lobby", room_name=room_name, actor_name=student_name, role=user_role, previous_room=prev_room)
@@ -723,7 +609,6 @@ if not st.session_state['joined']:
 # [6] 메인 화면 (의견 입력부)
 # ==========================================
 topic_data = fetch_topic_data(supabase, room_name)
-
 current_topic = topic_data.get('title', "자유 주제로 대화해 봅시다.")
 current_mode = topic_data.get('mode', "⚔️ 찬반 토론")
 act_type = "토론" if "토론" in current_mode else "토의"
@@ -780,19 +665,14 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
         author_role_for_submit = "교사" if user_role == "교사" else "학생"
         client_ip = get_client_ip()
         insert_payload = {
-            "room_name": room_name,
-            "timestamp": now,
-            "student_name": safe_student_name,
-            "content": safe_input,
-            "sentiment": sentiment,
-            "author_role": author_role_for_submit
+            "room_name": room_name, "timestamp": now, "student_name": safe_student_name,
+            "content": safe_input, "sentiment": sentiment, "author_role": author_role_for_submit
         }
         if debate_ip_column_available() and client_ip:
             insert_payload["ip_address"] = client_ip
         try:
             res = submit_opinion(supabase, insert_payload)
-            if res is None:
-                st.stop()
+            if res is None: st.stop()
             log_audit("opinion_submitted", room_name=room_name, actor_name=safe_student_name, role=author_role_for_submit, sentiment=sentiment, client_ip=client_ip if client_ip else "N/A")
             st.session_state['reset_key'] += 1
             st.rerun()
@@ -807,10 +687,16 @@ st.divider()
 # [7] 실시간 업데이트 영역
 # ==========================================
 def live_chat_board_core():
-    board_df = fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
-    opinion_df = with_fallback_author_role(board_df)
-    stats_df = fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT)
-    stats_opinion_df = with_fallback_author_role(stats_df)
+    # ✅ Phase 2 핵심: fetch_live_messages 이중 호출 제거
+    # 기존: limit=300, limit=2000 각각 2회 호출 → Supabase 요청 2배 낭비
+    # 개선: DASHBOARD_FETCH_LIMIT(2000)으로 1회만 호출 후 보드/통계 모두 재사용
+    all_df = with_fallback_author_role(
+        fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT)
+    )
+    # 실시간 보드용: 최신 300건 슬라이싱 (id desc 정렬이므로 앞에서 자름)
+    opinion_df = all_df.head(LIVE_BOARD_FETCH_LIMIT) if not all_df.empty else all_df
+    # 통계용: 전체 2000건 사용
+    stats_opinion_df = all_df
 
     with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
         if not stats_opinion_df.empty:
@@ -848,8 +734,7 @@ def live_chat_board_core():
 
         def delete_chat_msg(msg_id):
             try:
-                if delete_opinion_message(supabase, msg_id) is None:
-                    return
+                if delete_opinion_message(supabase, msg_id) is None: return
                 log_audit("chat_deleted", room_name=room_name, actor_name=student_name, role=user_role, message_id=msg_id)
                 st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
             except Exception as e:
@@ -916,7 +801,6 @@ else:
 # ==========================================
 if user_role == "교사" and teacher_auth:
     st.divider()
-
     col_dash_title, col_dash_refresh = st.columns([8, 2])
     with col_dash_title:
         st.header("👨‍🏫 교사 관리 대시보드")
@@ -927,9 +811,9 @@ if user_role == "교사" and teacher_auth:
     if admin_auth:
         render_admin_approval_panel()
         st.divider()
+
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
 
-    # --- 1. 통계 ---
     st.subheader("📊 학생 참여도 현황")
     if not df_all.empty:
         student_only_df = df_all[(df_all['author_role'] == '학생') & ~df_all['student_name'].str.contains('익명|AI', na=False, regex=True)].copy()
@@ -946,7 +830,6 @@ if user_role == "교사" and teacher_auth:
 
     st.divider()
 
-    # --- 2. Teacher in the loop ---
     @st.fragment
     def teacher_hint_section():
         st.subheader(f"💡 AI {act_type} 촉진 (Teacher-in-the-loop)")
@@ -961,8 +844,7 @@ if user_role == "교사" and teacher_auth:
                         "room_name": room_name, "timestamp": now, "student_name": "👨‍🏫 선생님 (AI 보조)",
                         "content": val, "sentiment": "❓ 질문", "author_role": "교사"
                     })
-                    if res is None:
-                        return
+                    if res is None: return
                     log_audit("teacher_hint_sent", room_name=room_name, actor_name=student_name, role=user_role)
                     st.session_state['hint_input_widget'] = ""
                 except Exception as e:
@@ -975,11 +857,8 @@ if user_role == "교사" and teacher_auth:
                     context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
                     prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
                     res_text = generate_ai_response(
-                        prompt,
-                        model_name=AI_MODEL_NAME,
-                        api_key=st.secrets["GEMINI_API_KEY"],
-                        log_message="AI 힌트 생성 실패",
-                        room_name=room_name,
+                        prompt, model_name=AI_MODEL_NAME, api_key=st.secrets["GEMINI_API_KEY"],
+                        log_message="AI 힌트 생성 실패", room_name=room_name,
                     )
                     if res_text:
                         st.session_state['hint_input_widget'] = res_text.strip().split('\n')[0]
@@ -1000,11 +879,9 @@ if user_role == "교사" and teacher_auth:
     teacher_hint_section()
     st.divider()
 
-    # --- 3. 수업 종료 요약 리포트 ---
     @st.fragment
     def teacher_summary_section():
         st.subheader(f"📝 수업 종료 및 전체 {act_type} 요약 리포트")
-
         if st.button(f"{act_type} 요약 및 베스트 발언 추출 🪄", use_container_width=True):
             st.toast("👀 AI가 전체 기록을 꼼꼼히 읽고 있습니다...", icon="⏳")
             with st.spinner("✍️ 요약 리포트를 작성하고 있습니다..."):
@@ -1013,24 +890,16 @@ if user_role == "교사" and teacher_auth:
                     prompt = (
                         f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n"
                         "[출력 형식 - 반드시 그대로]\n"
-                        "핵심요약 1: ...\n"
-                        "핵심요약 2: ...\n"
-                        "핵심요약 3: ...\n"
-                        "베스트 학생: ...\n"
-                        "선정 이유: ...\n\n"
+                        "핵심요약 1: ...\n핵심요약 2: ...\n핵심요약 3: ...\n베스트 학생: ...\n선정 이유: ...\n\n"
                         "[엄격한 규칙]\n"
                         "- 핵심요약 1,2,3과 베스트 학생, 선정이유를 줄바꿈을 하여 보기 편하게 합니다.\n"
-                        "- 5~10줄로 출력합니다.\n"
-                        "- 제목/헤더(#,##,###), 소제목을 절대 쓰지 않습니다.\n"
+                        "- 5~10줄로 출력합니다.\n- 제목/헤더(#,##,###), 소제목을 절대 쓰지 않습니다.\n"
                         "- 불필요한 서론/결론 없이 바로 결과만 출력합니다.\n\n"
                         f"기록:\n{full_history}"
                     )
                     res_text = generate_ai_response(
-                        prompt,
-                        model_name=AI_MODEL_NAME,
-                        api_key=st.secrets["GEMINI_API_KEY"],
-                        log_message="AI 요약 리포트 생성 실패",
-                        room_name=room_name,
+                        prompt, model_name=AI_MODEL_NAME, api_key=st.secrets["GEMINI_API_KEY"],
+                        log_message="AI 요약 리포트 생성 실패", room_name=room_name,
                     )
                     if res_text:
                         st.session_state['ai_report_text'] = compact_ai_report_output(res_text)
@@ -1039,27 +908,21 @@ if user_role == "교사" and teacher_auth:
                         st.toast("🚨 AI 호출 오류가 발생했습니다.", icon="❌")
                 else:
                     st.toast("🚨 분석할 데이터가 없습니다.", icon="⚠️")
-
         if st.session_state.get('ai_report_text'):
             st.info(f"📊 **AI 수업 {act_type} 요약 리포트**")
             report_html = html.escape(st.session_state['ai_report_text']).replace("\n", "<br>")
-            st.markdown(
-                f"<div style='line-height:1.8;'>{report_html}</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown(f"<div style='line-height:1.8;'>{report_html}</div>", unsafe_allow_html=True)
 
     teacher_summary_section()
     st.divider()
 
-    # --- 4. 세특 생성 및 다운로드 ---
     @st.fragment
     def teacher_record_section():
         def delete_selected_record():
             del_id = st.session_state.get('del_record_dropdown')
             if del_id:
                 try:
-                    if delete_student_record(supabase, del_id) is None:
-                        return
+                    if delete_student_record(supabase, del_id) is None: return
                     log_audit("record_deleted", room_name=room_name, actor_name=student_name, role=user_role, record_id=del_id)
                     st.toast("기록이 삭제되었습니다.", icon="🗑️")
                 except Exception as e:
@@ -1076,10 +939,8 @@ if user_role == "교사" and teacher_auth:
         with col4:
             st.subheader("🤖 개인별 AI 세특 초안 생성")
             student_list = student_only_df['student_name'].unique() if not df_all.empty else []
-
             if len(student_list) > 0:
                 selected_student = st.selectbox("학생을 선택하세요", student_list)
-
                 if st.button(f"'{selected_student}' 세특 생성 🪄", use_container_width=True):
                     st.toast(f"👀 AI가 '{selected_student}' 학생의 활동을 분석합니다...", icon="⏳")
                     with st.spinner(f"✍️ '{selected_student}' 학생의 세특 초안 작성 중..."):
@@ -1088,14 +949,9 @@ if user_role == "교사" and teacher_auth:
                             debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
                             prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 {act_type}에 참여한 '{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
                             res_text = generate_ai_response(
-                                prompt,
-                                model_name=AI_MODEL_NAME,
-                                api_key=st.secrets["GEMINI_API_KEY"],
-                                log_message="AI 세특 생성 실패",
-                                room_name=room_name,
-                                student=selected_student,
+                                prompt, model_name=AI_MODEL_NAME, api_key=st.secrets["GEMINI_API_KEY"],
+                                log_message="AI 세특 생성 실패", room_name=room_name, student=selected_student,
                             )
-
                             if res_text:
                                 st.session_state['ai_result_text'] = res_text
                                 now = get_kst_now_str()
@@ -1103,15 +959,13 @@ if user_role == "교사" and teacher_auth:
                                     "room_name": room_name, "timestamp": now,
                                     "student_name": selected_student, "content": res_text
                                 })
-                                if save_res is None:
-                                    raise RuntimeError("보관함 저장 실패")
+                                if save_res is None: raise RuntimeError("보관함 저장 실패")
                                 st.toast("✅ 세특 생성 및 보관함 저장 완료!", icon="🎉")
                             else:
                                 raise RuntimeError("AI 응답 비어있음")
                         except Exception as e:
                             logger.exception("세특 생성 후처리 실패")
                             st.toast("🚨 오류가 발생했습니다. 다시 시도해주세요.", icon="❌")
-
                 if st.session_state.get('ai_result_text'):
                     st.success("🤖 **개인별 세특 초안** (보관함에 자동 저장되었습니다)")
                     st.text_area("내용 수정 후 복사하여 사용하세요", value=st.session_state['ai_result_text'], height=200, label_visibility="collapsed")
@@ -1119,9 +973,7 @@ if user_role == "교사" and teacher_auth:
 
         st.divider()
         st.subheader("📂 저장된 세특 기록 보관함")
-
         records_df = fetch_student_records(supabase, room_name, RECORDS_FETCH_LIMIT)
-
         if not records_df.empty:
             records_display_df = records_df.rename(columns={"id": "No.", "content": "세특 내용"})
             records_html = records_display_df.to_html(index=False, escape=True)
@@ -1132,7 +984,6 @@ if user_role == "교사" and teacher_auth:
                 with pd.ExcelWriter(buffer_records, engine='openpyxl') as writer:
                     records_df.drop(columns=['id']).to_excel(writer, index=False)
                 st.download_button("📥 세특 보관함 다운로드 (Excel)", data=buffer_records.getvalue(), file_name=f"{room_name}_세특보관함.xlsx")
-
             with col_del:
                 st.selectbox("🗑️ 삭제할 '고유 번호(No.)' 선택", records_df['id'].tolist(), key="del_record_dropdown")
                 st.button("선택한 세특 기록 영구 삭제", type="primary", on_click=delete_selected_record)
@@ -1149,8 +1000,7 @@ if user_role == "교사" and teacher_auth:
             st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록과 세특 보관함이 완전히 삭제됩니다.")
             if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True):
                 try:
-                    if destroy_room_data(supabase, room_name) is None:
-                        st.stop()
+                    if destroy_room_data(supabase, room_name) is None: st.stop()
                     log_audit("room_destroyed", room_name=room_name, actor_name=student_name, role=user_role)
                     st.success("성공적으로 파괴되었습니다.")
                     st.session_state['ai_result_text'] = ""
