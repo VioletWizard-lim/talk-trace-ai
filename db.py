@@ -66,13 +66,19 @@ def execute_query(query, fail_message="DB 작업 실패"):
         return query.execute()
     except Exception as e:
         if _is_rls_permission_error(e):
-            st.error(f"{fail_message}: {e} (RLS 정책 또는 권한 설정을 확인해 주세요)")
+            # RLS 에러는 별도 코드로 분류해서 운영자가 즉시 식별 가능하도록
+            logger.error("RLS_PERMISSION_ERROR %s: %s", fail_message, e)
+            st.error(
+                f"🔒 {fail_message}: 권한 오류가 발생했습니다. "
+                "Supabase 대시보드에서 RLS 정책 및 Service Role Key 설정을 확인해 주세요. "
+                f"(오류코드: RLS_PERMISSION_ERROR)"
+            )
         else:
-            st.error(f"{fail_message}: {e}")
-        logger.exception("%s: %s", fail_message, e)
+            logger.exception("DB_ERROR %s: %s", fail_message, e)
+            st.error(f"🚨 {fail_message}: {e} (오류코드: DB_ERROR)")
         return None
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def debate_ip_column_available() -> bool:
     supabase = init_db()
     try:
@@ -81,7 +87,7 @@ def debate_ip_column_available() -> bool:
     except Exception:
         return False
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def topic_entry_code_column_available() -> bool:
     supabase = init_db()
     try:
@@ -93,7 +99,7 @@ def topic_entry_code_column_available() -> bool:
         logger.warning("topic.entry_code 컬럼 확인 중 예외 발생: %s", e)
         return False
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def topic_created_by_teacher_id_column_available() -> bool:
     supabase = init_db()
     try:
@@ -105,7 +111,7 @@ def topic_created_by_teacher_id_column_available() -> bool:
         logger.warning("topic.created_by_teacher_id 컬럼 확인 중 예외 발생: %s", e)
         return False
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def topic_created_by_column_available() -> bool:
     supabase = init_db()
     try:
@@ -120,7 +126,7 @@ def topic_created_by_column_available() -> bool:
 def topic_owner_column_available() -> bool:
     return topic_created_by_teacher_id_column_available() or topic_created_by_column_available()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def teacher_is_admin_column_available() -> bool:
     supabase = init_db()
     try:
