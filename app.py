@@ -89,9 +89,6 @@ def get_kst_now():
 def get_kst_now_str():
     return get_kst_now().strftime(DATETIME_FMT)
 
-def get_kst_now_str():
-    return get_kst_now().strftime(DATETIME_FMT)
-
 def format_kst_datetime(value):
     if value is None:
         return "-"
@@ -505,13 +502,13 @@ with st.sidebar:
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
                     redirect_from_admin_page_if_needed()
-                    st.error("❌ 교사 계정 조회에 실패했습니다. Supabase RLS 정책/권한 및 DB 연결 상태를 확인해 주세요.")
+                    st.error("🚨 교사 계정 조회에 실패했습니다. Supabase RLS 정책/권한 및 DB 연결 상태를 확인해 주세요.")
                 elif not account:
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
                     redirect_from_admin_page_if_needed()
-                    st.error("❌ 등록되지 않은 교사 ID입니다.")
+                    st.error("🚨 등록되지 않은 교사 ID입니다.")
                     if not using_service_role_key():
                         st.warning(
                             "⚠️ 현재 앱이 SERVICE ROLE KEY 없이 동작 중입니다. "
