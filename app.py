@@ -575,10 +575,18 @@ with st.sidebar:
         admin_auth = st.session_state['admin_auth']
         teacher_id_for_scope = st.session_state.get("teacher_id", "")
 
-        teacher_auth = st.session_state['teacher_auth']
-        admin_auth = st.session_state['admin_auth']
-        teacher_id_for_scope = st.session_state.get("teacher_id", "")
-
+        # ── 로그아웃 버튼 ──
+        if teacher_auth:
+            st.caption(f"🔐 {teacher_id_for_scope} 로그인 중")
+            if st.button("🚪 로그아웃", use_container_width=True):
+                st.session_state['teacher_auth'] = False
+                st.session_state['admin_auth'] = False
+                st.session_state['teacher_id'] = ""
+                st.session_state['joined'] = False
+                st.session_state['page'] = "lobby"
+                st.rerun()
+            st.divider()
+        
         if teacher_auth and admin_auth:
             st.caption("관리자 바로가기")
             if st.button("📝 ID 요청 수락", use_container_width=True):
