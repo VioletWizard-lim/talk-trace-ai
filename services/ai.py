@@ -47,7 +47,7 @@ def generate_ai_response(
         # 응답이 공백이거나 None인 경우 fallback 반환
         if not response_text or not response_text.strip():
             logger.warning(
-                "%s — 빈 응답 수신, fallback 반환 (context=%s)", log_message, context
+                "AI_EMPTY_RESPONSE %s — 빈 응답 수신, fallback 반환 (context=%s)", log_message, context
             )
             return fallback
 
@@ -55,6 +55,6 @@ def generate_ai_response(
 
     except Exception:
         logger.exception(
-            "%s (model=%s, context=%s)", log_message, model_name, context
+            "AI_CALL_FAILED %s (model=%s, context=%s)", log_message, model_name, context
         )
         return fallback
