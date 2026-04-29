@@ -7,8 +7,8 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-RUN chmod +x start.sh
+EXPOSE 8080
 
-EXPOSE 7860
-
-CMD ["bash", "/app/start.sh"]
+CMD ["streamlit", "run", "app.py", \
+     "--server.port=8080", \
+     "--server.address=0.0.0.0"]
