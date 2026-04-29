@@ -47,6 +47,21 @@ from validators import (
     with_fallback_author_role,
 )
 
+# Hugging Face 환경변수 → secrets.toml 자동 생성
+import os, pathlib
+_hf_keys = ["SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_APP_EMAIL", 
+            "SUPABASE_APP_PASSWORD", "GEMINI_API_KEY"]
+if any(os.environ.get(k) for k in _hf_keys):
+    _secrets_dir = pathlib.Path("/root/.streamlit")
+    _secrets_dir.mkdir(parents=True, exist_ok=True)
+    _secrets_file = _secrets_dir / "secrets.toml"
+    if not _secrets_file.exists():
+        with open(_secrets_file, "w") as f:
+            f.write("[default]\n")
+            for k in _hf_keys:
+                v = os.environ.get(k, "")
+                f.write(f'{k} = "{v}"\n')
+
 # ==========================================
 # [0] 로깅 설정
 # ==========================================
