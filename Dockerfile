@@ -13,3 +13,5 @@ CMD ["streamlit", "run", "app.py", \
      "--server.port=7860", \
      "--server.address=0.0.0.0", \
      "--server.fileWatcherType=none"]
+
+ENV STREAMLIT_SECRETS_FILE=/app/.streamlit/secrets.toml
