@@ -14,7 +14,7 @@ logger = logging.getLogger("talk_trace_ai")
 
 @st.cache_resource
 def init_db() -> Client:
-    supabase_key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY") or st.secrets["SUPABASE_KEY"]
+    supabase_key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY") or st.secrets.get("SUPABASE_KEY")
     return create_client(st.secrets["SUPABASE_URL"], supabase_key)
 
 
