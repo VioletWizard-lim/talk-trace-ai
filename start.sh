@@ -8,4 +8,4 @@ SUPABASE_APP_EMAIL = "${SUPABASE_APP_EMAIL}"
 SUPABASE_APP_PASSWORD = "${SUPABASE_APP_PASSWORD}"
 GEMINI_API_KEY = "${GEMINI_API_KEY}"
 EOF
-streamlit run app.py --server.port=${PORT:-7860} --server.address=0.0.0.0
+streamlit run app.py --server.port=7860 --server.address=0.0.0.0
