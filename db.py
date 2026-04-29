@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 
 import pandas as pd
@@ -9,24 +10,41 @@ logger = logging.getLogger("talk_trace_ai")
 
 
 # ==========================================
+# [0] 환경변수 → st.secrets 통합 읽기 헬퍼
+# ==========================================
+
+def _get_secret(key: str, default: str = "") -> str:
+    """
+    환경변수(HF Spaces) → st.secrets(Streamlit Cloud) 순서로 값을 읽습니다.
+    두 플랫폼 모두 코드 수정 없이 동작합니다.
+    """
+    # 1순위: 환경변수 (Hugging Face Spaces)
+    env_val = os.environ.get(key, "").strip()
+    if env_val:
+        return env_val
+    # 2순위: st.secrets (Streamlit Cloud)
+    try:
+        return str(st.secrets.get(key, default)).strip()
+    except Exception:
+        return default
+
+
+# ==========================================
 # [1] DB 초기화 및 인증
 # ==========================================
 
 @st.cache_resource
 def init_db() -> Client:
-    import os
-    supabase_url = os.environ.get("SUPABASE_URL") or st.secrets["SUPABASE_URL"]
+    supabase_url = _get_secret("SUPABASE_URL")
     supabase_key = (
-        os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or
-        os.environ.get("SUPABASE_KEY") or
-        st.secrets.get("SUPABASE_SERVICE_ROLE_KEY") or
-        st.secrets.get("SUPABASE_KEY", "")
+        _get_secret("SUPABASE_SERVICE_ROLE_KEY")
+        or _get_secret("SUPABASE_KEY")
     )
     return create_client(supabase_url, supabase_key)
 
 
 def using_service_role_key() -> bool:
-    return bool(str(st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "")).strip())
+    return bool(_get_secret("SUPABASE_SERVICE_ROLE_KEY"))
 
 
 def ensure_db_login(supabase: Client) -> bool:
@@ -43,8 +61,8 @@ def ensure_db_login(supabase: Client) -> bool:
     try:
         supabase.auth.sign_in_with_password(
             {
-                "email": st.secrets["SUPABASE_APP_EMAIL"],
-                "password": st.secrets["SUPABASE_APP_PASSWORD"],
+                "email": _get_secret("SUPABASE_APP_EMAIL"),
+                "password": _get_secret("SUPABASE_APP_PASSWORD"),
             }
         )
         time.sleep(0.5)
@@ -84,7 +102,6 @@ def execute_query(query, fail_message="DB 작업 실패"):
         return query.execute()
     except Exception as e:
         if _is_rls_permission_error(e):
-            # RLS 에러는 별도 코드로 분류해서 운영자가 즉시 식별 가능하도록
             logger.error("RLS_PERMISSION_ERROR %s: %s", fail_message, e)
             st.error(
                 f"🔒 {fail_message}: 권한 오류가 발생했습니다. "
@@ -98,37 +115,20 @@ def execute_query(query, fail_message="DB 작업 실패"):
 
 
 # ==========================================
-# [3] ✅ 컬럼 존재 확인 — 통합 함수 (Phase 2 핵심 개선)
-#
-# 기존: 컬럼마다 별도 쿼리 5회 → 앱 재시작 시 Supabase 5번 호출
-# 개선: 단일 함수로 한 번에 체크 후 딕셔너리로 캐싱 → 1회 호출로 통일
-# TTL: 스키마는 재배포 전까지 안 바뀌므로 3600초(1시간)로 연장
+# [3] 컬럼 존재 확인 — 통합 함수
 # ==========================================
 
 @st.cache_data(ttl=3600)
 def check_schema_columns() -> dict:
-    """
-    모든 컬럼 존재 여부를 한 번에 확인하여 딕셔너리로 반환합니다.
-
-    Returns
-    -------
-    {
-        "debate.ip_address": bool,
-        "topic.entry_code": bool,
-        "topic.created_by_teacher_id": bool,
-        "topic.created_by": bool,
-        "teacher_accounts.is_admin": bool,
-    }
-    """
     supabase = init_db()
     results = {}
 
     checks = [
-        ("debate.ip_address",               lambda: supabase.table("debate").select("ip_address").limit(1).execute()),
-        ("topic.entry_code",                lambda: supabase.table("topic").select("entry_code").limit(1).execute()),
-        ("topic.created_by_teacher_id",     lambda: supabase.table("topic").select("created_by_teacher_id").limit(1).execute()),
-        ("topic.created_by",                lambda: supabase.table("topic").select("created_by").limit(1).execute()),
-        ("teacher_accounts.is_admin",       lambda: supabase.table("teacher_accounts").select("is_admin").limit(1).execute()),
+        ("debate.ip_address",           lambda: supabase.table("debate").select("ip_address").limit(1).execute()),
+        ("topic.entry_code",            lambda: supabase.table("topic").select("entry_code").limit(1).execute()),
+        ("topic.created_by_teacher_id", lambda: supabase.table("topic").select("created_by_teacher_id").limit(1).execute()),
+        ("topic.created_by",            lambda: supabase.table("topic").select("created_by").limit(1).execute()),
+        ("teacher_accounts.is_admin",   lambda: supabase.table("teacher_accounts").select("is_admin").limit(1).execute()),
     ]
 
     for key, query_fn in checks:
@@ -142,9 +142,6 @@ def check_schema_columns() -> dict:
     logger.info("schema_columns 체크 완료: %s", results)
     return results
 
-
-# ── 하위 호환성 유지용 래퍼 함수들 ──
-# app.py에서 기존 함수명으로 호출하는 코드를 수정 없이 그대로 사용 가능
 
 def debate_ip_column_available() -> bool:
     return check_schema_columns().get("debate.ip_address", False)
@@ -411,7 +408,6 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     if res.data:
         return res.data[0]
 
-    # 대소문자 차이로 인한 로그인 실패를 줄이기 위해 2차 조회(대소문자 무시)
     ci_res = execute_query(
         supabase.table("teacher_accounts")
         .select(teacher_select)
