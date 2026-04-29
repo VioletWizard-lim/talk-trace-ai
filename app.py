@@ -67,9 +67,20 @@ LIVE_BOARD_FETCH_LIMIT = 300
 DASHBOARD_FETCH_LIMIT = 2000
 RECORDS_FETCH_LIMIT = 500
 LIVE_REFRESH_INTERVAL = "5s"
-AI_HINT_ENABLED = st.secrets.get("AI_HINT_ENABLED", True)
-ROOM_DESTROY_ENABLED = st.secrets.get("ROOM_DESTROY_ENABLED", True)
-AUTO_JOIN_ON_REFRESH = st.secrets.get("AUTO_JOIN_ON_REFRESH", False)
+def _get_secret(key: str, default=None):
+    """환경변수(HF) → st.secrets(Streamlit Cloud) 순서로 읽습니다."""
+    env_val = os.environ.get(key, "").strip()
+    if env_val:
+        return env_val
+    try:
+        return st.secrets.get(key, default)
+    except Exception:
+        return default
+
+import os
+AI_HINT_ENABLED = _get_secret("AI_HINT_ENABLED", True)
+ROOM_DESTROY_ENABLED = _get_secret("ROOM_DESTROY_ENABLED", True)
+AUTO_JOIN_ON_REFRESH = _get_secret("AUTO_JOIN_ON_REFRESH", False)
 MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
@@ -422,7 +433,7 @@ with st.sidebar:
                             "등록된 계정도 미등록으로 보일 수 있습니다."
                         )
                     try:
-                        supabase_url = str(st.secrets.get("SUPABASE_URL", ""))
+                        supabase_url = str(_get_secret("SUPABASE_URL", ""))
                         project_ref = supabase_url.split("//", 1)[-1].split(".", 1)[0] if supabase_url else ""
                         if project_ref:
                             st.caption(f"현재 앱 연결 DB 프로젝트: `{project_ref}`")
@@ -857,7 +868,7 @@ if user_role == "교사" and teacher_auth:
                     context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
                     prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
                     res_text = generate_ai_response(
-                        prompt, model_name=AI_MODEL_NAME, api_key=st.secrets["GEMINI_API_KEY"],
+                        prompt, model_name=AI_MODEL_NAME, api_key=_get_secret("GEMINI_API_KEY", ""),
                         log_message="AI 힌트 생성 실패", room_name=room_name,
                     )
                     if res_text:
@@ -898,7 +909,7 @@ if user_role == "교사" and teacher_auth:
                         f"기록:\n{full_history}"
                     )
                     res_text = generate_ai_response(
-                        prompt, model_name=AI_MODEL_NAME, api_key=st.secrets["GEMINI_API_KEY"],
+                        prompt, model_name=AI_MODEL_NAME, api_key=_get_secret("GEMINI_API_KEY", ""),
                         log_message="AI 요약 리포트 생성 실패", room_name=room_name,
                     )
                     if res_text:
@@ -949,7 +960,7 @@ if user_role == "교사" and teacher_auth:
                             debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
                             prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 {act_type}에 참여한 '{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
                             res_text = generate_ai_response(
-                                prompt, model_name=AI_MODEL_NAME, api_key=st.secrets["GEMINI_API_KEY"],
+                                prompt, model_name=AI_MODEL_NAME, api_key=_get_secret("GEMINI_API_KEY", ""),
                                 log_message="AI 세특 생성 실패", room_name=room_name, student=selected_student,
                             )
                             if res_text:
