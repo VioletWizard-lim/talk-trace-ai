@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import io
@@ -77,10 +78,9 @@ def _get_secret(key: str, default=None):
     except Exception:
         return default
 
-import os
-AI_HINT_ENABLED = _get_secret("AI_HINT_ENABLED", True)
-ROOM_DESTROY_ENABLED = _get_secret("ROOM_DESTROY_ENABLED", True)
-AUTO_JOIN_ON_REFRESH = _get_secret("AUTO_JOIN_ON_REFRESH", False)
+AI_HINT_ENABLED = str(_get_secret("AI_HINT_ENABLED", "true")).lower() not in ("false", "0", "no")
+ROOM_DESTROY_ENABLED = str(_get_secret("ROOM_DESTROY_ENABLED", "true")).lower() not in ("false", "0", "no")
+AUTO_JOIN_ON_REFRESH = str(_get_secret("AUTO_JOIN_ON_REFRESH", "false")).lower() not in ("false", "0", "no")
 MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
