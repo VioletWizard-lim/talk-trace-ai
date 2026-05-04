@@ -34,6 +34,7 @@ from db import (
     topic_entry_code_column_available,
     using_service_role_key,
     upsert_topic_room,
+    _get_secret,
 )
 from services.ai import generate_ai_response
 from validators import (
@@ -68,16 +69,6 @@ LIVE_BOARD_FETCH_LIMIT = 300
 DASHBOARD_FETCH_LIMIT = 2000
 RECORDS_FETCH_LIMIT = 500
 LIVE_REFRESH_INTERVAL = "5s"
-def _get_secret(key: str, default=None):
-    """환경변수(HF) → st.secrets(Streamlit Cloud) 순서로 읽습니다."""
-    env_val = os.environ.get(key, "").strip()
-    if env_val:
-        return env_val
-    try:
-        return st.secrets.get(key, default)
-    except Exception:
-        return default
-
 AI_HINT_ENABLED = str(_get_secret("AI_HINT_ENABLED", "true")).lower() not in ("false", "0", "no")
 ROOM_DESTROY_ENABLED = str(_get_secret("ROOM_DESTROY_ENABLED", "true")).lower() not in ("false", "0", "no")
 AUTO_JOIN_ON_REFRESH = str(_get_secret("AUTO_JOIN_ON_REFRESH", "false")).lower() not in ("false", "0", "no")
