@@ -10,6 +10,7 @@ import google.generativeai as genai
 import plotly.express as px
 import time
 import re
+import threading
 
 # ==========================================
 # [0] 로깅 설정
@@ -30,15 +31,16 @@ LIVE_BOARD_FETCH_LIMIT = 300
 DASHBOARD_FETCH_LIMIT = 2000
 RECORDS_FETCH_LIMIT = 500
 LIVE_REFRESH_INTERVAL = "2s"
-AI_HINT_ENABLED = st.secrets.get("AI_HINT_ENABLED", True)
-ROOM_DESTROY_ENABLED = st.secrets.get("ROOM_DESTROY_ENABLED", True)
-AUTO_JOIN_ON_REFRESH = st.secrets.get("AUTO_JOIN_ON_REFRESH", True)
+AI_HINT_ENABLED = str(st.secrets.get("AI_HINT_ENABLED", "true")).lower() not in ("false", "0", "no")
+ROOM_DESTROY_ENABLED = str(st.secrets.get("ROOM_DESTROY_ENABLED", "true")).lower() not in ("false", "0", "no")
+AUTO_JOIN_ON_REFRESH = str(st.secrets.get("AUTO_JOIN_ON_REFRESH", "true")).lower() not in ("false", "0", "no")
 MAX_ROOM_NAME_LEN = 60
 MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
 DB_POOL_MIN_CONN = int(st.secrets.get("DB_POOL_MIN_CONN", 1))
 DB_POOL_MAX_CONN = int(st.secrets.get("DB_POOL_MAX_CONN", 8))
 DB_POOL = None
+_pool_lock = threading.Lock()
 
 def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
@@ -73,7 +75,7 @@ def normalize_room_name(raw_text):
 def validate_room_name(room):
     if not room:
         return False
-    return re.fullmatch(r"[0-9A-Za-z가-힣 _\\-()]+", room) is not None
+    return re.fullmatch(r"[0-9A-Za-z가-힣 _()\-]+", room) is not None
 
 def normalize_topic_title(raw_text):
     return normalize_user_text(raw_text, max_len=MAX_TOPIC_LEN)
@@ -103,12 +105,13 @@ def log_audit(event, room_name="", actor_name="", role="", **extra):
 
 def init_db_pool():
     global DB_POOL
-    if DB_POOL is None:
-        DB_POOL = SimpleConnectionPool(
-            DB_POOL_MIN_CONN,
-            DB_POOL_MAX_CONN,
-            st.secrets["SUPABASE_URL"],
-        )
+    with _pool_lock:
+        if DB_POOL is None:
+            DB_POOL = SimpleConnectionPool(
+                DB_POOL_MIN_CONN,
+                DB_POOL_MAX_CONN,
+                st.secrets["SUPABASE_URL"],
+            )
 
 def get_db_conn():
     if DB_POOL is None:
@@ -163,6 +166,8 @@ def execute_query(query, params=()):
         conn.commit()
     except Exception:
         logger.exception("DB 실행 실패 (query=%s, params=%s)", query, params)
+        if conn is not None:
+            conn.rollback()
         raise
     finally:
         release_db_conn(conn)
