@@ -819,10 +819,6 @@ if user_role == "교사" and teacher_auth:
         if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
             st.rerun()
 
-    if admin_auth:
-        render_admin_approval_panel()
-        st.divider()
-
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
 
     st.subheader("📊 학생 참여도 현황")
