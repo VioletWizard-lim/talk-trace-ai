@@ -16,6 +16,7 @@ from db import (
     _get_secret,
 )
 from services.ai import generate_ai_response
+from services.prompts import build_hint_prompt, build_summary_prompt, build_record_prompt
 from validators import with_fallback_author_role
 from utils import compact_ai_report_output, get_kst_now, get_kst_now_str, log_audit
 from config import (
@@ -92,11 +93,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                 st.toast("👀 AI가 대화 맥락을 읽고 있습니다...", icon="⏳")
                 with st.spinner("✍️ 예리한 질문을 작성하고 있습니다..."):
                     context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
-                    prompt = (
-                        f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. "
-                        "학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. "
-                        f"번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
-                    )
+                    prompt = build_hint_prompt(act_type, current_topic, context)
                     res_text = generate_ai_response(
                         prompt, model_name=AI_MODEL_NAME, api_key=_get_secret("GEMINI_API_KEY", ""),
                         log_message="AI 힌트 생성 실패", room_name=room_name,
@@ -131,16 +128,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                         f"[{row['student_name']} - {row['sentiment']}] {row['content']}"
                         for _, row in df_all.iterrows()
                     ])
-                    prompt = (
-                        f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n"
-                        "[출력 형식 - 반드시 그대로]\n"
-                        "핵심요약 1: ...\n핵심요약 2: ...\n핵심요약 3: ...\n베스트 학생: ...\n선정 이유: ...\n\n"
-                        "[엄격한 규칙]\n"
-                        "- 핵심요약 1,2,3과 베스트 학생, 선정이유를 줄바꿈을 하여 보기 편하게 합니다.\n"
-                        "- 5~10줄로 출력합니다.\n- 제목/헤더(#,##,###), 소제목을 절대 쓰지 않습니다.\n"
-                        "- 불필요한 서론/결론 없이 바로 결과만 출력합니다.\n\n"
-                        f"기록:\n{full_history}"
-                    )
+                    prompt = build_summary_prompt(act_type, current_topic, full_history)
                     res_text = generate_ai_response(
                         prompt, model_name=AI_MODEL_NAME, api_key=_get_secret("GEMINI_API_KEY", ""),
                         log_message="AI 요약 리포트 생성 실패", room_name=room_name,
@@ -197,12 +185,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                         try:
                             student_data = df_all[df_all['student_name'] == selected_student]
                             debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
-                            prompt = (
-                                f"당신은 정보 교사입니다. '{current_topic}' 주제 {act_type}에 참여한 "
-                                f"'{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 "
-                                f"교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n"
-                                f"[활동 기록]\n{debate_history}"
-                            )
+                            prompt = build_record_prompt(act_type, current_topic, selected_student, debate_history)
                             res_text = generate_ai_response(
                                 prompt, model_name=AI_MODEL_NAME, api_key=_get_secret("GEMINI_API_KEY", ""),
                                 log_message="AI 세특 생성 실패", room_name=room_name, student=selected_student,

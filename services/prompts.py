@@ -9,6 +9,19 @@ def build_hint_prompt(act_type, current_topic, context):
     )
 
 
+def build_summary_prompt(act_type, current_topic, full_history):
+    return (
+        f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n"
+        "[출력 형식 - 반드시 그대로]\n"
+        "핵심요약 1: ...\n핵심요약 2: ...\n핵심요약 3: ...\n베스트 학생: ...\n선정 이유: ...\n\n"
+        "[엄격한 규칙]\n"
+        "- 핵심요약 1,2,3과 베스트 학생, 선정이유를 줄바꿈을 하여 보기 편하게 합니다.\n"
+        "- 5~10줄로 출력합니다.\n- 제목/헤더(#,##,###), 소제목을 절대 쓰지 않습니다.\n"
+        "- 불필요한 서론/결론 없이 바로 결과만 출력합니다.\n\n"
+        f"기록:\n{full_history}"
+    )
+
+
 def build_record_prompt(act_type, current_topic, selected_student, debate_history):
     return (
         f"당신은 정보 교사입니다. "
