@@ -32,6 +32,7 @@ from db import (
     _get_secret,
 )
 from services.ai import generate_ai_response
+from services.prompts import build_hint_prompt, build_record_prompt
 from utils import (
     get_kst_now,
     get_kst_now_str,
@@ -699,7 +700,7 @@ if user_role == "교사" and teacher_auth:
                 st.toast("👀 AI가 대화 맥락을 읽고 있습니다...", icon="⏳")
                 with st.spinner("✍️ 예리한 질문을 작성하고 있습니다..."):
                     context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
-                    prompt = f"당신은 고등학교 {act_type} 조력자입니다. '{current_topic}' 주제로 {act_type} 중입니다. 학생들의 균형을 맞추거나 더 깊은 생각을 유도할 수 있는 예리한 질문을 1문장만 제안하세요. 번호 매기기나 번잡한 서론 없이 질문 자체만 출력하세요.\n최근 대화: {context}"
+                    prompt = build_hint_prompt(act_type, current_topic, context)
                     res_text = generate_ai_response(
                         prompt, model_name=AI_MODEL_NAME, api_key=_get_secret("GEMINI_API_KEY", ""),
                         log_message="AI 힌트 생성 실패", room_name=room_name,
@@ -791,7 +792,7 @@ if user_role == "교사" and teacher_auth:
                         try:
                             student_data = df_all[df_all['student_name'] == selected_student]
                             debate_history = "\n".join([f"- [{row['sentiment']}] {row['content']}" for _, row in student_data.iterrows()])
-                            prompt = f"당신은 정보 교사입니다. '{current_topic}' 주제 {act_type}에 참여한 '{selected_student}' 학생의 활동 기록입니다. 이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. 교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
+                            prompt = build_record_prompt(act_type, current_topic, selected_student, debate_history)
                             res_text = generate_ai_response(
                                 prompt, model_name=AI_MODEL_NAME, api_key=_get_secret("GEMINI_API_KEY", ""),
                                 log_message="AI 세특 생성 실패", room_name=room_name, student=selected_student,
