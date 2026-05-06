@@ -42,7 +42,8 @@ def generate_ai_response(
     """
     try:
         _ensure_configured(api_key)
-        response_text = genai.GenerativeModel(model_name).generate_content(prompt).text
+        response = genai.GenerativeModel(model_name).generate_content(prompt)
+        response_text = response.text if response else None
 
         # 응답이 공백이거나 None인 경우 fallback 반환
         if not response_text or not response_text.strip():

@@ -10,7 +10,7 @@ DISPLAY_DATETIME_FMT = "%Y-%m-%d %p %I:%M:%S"
 
 
 def get_kst_now():
-    return datetime.utcnow() + timedelta(hours=9)
+    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=9)
 
 
 def get_kst_now_str():
