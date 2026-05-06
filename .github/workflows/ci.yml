@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      - name: 문법 점검
+        run: |
+          python -m py_compile app.py
+          python -m py_compile db.py
+          python -m py_compile validators.py
+          python -m py_compile utils.py
+          python -m py_compile wordcloud.py
+          python -m py_compile services/ai.py
+          echo "✅ 문법 점검 통과!"
