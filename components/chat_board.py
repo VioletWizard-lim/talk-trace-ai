@@ -14,25 +14,25 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
     opinion_df = all_df.head(LIVE_BOARD_FETCH_LIMIT) if not all_df.empty else all_df
     stats_opinion_df = all_df
 
-    with st.expander("📊 실시간 의견 통계 보기 (클릭하여 펼치기)"):
-        if not stats_opinion_df.empty:
-            left_col, right_col = st.columns(2)
-            with left_col:
-                st.caption("감정 분포 그래프")
-                live_pie_fig = px.pie(stats_opinion_df, names="sentiment", hole=0.4, height=320)
-                live_pie_fig.update_layout(font={"family": UI_FONT_FAMILY})
-                st.plotly_chart(live_pie_fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': False})
-            with right_col:
-                st.caption("누적 토의/토론 워드클라우드")
-                frequencies = build_word_frequencies(stats_opinion_df["content"])
-                if frequencies:
-                    st.markdown(build_circular_wordcloud_html(frequencies), unsafe_allow_html=True)
-                    top_words = ", ".join([f"{word}({count})" for word, count in frequencies.most_common(8)])
-                    st.caption(f"상위 키워드: {top_words}")
-                else:
-                    st.info("워드클라우드를 만들 단어가 아직 부족합니다.")
-        else:
-            st.write("데이터 수집 중...")
+    st.subheader("📊 실시간 의견 통계")
+    if not stats_opinion_df.empty:
+        left_col, right_col = st.columns(2)
+        with left_col:
+            st.caption("감정 분포 그래프")
+            live_pie_fig = px.pie(stats_opinion_df, names="sentiment", hole=0.4, height=320)
+            live_pie_fig.update_layout(font={"family": UI_FONT_FAMILY})
+            st.plotly_chart(live_pie_fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': False})
+        with right_col:
+            st.caption("누적 토의/토론 워드클라우드")
+            frequencies = build_word_frequencies(stats_opinion_df["content"])
+            if frequencies:
+                st.markdown(build_circular_wordcloud_html(frequencies), unsafe_allow_html=True)
+                top_words = ", ".join([f"{word}({count})" for word, count in frequencies.most_common(8)])
+                st.caption(f"상위 키워드: {top_words}")
+            else:
+                st.info("워드클라우드를 만들 단어가 아직 부족합니다.")
+    else:
+        st.write("데이터 수집 중...")
 
     col_board_title, col_board_ref = st.columns([8, 2])
     with col_board_title:
