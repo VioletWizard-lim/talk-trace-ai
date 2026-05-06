@@ -2,11 +2,24 @@ import logging
 import os
 import time
 
+import bcrypt
 import pandas as pd
 import streamlit as st
 from supabase import Client, create_client
 
 logger = logging.getLogger("talk_trace_ai")
+
+
+def _hash_password(plain: str) -> str:
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify_password(plain: str, stored: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain.encode(), stored.encode())
+    except Exception:
+        # 기존 평문 비밀번호 호환 (마이그레이션 기간)
+        return plain == stored
 
 
 # ==========================================
@@ -425,7 +438,7 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
 def request_teacher_account(supabase: Client, teacher_id: str, teacher_pw: str):
     payload = {
         "teacher_id": str(teacher_id or "").strip(),
-        "teacher_pw": str(teacher_pw or "").strip(),
+        "teacher_pw": _hash_password(str(teacher_pw or "").strip()),
         "is_approved": False,
     }
     if teacher_is_admin_column_available():

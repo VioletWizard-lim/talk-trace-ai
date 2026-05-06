@@ -8,6 +8,7 @@ from db import (
     topic_entry_code_column_available,
     upsert_topic_room,
     using_service_role_key,
+    _verify_password,
     _get_secret,
 )
 from validators import (
@@ -94,7 +95,7 @@ def render_sidebar(supabase) -> dict:
                                 st.caption(f"현재 앱 연결 DB 프로젝트: `{project_ref}`")
                         except Exception:
                             pass
-                    elif account.get("teacher_pw") != safe_pw:
+                    elif not _verify_password(safe_pw, account.get("teacher_pw", "")):
                         st.session_state['teacher_auth'] = False
                         st.session_state['admin_auth'] = False
                         st.session_state['teacher_id'] = ""
