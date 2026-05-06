@@ -9,6 +9,8 @@ from db import (
     upsert_topic_room,
     using_service_role_key,
     _verify_password,
+    _is_hashed,
+    upgrade_teacher_password,
     _get_secret,
 )
 from validators import (
@@ -112,6 +114,8 @@ def render_sidebar(supabase) -> dict:
                         st.session_state['admin_auth'] = to_bool_flag(account.get("is_admin", False))
                         st.session_state['teacher_id'] = safe_teacher_id
                         redirect_from_admin_page_if_needed()
+                        if not _is_hashed(account.get("teacher_pw", "")):
+                            upgrade_teacher_password(supabase, account["id"], safe_pw)
                         if st.session_state['admin_auth']:
                             st.session_state['page'] = "admin_approval"
                             st.toast("✅ 관리자 계정 로그인 성공", icon="✅")

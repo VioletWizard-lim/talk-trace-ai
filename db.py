@@ -14,12 +14,26 @@ def _hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
+def _is_hashed(stored: str) -> bool:
+    return stored.startswith(("$2b$", "$2a$"))
+
+
 def _verify_password(plain: str, stored: str) -> bool:
-    try:
-        return bcrypt.checkpw(plain.encode(), stored.encode())
-    except Exception:
-        # 기존 평문 비밀번호 호환 (마이그레이션 기간)
-        return plain == stored
+    if _is_hashed(stored):
+        try:
+            return bcrypt.checkpw(plain.encode(), stored.encode())
+        except Exception:
+            return False
+    return plain == stored
+
+
+def upgrade_teacher_password(supabase: Client, account_id: int, plain: str):
+    return execute_query(
+        supabase.table("teacher_accounts")
+        .update({"teacher_pw": _hash_password(plain)})
+        .eq("id", account_id),
+        fail_message="비밀번호 업그레이드 실패",
+    )
 
 
 # ==========================================
