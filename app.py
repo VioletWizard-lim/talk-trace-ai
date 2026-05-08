@@ -5,6 +5,7 @@ import streamlit as st
 from db import (
     debate_ip_column_available,
     ensure_db_login,
+    fetch_live_messages,
     fetch_topic_data,
     init_db,
     submit_opinion,
@@ -144,6 +145,7 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
             res = submit_opinion(supabase, insert_payload)
             if res is None:
                 st.stop()
+            fetch_live_messages.clear()
             log_audit(
                 "opinion_submitted",
                 room_name=room_name, actor_name=safe_student_name,

@@ -52,6 +52,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             try:
                 if delete_opinion_message(supabase, msg_id) is None:
                     return
+                fetch_live_messages.clear()
                 log_audit("chat_deleted", room_name=room_name, actor_name=student_name, role=user_role, message_id=msg_id)
                 st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
             except Exception as e:

@@ -83,6 +83,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                     })
                     if res is None:
                         return
+                    fetch_live_messages.clear()
                     log_audit("teacher_hint_sent", room_name=room_name, actor_name=student_name, role=user_role)
                     st.session_state['hint_input_widget'] = ""
                 except Exception as e:
