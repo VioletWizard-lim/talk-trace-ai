@@ -329,9 +329,10 @@ def fetch_topic_data(supabase: Client, room_name):
 # [5] 토론(debate) 관련 쿼리
 # ==========================================
 
-def fetch_live_messages(supabase: Client, room_name, limit):
+@st.cache_data(ttl=5)
+def fetch_live_messages(_supabase: Client, room_name, limit):
     res = execute_query(
-        supabase.table("debate").select("*").eq("room_name", room_name).order("id", desc=True).limit(limit),
+        _supabase.table("debate").select("*").eq("room_name", room_name).order("id", desc=True).limit(limit),
         fail_message="🚨 데이터 불러오기 실패",
     )
     if not res or not res.data:

@@ -11,7 +11,7 @@ from db import (
 )
 from config import APP_CSS, MAX_STUDENT_NAME_LEN
 from utils import get_client_ip, get_kst_now_str, log_audit
-from validators import normalize_user_text, validate_opinion_content, validate_student_name
+from validators import validate_opinion_content, validate_student_name
 from views.home import render_home_page
 from views.lobby import render_lobby_page
 from views.admin import render_admin_page
