@@ -1,5 +1,5 @@
 import streamlit as st
-from db import fetch_pending_teacher_accounts, approve_teacher_account
+from db import fetch_pending_teacher_accounts, approve_teacher_account, reject_teacher_account
 from utils import format_kst_datetime, get_kst_now_str
 
 
@@ -13,15 +13,22 @@ def render_admin_approval_panel(supabase):
         acc_id = pending.get("id")
         pending_teacher_id = pending.get("teacher_id", "")
         requested_at = pending.get("requested_at", "") or "-"
-        c_left, c_right = st.columns([3, 2])
-        with c_left:
+        c_id, c_date, c_approve, c_reject = st.columns([3, 2, 1, 1])
+        with c_id:
             st.write(f"ID: {pending_teacher_id}")
-        with c_right:
+        with c_date:
             st.caption(f"신청 시각: {format_kst_datetime(requested_at)}")
-            if st.button("승인", key=f"approve_{acc_id}"):
+        with c_approve:
+            if st.button("✅ 승인", key=f"approve_{acc_id}", use_container_width=True):
                 res = approve_teacher_account(supabase, acc_id, get_kst_now_str())
                 if res is not None:
                     st.success(f"{pending_teacher_id} 계정을 승인했습니다.")
+                    st.rerun()
+        with c_reject:
+            if st.button("❌ 거절", key=f"reject_{acc_id}", use_container_width=True, type="secondary"):
+                res = reject_teacher_account(supabase, acc_id)
+                if res is not None:
+                    st.warning(f"{pending_teacher_id} 계정 신청을 거절했습니다.")
                     st.rerun()
 
 
