@@ -8,11 +8,10 @@ from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, LIVE_REFRESH_I
 
 
 def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
-    all_df = with_fallback_author_role(
-        fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT)
+    opinion_df = with_fallback_author_role(
+        fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
     )
-    opinion_df = all_df.head(LIVE_BOARD_FETCH_LIMIT) if not all_df.empty else all_df
-    stats_opinion_df = all_df
+    stats_opinion_df = opinion_df
 
     st.subheader("📊 실시간 의견 통계")
     if not stats_opinion_df.empty:
