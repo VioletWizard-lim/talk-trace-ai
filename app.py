@@ -78,7 +78,20 @@ current_topic = topic_data.get('title', "자유 주제로 대화해 봅시다.")
 current_mode = topic_data.get('mode', "⚔️ 찬반 토론")
 act_type = "토론" if "토론" in current_mode else "토의"
 
-st.title(f"🎙️ 말자취(Talk-Trace) AI [{room_name}]")
+if admin_auth:
+    col_title, col_btn1, col_btn2 = st.columns([4, 1, 1])
+    with col_title:
+        st.title(f"🎙️ 말자취(Talk-Trace) AI [{room_name}]")
+    with col_btn1:
+        if st.button("📝 ID 요청 수락", use_container_width=True):
+            st.session_state['page'] = "admin_approval"
+            st.rerun()
+    with col_btn2:
+        if st.button("🚪 말자취 AI 대기실", use_container_width=True):
+            st.session_state['page'] = "lobby"
+            st.rerun()
+else:
+    st.title(f"🎙️ 말자취(Talk-Trace) AI [{room_name}]")
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
 
 st.subheader("🗣️ 내 의견 작성")
