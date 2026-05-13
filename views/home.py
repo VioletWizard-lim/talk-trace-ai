@@ -6,9 +6,9 @@ def render_home_page():
     teacher_auth = st.session_state.get('teacher_auth', False)
 
     if admin_auth and teacher_auth:
-        st.title("🏠 말자취(Talk-Trace) AI 홈")
-        st.markdown("#### 🛠️ 관리자 메뉴")
-        col_admin1, col_admin2, col_spacer = st.columns([1, 1, 3])
+        col_title, col_admin1, col_admin2 = st.columns([4, 1, 1])
+        with col_title:
+            st.title("🏠 말자취(Talk-Trace) AI 홈")
         with col_admin1:
             if st.button("📝 ID 요청 수락", use_container_width=True):
                 st.session_state['page'] = "admin_approval"
@@ -17,7 +17,6 @@ def render_home_page():
             if st.button("🚪 말자취 AI 대기실", use_container_width=True):
                 st.session_state['page'] = "lobby"
                 st.rerun()
-        st.divider()
     else:
         st.title("🏠 말자취(Talk-Trace) AI 홈")
 

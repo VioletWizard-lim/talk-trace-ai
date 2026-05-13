@@ -127,6 +127,7 @@ def render_sidebar(supabase) -> dict:
                             st.rerun()
                         else:
                             st.toast("✅ 교사 로그인 성공", icon="✅")
+                            st.rerun()
             elif auth_mode == "ID/PW 신청":
                 req_teacher_id = st.text_input("신청할 교사 ID", key="req_teacher_id")
                 req_teacher_pw = st.text_input("신청할 교사 PW", type="password", key="req_teacher_pw")
@@ -161,15 +162,6 @@ def render_sidebar(supabase) -> dict:
                     st.rerun()
                 st.divider()
 
-            if teacher_auth and admin_auth:
-                st.caption("관리자 바로가기")
-                if st.button("📝 ID 요청 수락", use_container_width=True):
-                    st.session_state['page'] = "admin_approval"
-                    st.rerun()
-                if st.button("🚪 말자취(Talk-Trace) AI 대기실", use_container_width=True):
-                    st.session_state['page'] = "lobby"
-                    st.rerun()
-                st.divider()
 
             if teacher_auth:
                 existing_rooms = all_rooms if admin_auth else (
