@@ -154,6 +154,8 @@ def render_sidebar(supabase) -> dict:
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
+                    st.session_state['teacher_id_input'] = ""
+                    st.session_state['teacher_pw_input'] = ""
                     st.session_state['joined'] = False
                     st.session_state['page'] = "lobby"
                     st.rerun()
