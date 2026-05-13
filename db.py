@@ -1,6 +1,6 @@
 import logging
 import os
-import time
+from concurrent.futures import ThreadPoolExecutor
 
 import bcrypt
 import pandas as pd
@@ -92,7 +92,6 @@ def ensure_db_login(supabase: Client) -> bool:
                 "password": _get_secret("SUPABASE_APP_PASSWORD"),
             }
         )
-        time.sleep(0.5)
         return True
     except Exception as e:
         st.error(f"🚨 DB 자동 로그인 실패: {e}")
@@ -148,7 +147,6 @@ def execute_query(query, fail_message="DB 작업 실패"):
 @st.cache_data(ttl=3600)
 def check_schema_columns() -> dict:
     supabase = init_db()
-    results = {}
 
     checks = [
         ("debate.ip_address",           lambda: supabase.table("debate").select("ip_address").limit(1).execute()),
@@ -158,13 +156,17 @@ def check_schema_columns() -> dict:
         ("teacher_accounts.is_admin",   lambda: supabase.table("teacher_accounts").select("is_admin").limit(1).execute()),
     ]
 
-    for key, query_fn in checks:
+    def _check_one(item):
+        key, query_fn = item
         try:
             query_fn()
-            results[key] = True
+            return key, True
         except Exception as e:
-            results[key] = False
             logger.info("컬럼 미존재 확인 [%s]: %s", key, e)
+            return key, False
+
+    with ThreadPoolExecutor(max_workers=len(checks)) as executor:
+        results = dict(executor.map(_check_one, checks))
 
     logger.info("schema_columns 체크 완료: %s", results)
     return results
@@ -194,10 +196,11 @@ def teacher_is_admin_column_available() -> bool:
 # [4] 방(topic) 관련 쿼리
 # ==========================================
 
-def fetch_room_names(supabase: Client):
+@st.cache_data(ttl=30)
+def fetch_room_names(_supabase: Client):
     if topic_created_by_teacher_id_column_available():
         res = execute_query(
-            supabase.table("topic")
+            _supabase.table("topic")
             .select("room_name, created_by_teacher_id")
             .not_.is_("created_by_teacher_id", "null")
             .order("room_name", desc=False),
@@ -212,7 +215,7 @@ def fetch_room_names(supabase: Client):
         ]
 
     res = execute_query(
-        supabase.table("topic")
+        _supabase.table("topic")
         .select("room_name, created_by")
         .not_.is_("created_by", "null")
         .order("room_name", desc=False),
@@ -227,14 +230,15 @@ def fetch_room_names(supabase: Client):
     ]
 
 
-def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
+@st.cache_data(ttl=30)
+def fetch_room_names_by_owner(_supabase: Client, owner_teacher_id: str):
     safe_owner = str(owner_teacher_id or "").strip()
     if not safe_owner:
         return []
 
     if topic_created_by_teacher_id_column_available():
         res = execute_query(
-            supabase.table("topic")
+            _supabase.table("topic")
             .select("room_name")
             .eq("created_by_teacher_id", safe_owner)
             .order("room_name", desc=False),
@@ -245,7 +249,7 @@ def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
         return [item.get("room_name", "") for item in res.data if str(item.get("room_name", "")).strip()]
 
     res = execute_query(
-        supabase.table("topic")
+        _supabase.table("topic")
         .select("room_name")
         .eq("created_by", safe_owner)
         .order("room_name", desc=False),
@@ -306,11 +310,12 @@ def fetch_room_entry_code(supabase: Client, room_name):
     return None
 
 
-def fetch_topic_data(supabase: Client, room_name):
+@st.cache_data(ttl=10)
+def fetch_topic_data(_supabase: Client, room_name):
     order_candidates = ["id", "created_at", None]
     for order_col in order_candidates:
         try:
-            query = supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
+            query = _supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
             if order_col:
                 query = query.order(order_col, desc=True)
             res = query.execute()

@@ -12,6 +12,7 @@ from db import (
     _is_hashed,
     upgrade_teacher_password,
     _get_secret,
+    fetch_topic_data,
 )
 from validators import (
     normalize_user_text,
@@ -200,6 +201,9 @@ def render_sidebar(supabase) -> dict:
                                 mode=new_mode, entry_code=safe_new_pw, created_by=teacher_id_for_scope,
                             )
                             if res is not None:
+                                fetch_room_names.clear()
+                                fetch_room_names_by_owner.clear()
+                                fetch_topic_data.clear()
                                 st.success(f"'{safe_new_room}' 방이 개설되었습니다! '기존 방 선택'을 눌러 입장하세요.")
                         room_name = ""
         else:
