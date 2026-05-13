@@ -55,7 +55,11 @@ def render_sidebar(supabase) -> dict:
         teacher_id_for_scope = st.session_state.get("teacher_id", "")
 
         if user_role == "교사":
-            auth_mode = st.radio("교사 계정", ["로그인", "ID/PW 신청"], horizontal=True)
+            already_logged_in = st.session_state.get('teacher_auth', False)
+            if already_logged_in:
+                auth_mode = "로그인"
+            else:
+                auth_mode = st.radio("교사 계정", ["로그인", "ID/PW 신청"], horizontal=True)
 
             if auth_mode == "로그인":
                 with st.form("teacher_login_form"):
