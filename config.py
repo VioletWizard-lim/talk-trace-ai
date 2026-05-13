@@ -26,6 +26,7 @@ APP_CSS = """
     .records-db-table-wrap th:nth-child(3), .records-db-table-wrap td:nth-child(3) { width: 12%; white-space: nowrap; }
     .records-db-table-wrap th:nth-child(4), .records-db-table-wrap td:nth-child(4) { width: 68%; white-space: pre-wrap; word-break: break-word; }
     [data-testid="stDecoration"] { display: none !important; }
+    [data-testid="stStatusWidget"] { display: none !important; }
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"], [data-testid="stFragment"],
     [data-testid="stVerticalBlock"], [data-testid="stElementContainer"],
