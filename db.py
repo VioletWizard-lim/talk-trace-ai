@@ -144,7 +144,7 @@ def execute_query(query, fail_message="DB 작업 실패"):
 # [3] 컬럼 존재 확인 — 통합 함수
 # ==========================================
 
-@st.cache_resource
+@st.cache_data(ttl=3600)
 def check_schema_columns() -> dict:
     supabase = init_db()
 
