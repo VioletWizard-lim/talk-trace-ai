@@ -18,8 +18,6 @@ from views.home import render_home_page
 from views.lobby import render_lobby_page
 from views.admin import render_admin_page
 from components.sidebar import render_sidebar
-from components.chat_board import render_chat_board
-from components.teacher_dashboard import render_teacher_dashboard
 
 logger = logging.getLogger("talk_trace_ai")
 if not logger.handlers:
@@ -59,6 +57,10 @@ if st.session_state['page'] != "home":
 
 if st.session_state['page'] == "home":
     render_home_page()
+
+# plotly / google.generativeai 임포트는 홈 화면에서 불필요 — st.stop() 이후에 로드
+from components.chat_board import render_chat_board
+from components.teacher_dashboard import render_teacher_dashboard
 
 sidebar_ctx = render_sidebar(supabase)
 user_role = sidebar_ctx['user_role']
