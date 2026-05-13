@@ -56,12 +56,12 @@ def render_sidebar(supabase) -> dict:
 
         if user_role == "교사":
             already_logged_in = st.session_state.get('teacher_auth', False)
-            if already_logged_in:
-                auth_mode = "로그인"
-            else:
+            if not already_logged_in:
                 auth_mode = st.radio("교사 계정", ["로그인", "ID/PW 신청"], horizontal=True)
+            else:
+                auth_mode = "로그인"
 
-            if auth_mode == "로그인":
+            if auth_mode == "로그인" and not already_logged_in:
                 with st.form("teacher_login_form"):
                     teacher_id_input = st.text_input("교사 ID", key="teacher_id_input")
                     teacher_pw_input = st.text_input("교사 PW", type="password", key="teacher_pw_input")
@@ -127,7 +127,7 @@ def render_sidebar(supabase) -> dict:
                             st.rerun()
                         else:
                             st.toast("✅ 교사 로그인 성공", icon="✅")
-            else:
+            elif auth_mode == "ID/PW 신청":
                 req_teacher_id = st.text_input("신청할 교사 ID", key="req_teacher_id")
                 req_teacher_pw = st.text_input("신청할 교사 PW", type="password", key="req_teacher_pw")
                 if st.button("교사 계정 신청", type="primary", use_container_width=True):
