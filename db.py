@@ -482,3 +482,10 @@ def approve_teacher_account(supabase: Client, account_id: int, approved_at: str)
         supabase.table("teacher_accounts").update({"is_approved": True, "approved_at": approved_at}).eq("id", account_id),
         fail_message="교사 계정 승인 실패",
     )
+
+
+def reject_teacher_account(supabase: Client, account_id: int):
+    return execute_query(
+        supabase.table("teacher_accounts").delete().eq("id", account_id),
+        fail_message="교사 계정 거절 실패",
+    )
