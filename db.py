@@ -196,11 +196,10 @@ def teacher_is_admin_column_available() -> bool:
 # [4] 방(topic) 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=30)
-def fetch_room_names(_supabase: Client):
+def fetch_room_names(supabase: Client):
     if topic_created_by_teacher_id_column_available():
         res = execute_query(
-            _supabase.table("topic")
+            supabase.table("topic")
             .select("room_name, created_by_teacher_id")
             .not_.is_("created_by_teacher_id", "null")
             .order("room_name", desc=False),
@@ -215,7 +214,7 @@ def fetch_room_names(_supabase: Client):
         ]
 
     res = execute_query(
-        _supabase.table("topic")
+        supabase.table("topic")
         .select("room_name, created_by")
         .not_.is_("created_by", "null")
         .order("room_name", desc=False),
@@ -230,15 +229,14 @@ def fetch_room_names(_supabase: Client):
     ]
 
 
-@st.cache_data(ttl=30)
-def fetch_room_names_by_owner(_supabase: Client, owner_teacher_id: str):
+def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
     safe_owner = str(owner_teacher_id or "").strip()
     if not safe_owner:
         return []
 
     if topic_created_by_teacher_id_column_available():
         res = execute_query(
-            _supabase.table("topic")
+            supabase.table("topic")
             .select("room_name")
             .eq("created_by_teacher_id", safe_owner)
             .order("room_name", desc=False),
@@ -249,7 +247,7 @@ def fetch_room_names_by_owner(_supabase: Client, owner_teacher_id: str):
         return [item.get("room_name", "") for item in res.data if str(item.get("room_name", "")).strip()]
 
     res = execute_query(
-        _supabase.table("topic")
+        supabase.table("topic")
         .select("room_name")
         .eq("created_by", safe_owner)
         .order("room_name", desc=False),
@@ -310,12 +308,11 @@ def fetch_room_entry_code(supabase: Client, room_name):
     return None
 
 
-@st.cache_data(ttl=10)
-def fetch_topic_data(_supabase: Client, room_name):
+def fetch_topic_data(supabase: Client, room_name):
     order_candidates = ["id", "created_at", None]
     for order_col in order_candidates:
         try:
-            query = _supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
+            query = supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
             if order_col:
                 query = query.order(order_col, desc=True)
             res = query.execute()
