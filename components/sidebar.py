@@ -161,15 +161,6 @@ def render_sidebar(supabase) -> dict:
                     st.rerun()
                 st.divider()
 
-            if teacher_auth and admin_auth:
-                st.caption("관리자 바로가기")
-                if st.button("📝 ID 요청 수락", use_container_width=True):
-                    st.session_state['page'] = "admin_approval"
-                    st.rerun()
-                if st.button("🚪 말자취(Talk-Trace) AI 대기실", use_container_width=True):
-                    st.session_state['page'] = "lobby"
-                    st.rerun()
-                st.divider()
 
             if teacher_auth:
                 existing_rooms = all_rooms if admin_auth else (
