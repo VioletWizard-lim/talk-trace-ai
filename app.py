@@ -10,6 +10,7 @@ from db import (
     fetch_topic_data,
     init_db,
     submit_opinion,
+    using_service_role_key,
 )
 from config import APP_CSS, MAX_STUDENT_NAME_LEN
 from utils import get_client_ip, get_kst_now_str, log_audit
@@ -29,7 +30,8 @@ if not logger.handlers:
     )
 
 supabase = init_db()
-ensure_db_login(supabase)
+if not using_service_role_key():
+    ensure_db_login(supabase)
 check_schema_columns()
 
 st.set_page_config(page_title="말자취(Talk-Trace) AI", layout="wide")
