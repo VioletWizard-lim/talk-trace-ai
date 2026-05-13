@@ -1,6 +1,5 @@
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
 
 import bcrypt
 import pandas as pd
@@ -156,17 +155,14 @@ def check_schema_columns() -> dict:
         ("teacher_accounts.is_admin",   lambda: supabase.table("teacher_accounts").select("is_admin").limit(1).execute()),
     ]
 
-    def _check_one(item):
-        key, query_fn = item
+    results = {}
+    for key, query_fn in checks:
         try:
             query_fn()
-            return key, True
+            results[key] = True
         except Exception as e:
             logger.info("컬럼 미존재 확인 [%s]: %s", key, e)
-            return key, False
-
-    with ThreadPoolExecutor(max_workers=len(checks)) as executor:
-        results = dict(executor.map(_check_one, checks))
+            results[key] = False
 
     logger.info("schema_columns 체크 완료: %s", results)
     return results
