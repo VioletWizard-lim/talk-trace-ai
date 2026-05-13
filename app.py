@@ -3,7 +3,6 @@ import logging
 import streamlit as st
 
 from db import (
-    check_schema_columns,
     debate_ip_column_available,
     ensure_db_login,
     fetch_live_messages,
@@ -32,7 +31,6 @@ if not logger.handlers:
 supabase = init_db()
 if not using_service_role_key():
     ensure_db_login(supabase)
-check_schema_columns()
 
 st.set_page_config(page_title="말자취(Talk-Trace) AI", layout="wide")
 st.markdown(APP_CSS, unsafe_allow_html=True)
