@@ -17,7 +17,8 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
     if not stats_opinion_df.empty:
         left_col, right_col = st.columns(2)
         with left_col:
-            st.caption("감정 분포 그래프")
+            chart_caption = "감정 분포 그래프" if current_mode == "⚔️ 찬반 토론" else "의견 유형 분포 그래프"
+            st.caption(chart_caption)
             live_pie_fig = px.pie(stats_opinion_df, names="sentiment", hole=0.4, height=320)
             live_pie_fig.update_layout(font={"family": UI_FONT_FAMILY})
             st.plotly_chart(live_pie_fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': False})
