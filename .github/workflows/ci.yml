@@ -23,16 +23,17 @@ jobs:
       - name: 문법 점검
         run: |
           python -m py_compile app.py
+          python -m py_compile auth.py
           python -m py_compile db.py
           python -m py_compile config.py
           python -m py_compile validators.py
           python -m py_compile utils.py
           python -m py_compile wordcloud.py
           python -m py_compile services/ai.py
-          python -m py_compile services/prompts.py
           python -m py_compile views/home.py
           python -m py_compile views/lobby.py
-          python -m py_compile views/admin.py
+          python -m py_compile components/admin_panel.py
+          python -m py_compile components/teacher_auth.py
           python -m py_compile components/sidebar.py
           python -m py_compile components/chat_board.py
           python -m py_compile components/teacher_dashboard.py
