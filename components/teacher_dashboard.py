@@ -15,8 +15,7 @@ from db import (
     save_student_record,
     _get_secret,
 )
-from services.ai import generate_ai_response
-from services.prompts import build_hint_prompt, build_summary_prompt, build_record_prompt
+from services.ai import generate_ai_response, build_hint_prompt, build_summary_prompt, build_record_prompt
 from validators import with_fallback_author_role
 from utils import compact_ai_report_output, get_kst_now, get_kst_now_str, log_audit
 from config import (

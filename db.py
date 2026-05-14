@@ -1,29 +1,13 @@
 import logging
 import os
 
-import bcrypt
 import pandas as pd
 import streamlit as st
 from supabase import Client, create_client
 
+from auth import _hash_password, _is_hashed, _verify_password  # noqa: F401
+
 logger = logging.getLogger("talk_trace_ai")
-
-
-def _hash_password(plain: str) -> str:
-    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
-
-
-def _is_hashed(stored: str) -> bool:
-    return stored.startswith(("$2b$", "$2a$"))
-
-
-def _verify_password(plain: str, stored: str) -> bool:
-    if _is_hashed(stored):
-        try:
-            return bcrypt.checkpw(plain.encode(), stored.encode())
-        except Exception:
-            return False
-    return plain == stored
 
 
 def upgrade_teacher_password(supabase: Client, account_id: int, plain: str):
