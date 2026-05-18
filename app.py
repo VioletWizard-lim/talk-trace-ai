@@ -99,102 +99,106 @@ else:
     st.title(f"🎙️ 말자취(Talk-Trace) AI [{room_name}]")
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
 
-st.subheader("🗣️ 내 의견 작성")
-col_input, col_stt = st.columns([4, 1])
-with col_input:
-    user_input = st.text_area(
-        "의견을 입력하세요",
-        key=f"input_{st.session_state['reset_key']}",
-        height=80,
-        label_visibility="collapsed",
-    )
-    opts = ["🔵 찬성", "🔴 반대"] if current_mode == "⚔️ 찬반 토론" else ["💡 아이디어", "➕ 보충", "❓ 질문"]
-    sentiment = st.radio("의견 성격", opts, horizontal=True)
+@st.fragment
+def _render_opinion_input(supabase, room_name, user_role, student_name, student_number, current_mode):
+    st.subheader("🗣️ 내 의견 작성")
+    col_input, col_stt = st.columns([4, 1])
+    with col_input:
+        user_input = st.text_area(
+            "의견을 입력하세요",
+            key=f"input_{st.session_state['reset_key']}",
+            height=80,
+            label_visibility="collapsed",
+        )
+        opts = ["🔵 찬성", "🔴 반대"] if current_mode == "⚔️ 찬반 토론" else ["💡 아이디어", "➕ 보충", "❓ 질문"]
+        sentiment = st.radio("의견 성격", opts, horizontal=True)
 
-with col_stt:
-    st.components.v1.html(
-        """
-        <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer;">🎤 음성 입력 시작</button>
-        <p id="status" style="font-size:11px; color:gray; text-align:center; margin-top:5px;">대기 중...</p>
-        <script>
-            const btn = document.getElementById('stt-btn');
-            const status = document.getElementById('status');
-            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-            recognition.lang = 'ko-KR';
-            let isRecognizing = false;
-            btn.onclick = () => { if (!isRecognizing) recognition.start(); else recognition.stop(); };
-            recognition.onstart = () => { isRecognizing = true; status.innerText = "듣는 중..."; btn.style.backgroundColor = "#ff4b4b"; btn.style.color = "white"; btn.innerHTML = "🛑 음성 입력 중지"; };
-            recognition.onresult = (event) => {
-                const text = event.results[0][0].transcript;
-                const textArea = window.parent.document.querySelector('textarea[aria-label="의견을 입력하세요"]');
-                if (textArea) {
-                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-                    nativeInputValueSetter.call(textArea, textArea.value + " " + text);
-                    textArea.dispatchEvent(new Event('input', { bubbles: true }));
-                    status.innerText = "입력 완료!";
-                }
-            };
-            recognition.onend = () => { isRecognizing = false; setTimeout(() => { status.innerText = "대기 중..."; btn.style.backgroundColor = "#e8f0fe"; btn.style.color = "#1a73e8"; btn.innerHTML = "🎤 음성 입력 시작"; }, 1500); };
-        </script>
-        """,
-        height=120,
-    )
+    with col_stt:
+        st.components.v1.html(
+            """
+            <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer;">🎤 음성 입력 시작</button>
+            <p id="status" style="font-size:11px; color:gray; text-align:center; margin-top:5px;">대기 중...</p>
+            <script>
+                const btn = document.getElementById('stt-btn');
+                const status = document.getElementById('status');
+                const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.lang = 'ko-KR';
+                let isRecognizing = false;
+                btn.onclick = () => { if (!isRecognizing) recognition.start(); else recognition.stop(); };
+                recognition.onstart = () => { isRecognizing = true; status.innerText = "듣는 중..."; btn.style.backgroundColor = "#ff4b4b"; btn.style.color = "white"; btn.innerHTML = "🛑 음성 입력 중지"; };
+                recognition.onresult = (event) => {
+                    const text = event.results[0][0].transcript;
+                    const textArea = window.parent.document.querySelector('textarea[aria-label="의견을 입력하세요"]');
+                    if (textArea) {
+                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+                        nativeInputValueSetter.call(textArea, textArea.value + " " + text);
+                        textArea.dispatchEvent(new Event('input', { bubbles: true }));
+                        status.innerText = "입력 완료!";
+                    }
+                };
+                recognition.onend = () => { isRecognizing = false; setTimeout(() => { status.innerText = "대기 중..."; btn.style.backgroundColor = "#e8f0fe"; btn.style.color = "#1a73e8"; btn.innerHTML = "🎤 음성 입력 시작"; }, 1500); };
+            </script>
+            """,
+            height=120,
+        )
 
-_elapsed = time.time() - st.session_state.get('last_submit_ts', 0)
-_submit_cooldown = _elapsed < 3
-_submit_disabled = _submit_cooldown or st.session_state.get('is_working', False)
-if st.button("의견 제출", use_container_width=True, type="primary", disabled=_submit_disabled):
-    if st.session_state.get('is_working', False):
-        st.stop()
-    st.session_state['is_working'] = True
-    input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
-    student_ok, safe_student_name, student_error_code, student_error_message = validate_student_name(student_name, max_len=MAX_STUDENT_NAME_LEN)
-    student_number_ok, safe_student_number, _, student_number_error_message = validate_student_name(student_number, max_len=20)
-    if not student_number_ok and user_role == "학생":
-        st.session_state['is_working'] = False
-        st.error(f"❌ {student_number_error_message}")
-        st.stop()
-    if user_role == "학생" and (not safe_student_name or safe_student_name == "익명"):
-        safe_student_name = safe_student_number or "학번미입력"
-    if input_ok and safe_input:
-        now = get_kst_now_str()
-        author_role_for_submit = "교사" if user_role == "교사" else "학생"
-        client_ip = get_client_ip()
-        insert_payload = {
-            "room_name": room_name, "timestamp": now, "student_name": safe_student_name,
-            "content": safe_input, "sentiment": sentiment, "author_role": author_role_for_submit,
-        }
-        if debate_ip_column_available() and client_ip:
-            parts = client_ip.split(".")
-            anonymized_ip = f"{parts[0]}.0.0.{parts[3]}" if len(parts) == 4 else None
-            if anonymized_ip:
-                insert_payload["ip_address"] = anonymized_ip
-        try:
-            res = submit_opinion(supabase, insert_payload)
-            if res is None:
+    _elapsed = time.time() - st.session_state.get('last_submit_ts', 0)
+    _submit_cooldown = _elapsed < 3
+    _submit_disabled = _submit_cooldown or st.session_state.get('is_working', False)
+    if st.button("의견 제출", use_container_width=True, type="primary", disabled=_submit_disabled):
+        if st.session_state.get('is_working', False):
+            st.stop()
+        st.session_state['is_working'] = True
+        input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
+        student_ok, safe_student_name, student_error_code, student_error_message = validate_student_name(student_name, max_len=MAX_STUDENT_NAME_LEN)
+        student_number_ok, safe_student_number, _, student_number_error_message = validate_student_name(student_number, max_len=20)
+        if not student_number_ok and user_role == "학생":
+            st.session_state['is_working'] = False
+            st.error(f"❌ {student_number_error_message}")
+            st.stop()
+        if user_role == "학생" and (not safe_student_name or safe_student_name == "익명"):
+            safe_student_name = safe_student_number or "학번미입력"
+        if input_ok and safe_input:
+            now = get_kst_now_str()
+            author_role_for_submit = "교사" if user_role == "교사" else "학생"
+            client_ip = get_client_ip()
+            insert_payload = {
+                "room_name": room_name, "timestamp": now, "student_name": safe_student_name,
+                "content": safe_input, "sentiment": sentiment, "author_role": author_role_for_submit,
+            }
+            if debate_ip_column_available() and client_ip:
+                parts = client_ip.split(".")
+                anonymized_ip = f"{parts[0]}.0.0.{parts[3]}" if len(parts) == 4 else None
+                if anonymized_ip:
+                    insert_payload["ip_address"] = anonymized_ip
+            try:
+                res = submit_opinion(supabase, insert_payload)
+                if res is None:
+                    st.session_state['is_working'] = False
+                    st.stop()
+                st.session_state['last_submit_ts'] = time.time()
                 st.session_state['is_working'] = False
-                st.stop()
-            st.session_state['last_submit_ts'] = time.time()
+                fetch_live_messages.clear()
+                log_audit(
+                    "opinion_submitted",
+                    room_name=room_name, actor_name=safe_student_name,
+                    role=author_role_for_submit, sentiment=sentiment,
+                    client_ip=client_ip if client_ip else "N/A",
+                )
+                st.session_state['reset_key'] += 1
+                st.rerun(scope="app")
+            except Exception as e:
+                st.session_state['is_working'] = False
+                st.error(f"저장 실패: {e}")
+        else:
             st.session_state['is_working'] = False
-            fetch_live_messages.clear()
-            log_audit(
-                "opinion_submitted",
-                room_name=room_name, actor_name=safe_student_name,
-                role=author_role_for_submit, sentiment=sentiment,
-                client_ip=client_ip if client_ip else "N/A",
-            )
-            st.session_state['reset_key'] += 1
-            st.rerun()
-        except Exception as e:
-            st.session_state['is_working'] = False
-            st.error(f"저장 실패: {e}")
-    else:
-        st.session_state['is_working'] = False
-        st.warning(f"{input_error_message} ({input_error_code})")
-if _submit_cooldown:
-    st.caption("⏳ 제출 성공 후 3초간 의견을 제출할 수 없습니다.")
-    time.sleep(0.5)
-    st.rerun()
+            st.warning(f"{input_error_message} ({input_error_code})")
+    if _submit_cooldown:
+        st.caption("⏳ 제출 성공 후 3초간 의견을 제출할 수 없습니다.")
+        time.sleep(0.5)
+        st.rerun()
+
+_render_opinion_input(supabase, room_name, user_role, student_name, student_number, current_mode)
 
 st.divider()
 
