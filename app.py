@@ -1,4 +1,5 @@
 import logging
+import time
 
 import streamlit as st
 
@@ -8,7 +9,6 @@ from db import (
     fetch_live_messages,
     fetch_topic_data,
     init_db,
-    is_recent_submission,
     submit_opinion,
     using_service_role_key,
 )
@@ -140,7 +140,8 @@ with col_stt:
         height=120,
     )
 
-if st.button("의견 제출", use_container_width=True, type="primary"):
+_submit_cooldown = time.time() - st.session_state.get('last_submit_ts', 0) < 3
+if st.button("의견 제출", use_container_width=True, type="primary", disabled=_submit_cooldown):
     input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
     student_ok, safe_student_name, student_error_code, student_error_message = validate_student_name(student_name, max_len=MAX_STUDENT_NAME_LEN)
     student_number_ok, safe_student_number, _, student_number_error_message = validate_student_name(student_number, max_len=20)
@@ -153,17 +154,13 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
         now = get_kst_now_str()
         author_role_for_submit = "교사" if user_role == "교사" else "학생"
         client_ip = get_client_ip()
-        if is_recent_submission(supabase, room_name, safe_student_name):
-            st.warning("⏳ 15초 후 다시 제출할 수 있습니다.")
-            st.stop()
         insert_payload = {
             "room_name": room_name, "timestamp": now, "student_name": safe_student_name,
             "content": safe_input, "sentiment": sentiment, "author_role": author_role_for_submit,
         }
         if debate_ip_column_available() and client_ip:
-            # inet 컬럼이므로 유효한 IP 형식 유지 — 마지막 옥텟만 0으로 익명화
             parts = client_ip.split(".")
-            anonymized_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.0" if len(parts) == 4 else None
+            anonymized_ip = f"{parts[0]}.0.0.{parts[3]}" if len(parts) == 4 else None
             if anonymized_ip:
                 insert_payload["ip_address"] = anonymized_ip
         try:
@@ -184,6 +181,8 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
             st.error(f"저장 실패: {e}")
     else:
         st.warning(f"{input_error_message} ({input_error_code})")
+if _submit_cooldown:
+    st.caption("⏳ 제출 성공 후 3초간 의견을 제출할 수 없습니다.")
 
 st.divider()
 
