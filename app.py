@@ -160,7 +160,7 @@ if st.button("의견 제출", use_container_width=True, type="primary", disabled
         }
         if debate_ip_column_available() and client_ip:
             parts = client_ip.split(".")
-            anonymized_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.0" if len(parts) == 4 else None
+            anonymized_ip = f"{parts[0]}.0.0.0" if len(parts) == 4 else None
             if anonymized_ip:
                 insert_payload["ip_address"] = anonymized_ip
         try:
