@@ -142,9 +142,9 @@ def _validate_text_field(
     -------
     (ok: bool, safe_text: str, error_code: str | None, error_message: str | None)
     """
-    normalized = normalize_user_text(raw_text, max_len=max_len)
+    stripped = (raw_text or "").strip()
 
-    if not normalized:
+    if not stripped:
         if allow_empty:
             return True, "", None, None
         return (
@@ -153,7 +153,7 @@ def _validate_text_field(
             VALIDATION_MESSAGES[ValidationError.EMPTY].format(field=field_name),
         )
 
-    if len(normalized) > max_len:
+    if len(stripped) > max_len:
         return (
             False, "",
             ValidationError.TOO_LONG,
@@ -161,6 +161,8 @@ def _validate_text_field(
                 field=field_name, max_len=max_len
             ),
         )
+
+    normalized = stripped
 
     if allowed_pattern and not allowed_pattern.match(normalized):
         return (
@@ -217,13 +219,14 @@ def validate_opinion_content(raw_text, max_len=700):
     """
     의견 내용 검증.
     - 최대 700자
-    - 허용 문자 패턴 적용
+    - 길이만 체크 (특수문자·이모지 허용)
     """
     return _validate_text_field(
         raw_text,
         field_name="의견 내용",
         max_len=max_len,
         allow_empty=False,
+        allowed_pattern=None,
     )
 
 

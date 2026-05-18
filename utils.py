@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 import streamlit as st
@@ -7,10 +8,11 @@ logger = logging.getLogger("talk_trace_ai")
 
 DATETIME_FMT = "%Y-%m-%d %H:%M:%S"
 DISPLAY_DATETIME_FMT = "%Y-%m-%d %p %I:%M:%S"
+KST = timezone(timedelta(hours=9))
 
 
 def get_kst_now():
-    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=9)
+    return datetime.now(tz=KST)
 
 
 def get_kst_now_str():
@@ -84,11 +86,7 @@ def compact_ai_report_output(text):
     cleaned = [line for line in raw_lines if line and not line.startswith("#")]
     if not cleaned:
         return ""
-    report_labels = ("핵심요약 1:", "핵심요약 2:", "핵심요약 3:", "베스트 학생:", "선정 이유:")
     normalized_text = " ".join(cleaned)
-    if report_labels[0] in normalized_text:
-        for label in report_labels[1:]:
-            normalized_text = normalized_text.replace(f" {label}", f"\n{label}")
-            normalized_text = normalized_text.replace(label, f"\n{label}")
+    normalized_text = re.sub(r"\s*(핵심요약 [123]:|베스트 학생:|선정 이유:)", r"\n\1", normalized_text)
     normalized_lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
     return "\n".join(normalized_lines[:5])

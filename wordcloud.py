@@ -39,7 +39,7 @@ def build_word_frequencies(text_series):
     return Counter(tokens)
 
 
-def build_circular_wordcloud_html(frequencies, max_words=75, width=760, height=520):
+def build_circular_wordcloud_html(frequencies, max_words=40, width=760, height=520):
     if not frequencies:
         return ""
     sorted_words = sorted(frequencies.items(), key=lambda item: (-item[1], item[0]))[:max_words]
