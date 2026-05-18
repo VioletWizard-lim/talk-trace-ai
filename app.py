@@ -140,7 +140,8 @@ with col_stt:
         height=120,
     )
 
-_submit_cooldown = time.time() - st.session_state.get('last_submit_ts', 0) < 3
+_elapsed = time.time() - st.session_state.get('last_submit_ts', 0)
+_submit_cooldown = _elapsed < 3
 if st.button("의견 제출", use_container_width=True, type="primary", disabled=_submit_cooldown):
     input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
     student_ok, safe_student_name, student_error_code, student_error_message = validate_student_name(student_name, max_len=MAX_STUDENT_NAME_LEN)
@@ -183,6 +184,8 @@ if st.button("의견 제출", use_container_width=True, type="primary", disabled
         st.warning(f"{input_error_message} ({input_error_code})")
 if _submit_cooldown:
     st.caption("⏳ 제출 성공 후 3초간 의견을 제출할 수 없습니다.")
+    time.sleep(3 - _elapsed)
+    st.rerun()
 
 st.divider()
 
