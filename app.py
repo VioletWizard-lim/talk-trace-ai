@@ -181,6 +181,8 @@ if st.button("의견 제출", use_container_width=True, type="primary", disabled
             st.error(f"저장 실패: {e}")
     else:
         st.warning(f"{input_error_message} ({input_error_code})")
+if _submit_cooldown:
+    st.caption("⏳ 제출 성공 후 3초간 의견을 제출할 수 없습니다.")
 
 st.divider()
 
