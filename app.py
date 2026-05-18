@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import time
 
@@ -163,8 +162,11 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
             "content": safe_input, "sentiment": sentiment, "author_role": author_role_for_submit,
         }
         if debate_ip_column_available() and client_ip:
-            hashed_ip = hashlib.sha256(client_ip.encode()).hexdigest()[:16]
-            insert_payload["ip_address"] = hashed_ip
+            # inet 컬럼이므로 유효한 IP 형식 유지 — 마지막 옥텟만 0으로 익명화
+            parts = client_ip.split(".")
+            anonymized_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.0" if len(parts) == 4 else None
+            if anonymized_ip:
+                insert_payload["ip_address"] = anonymized_ip
         try:
             res = submit_opinion(supabase, insert_payload)
             if res is None:
