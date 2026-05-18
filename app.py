@@ -1,5 +1,4 @@
 import logging
-import time
 
 import streamlit as st
 
@@ -9,6 +8,7 @@ from db import (
     fetch_live_messages,
     fetch_topic_data,
     init_db,
+    is_recent_submission,
     submit_opinion,
     using_service_role_key,
 )
@@ -141,10 +141,6 @@ with col_stt:
     )
 
 if st.button("의견 제출", use_container_width=True, type="primary"):
-    last_submit = st.session_state.get('last_submit_ts', 0)
-    if time.time() - last_submit < 10:
-        st.warning("⏳ 10초 후 다시 제출할 수 있습니다.")
-        st.stop()
     input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
     student_ok, safe_student_name, student_error_code, student_error_message = validate_student_name(student_name, max_len=MAX_STUDENT_NAME_LEN)
     student_number_ok, safe_student_number, _, student_number_error_message = validate_student_name(student_number, max_len=20)
@@ -157,6 +153,9 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
         now = get_kst_now_str()
         author_role_for_submit = "교사" if user_role == "교사" else "학생"
         client_ip = get_client_ip()
+        if is_recent_submission(supabase, room_name, safe_student_name):
+            st.warning("⏳ 15초 후 다시 제출할 수 있습니다.")
+            st.stop()
         insert_payload = {
             "room_name": room_name, "timestamp": now, "student_name": safe_student_name,
             "content": safe_input, "sentiment": sentiment, "author_role": author_role_for_submit,

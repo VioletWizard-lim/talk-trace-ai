@@ -307,6 +307,23 @@ def submit_opinion(supabase: Client, payload):
     return execute_query(supabase.table("debate").insert(payload), fail_message="저장 실패")
 
 
+def is_recent_submission(supabase: Client, room_name: str, student_name: str, cooldown_seconds: int = 15) -> bool:
+    """같은 학생이 cooldown_seconds 이내에 이미 제출했으면 True를 반환합니다."""
+    from datetime import timedelta
+    from utils import get_kst_now
+    cutoff = (get_kst_now() - timedelta(seconds=cooldown_seconds)).strftime("%Y-%m-%d %H:%M:%S")
+    res = execute_query(
+        supabase.table("debate")
+        .select("id")
+        .eq("room_name", room_name)
+        .eq("student_name", student_name)
+        .gte("timestamp", cutoff)
+        .limit(1),
+        fail_message="제출 간격 확인 실패",
+    )
+    return bool(res and res.data)
+
+
 def delete_opinion_message(supabase: Client, message_id: int):
     return execute_query(
         supabase.table("debate").delete().eq("id", message_id),
