@@ -1,11 +1,11 @@
 import logging
-import os
 
 import pandas as pd
 import streamlit as st
 from supabase import Client, create_client
 
 from auth import _hash_password, _is_hashed, _verify_password  # noqa: F401
+from env import get_secret
 
 logger = logging.getLogger("talk_trace_ai")
 
@@ -20,41 +20,21 @@ def upgrade_teacher_password(supabase: Client, account_id: int, plain: str):
 
 
 # ==========================================
-# [0] 환경변수 → st.secrets 통합 읽기 헬퍼
-# ==========================================
-
-def _get_secret(key: str, default: str = "") -> str:
-    """
-    환경변수(HF Spaces) → st.secrets(Streamlit Cloud) 순서로 값을 읽습니다.
-    두 플랫폼 모두 코드 수정 없이 동작합니다.
-    """
-    # 1순위: 환경변수 (Hugging Face Spaces)
-    env_val = os.environ.get(key, "").strip()
-    if env_val:
-        return env_val
-    # 2순위: st.secrets (Streamlit Cloud)
-    try:
-        return str(st.secrets.get(key, default)).strip()
-    except Exception:
-        return default
-
-
-# ==========================================
 # [1] DB 초기화 및 인증
 # ==========================================
 
 @st.cache_resource
 def init_db() -> Client:
-    supabase_url = _get_secret("SUPABASE_URL")
+    supabase_url = get_secret("SUPABASE_URL")
     supabase_key = (
-        _get_secret("SUPABASE_SERVICE_ROLE_KEY")
-        or _get_secret("SUPABASE_KEY")
+        get_secret("SUPABASE_SERVICE_ROLE_KEY")
+        or get_secret("SUPABASE_KEY")
     )
     return create_client(supabase_url, supabase_key)
 
 
 def using_service_role_key() -> bool:
-    return bool(_get_secret("SUPABASE_SERVICE_ROLE_KEY"))
+    return bool(get_secret("SUPABASE_SERVICE_ROLE_KEY"))
 
 
 def ensure_db_login(supabase: Client) -> bool:
@@ -71,8 +51,8 @@ def ensure_db_login(supabase: Client) -> bool:
     try:
         supabase.auth.sign_in_with_password(
             {
-                "email": _get_secret("SUPABASE_APP_EMAIL"),
-                "password": _get_secret("SUPABASE_APP_PASSWORD"),
+                "email": get_secret("SUPABASE_APP_EMAIL"),
+                "password": get_secret("SUPABASE_APP_PASSWORD"),
             }
         )
         return True

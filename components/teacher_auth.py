@@ -6,8 +6,8 @@ from db import (
     request_teacher_account,
     upgrade_teacher_password,
     using_service_role_key,
-    _get_secret,
 )
+from env import get_secret
 from validators import validate_teacher_credential
 from utils import to_bool_flag
 
@@ -53,7 +53,7 @@ def _handle_login(supabase, teacher_id_input, teacher_pw_input):
                 "등록된 계정도 미등록으로 보일 수 있습니다."
             )
         try:
-            supabase_url = str(_get_secret("SUPABASE_URL", ""))
+            supabase_url = str(get_secret("SUPABASE_URL", ""))
             project_ref = supabase_url.split("//", 1)[-1].split(".", 1)[0] if supabase_url else ""
             if project_ref:
                 st.caption(f"현재 앱 연결 DB 프로젝트: `{project_ref}`")

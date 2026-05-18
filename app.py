@@ -1,4 +1,6 @@
+import hashlib
 import logging
+import time
 
 import streamlit as st
 
@@ -140,6 +142,10 @@ with col_stt:
     )
 
 if st.button("의견 제출", use_container_width=True, type="primary"):
+    last_submit = st.session_state.get('last_submit_ts', 0)
+    if time.time() - last_submit < 10:
+        st.warning("⏳ 10초 후 다시 제출할 수 있습니다.")
+        st.stop()
     input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
     student_ok, safe_student_name, student_error_code, student_error_message = validate_student_name(student_name, max_len=MAX_STUDENT_NAME_LEN)
     student_number_ok, safe_student_number, _, student_number_error_message = validate_student_name(student_number, max_len=20)
@@ -157,11 +163,13 @@ if st.button("의견 제출", use_container_width=True, type="primary"):
             "content": safe_input, "sentiment": sentiment, "author_role": author_role_for_submit,
         }
         if debate_ip_column_available() and client_ip:
-            insert_payload["ip_address"] = client_ip
+            hashed_ip = hashlib.sha256(client_ip.encode()).hexdigest()[:16]
+            insert_payload["ip_address"] = hashed_ip
         try:
             res = submit_opinion(supabase, insert_payload)
             if res is None:
                 st.stop()
+            st.session_state['last_submit_ts'] = time.time()
             fetch_live_messages.clear()
             log_audit(
                 "opinion_submitted",
