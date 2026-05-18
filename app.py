@@ -142,11 +142,16 @@ with col_stt:
 
 _elapsed = time.time() - st.session_state.get('last_submit_ts', 0)
 _submit_cooldown = _elapsed < 3
-if st.button("의견 제출", use_container_width=True, type="primary", disabled=_submit_cooldown):
+_submit_disabled = _submit_cooldown or st.session_state.get('is_working', False)
+if st.button("의견 제출", use_container_width=True, type="primary", disabled=_submit_disabled):
+    if st.session_state.get('is_working', False):
+        st.stop()
+    st.session_state['is_working'] = True
     input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
     student_ok, safe_student_name, student_error_code, student_error_message = validate_student_name(student_name, max_len=MAX_STUDENT_NAME_LEN)
     student_number_ok, safe_student_number, _, student_number_error_message = validate_student_name(student_number, max_len=20)
     if not student_number_ok and user_role == "학생":
+        st.session_state['is_working'] = False
         st.error(f"❌ {student_number_error_message}")
         st.stop()
     if user_role == "학생" and (not safe_student_name or safe_student_name == "익명"):
@@ -167,8 +172,10 @@ if st.button("의견 제출", use_container_width=True, type="primary", disabled
         try:
             res = submit_opinion(supabase, insert_payload)
             if res is None:
+                st.session_state['is_working'] = False
                 st.stop()
             st.session_state['last_submit_ts'] = time.time()
+            st.session_state['is_working'] = False
             fetch_live_messages.clear()
             log_audit(
                 "opinion_submitted",
@@ -179,12 +186,14 @@ if st.button("의견 제출", use_container_width=True, type="primary", disabled
             st.session_state['reset_key'] += 1
             st.rerun()
         except Exception as e:
+            st.session_state['is_working'] = False
             st.error(f"저장 실패: {e}")
     else:
+        st.session_state['is_working'] = False
         st.warning(f"{input_error_message} ({input_error_code})")
 if _submit_cooldown:
     st.caption("⏳ 제출 성공 후 3초간 의견을 제출할 수 없습니다.")
-    time.sleep(3 - _elapsed)
+    time.sleep(0.5)
     st.rerun()
 
 st.divider()
