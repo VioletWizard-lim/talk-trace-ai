@@ -30,15 +30,6 @@ def build_summary_prompt(act_type, current_topic, full_history):
     )
 
 
-def build_record_prompt(act_type, current_topic, selected_student, debate_history):
-    return (
-        f"당신은 정보 교사입니다. "
-        f"'{current_topic}' 주제 {act_type}에 참여한 "
-        f"'{selected_student}' 학생의 활동 기록입니다. "
-        "이를 바탕으로 생활기록부 교과세특 초안을 약 300자 내외로 작성하세요. "
-        f"교육적 성장을 강조하세요.\n\n[활동 기록]\n{debate_history}"
-    )
-
 # ── API 키 초기화 상태 추적 (모듈 수준 1회만 실행) ──
 _initialized_api_key: str | None = None
 

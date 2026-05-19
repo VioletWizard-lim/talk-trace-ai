@@ -338,37 +338,6 @@ def create_teacher_hint(supabase: Client, payload):
     )
 
 
-# ==========================================
-# [6] 세특 기록(records) 관련 쿼리
-# ==========================================
-
-def save_student_record(supabase: Client, payload):
-    return execute_query(
-        supabase.table("records").insert(payload),
-        fail_message="세특 보관함 저장 실패",
-    )
-
-
-def delete_student_record(supabase: Client, record_id: int):
-    return execute_query(
-        supabase.table("records").delete().eq("id", record_id),
-        fail_message="세특 기록 삭제 실패",
-    )
-
-
-def fetch_student_records(supabase: Client, room_name: str, limit: int):
-    res = execute_query(
-        supabase.table("records")
-        .select("id, timestamp, student_name, content")
-        .eq("room_name", room_name)
-        .order("id", desc=True)
-        .limit(limit),
-        fail_message="세특 보관함 조회 실패",
-    )
-    if not res or not res.data:
-        return pd.DataFrame()
-    return pd.DataFrame(res.data)
-
 
 def destroy_room_data(supabase: Client, room_name: str):
     topic_res = execute_query(
@@ -379,13 +348,9 @@ def destroy_room_data(supabase: Client, room_name: str):
         supabase.table("debate").delete().eq("room_name", room_name),
         fail_message="방 의견 삭제 실패",
     )
-    records_res = execute_query(
-        supabase.table("records").delete().eq("room_name", room_name),
-        fail_message="방 세특 기록 삭제 실패",
-    )
-    if topic_res is None or debate_res is None or records_res is None:
+    if topic_res is None or debate_res is None:
         return None
-    return {"topic": topic_res, "debate": debate_res, "records": records_res}
+    return {"topic": topic_res, "debate": debate_res}
 
 
 # ==========================================

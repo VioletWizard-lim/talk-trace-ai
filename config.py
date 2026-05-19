@@ -3,7 +3,6 @@ from env import get_secret
 AI_MODEL_NAME = "gemini-2.5-flash"
 LIVE_BOARD_FETCH_LIMIT = 300
 DASHBOARD_FETCH_LIMIT = 2000
-RECORDS_FETCH_LIMIT = 500
 LIVE_REFRESH_INTERVAL = "5s"
 AI_HINT_ENABLED = str(get_secret("AI_HINT_ENABLED", "true")).lower() not in ("false", "0", "no")
 ROOM_DESTROY_ENABLED = str(get_secret("ROOM_DESTROY_ENABLED", "true")).lower() not in ("false", "0", "no")
@@ -16,15 +15,6 @@ UI_FONT_FAMILY = "sans-serif"
 
 APP_CSS = """
     <style>
-    .records-db-table-wrap { overflow-x: auto; border: 1px solid #e6e6e6; border-radius: 10px; background: #fff; }
-    .records-db-table-wrap table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .records-db-table-wrap th, .records-db-table-wrap td { border-bottom: 1px solid #efefef; border-right: 1px solid #efefef; padding: 10px 12px; text-align: left; vertical-align: top; }
-    .records-db-table-wrap th:last-child, .records-db-table-wrap td:last-child { border-right: none; }
-    .records-db-table-wrap th { white-space: nowrap; font-weight: 700; }
-    .records-db-table-wrap th:nth-child(1), .records-db-table-wrap td:nth-child(1) { width: 5%; white-space: nowrap; }
-    .records-db-table-wrap th:nth-child(2), .records-db-table-wrap td:nth-child(2) { width: 15%; white-space: nowrap; }
-    .records-db-table-wrap th:nth-child(3), .records-db-table-wrap td:nth-child(3) { width: 12%; white-space: nowrap; }
-    .records-db-table-wrap th:nth-child(4), .records-db-table-wrap td:nth-child(4) { width: 68%; white-space: pre-wrap; word-break: break-word; }
     [data-testid="stDecoration"] { display: none !important; }
     [data-testid="stStatusWidget"] { display: none !important; }
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"],
