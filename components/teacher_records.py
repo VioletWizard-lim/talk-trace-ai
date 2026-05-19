@@ -10,9 +10,11 @@ from utils import get_kst_now
 def render_records_section(room_name, act_type, df_all):
     st.subheader("📥 활동 데이터 다운로드")
     if not df_all.empty:
+        EXCLUDE_COLS = {'user_id', 'ip_address', 'created_at'}
+        export_df = df_all.drop(columns=[c for c in EXCLUDE_COLS if c in df_all.columns])
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df_all.to_excel(writer, index=False)
+            export_df.to_excel(writer, index=False)
         st.download_button(
             f"{act_type} 전체 활동 로그 (Excel)",
             data=buffer.getvalue(),
