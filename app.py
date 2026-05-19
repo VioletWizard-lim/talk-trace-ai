@@ -35,7 +35,6 @@ st.set_page_config(page_title="말자취(Talk-Trace) AI", layout="wide")
 st.markdown(APP_CSS, unsafe_allow_html=True)
 
 if 'reset_key' not in st.session_state: st.session_state['reset_key'] = 0
-if 'ai_result_text' not in st.session_state: st.session_state['ai_result_text'] = ""
 if 'ai_hint_text' not in st.session_state: st.session_state['ai_hint_text'] = ""
 if 'ai_report_text' not in st.session_state: st.session_state['ai_report_text'] = ""
 if 'page' not in st.session_state: st.session_state['page'] = "home"

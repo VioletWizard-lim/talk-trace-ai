@@ -52,7 +52,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     st.divider()
     render_summary_section(room_name, act_type, current_topic, df_all)
     st.divider()
-    render_records_section(supabase, room_name, user_role, student_name, act_type, current_topic, df_all, student_only_df)
+    render_records_section(room_name, act_type, df_all)
 
     st.divider()
     st.subheader("🚨 위험 구역 (방 폭파)")
@@ -60,14 +60,13 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
         if not ROOM_DESTROY_ENABLED:
             st.warning("운영 안전 모드로 방 폭파 기능이 비활성화되어 있습니다.")
         else:
-            st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록과 세특 보관함이 완전히 삭제됩니다.")
+            st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록이 완전히 삭제됩니다.")
             if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True):
                 try:
                     if destroy_room_data(supabase, room_name) is None:
                         st.stop()
                     log_audit("room_destroyed", room_name=room_name, actor_name=student_name, role=user_role)
                     st.success("성공적으로 파괴되었습니다.")
-                    st.session_state['ai_result_text'] = ""
                     st.rerun()
                 except Exception as e:
                     st.error(f"삭제 중 오류 발생: {e}")

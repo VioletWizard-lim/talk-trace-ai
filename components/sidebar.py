@@ -105,7 +105,6 @@ def render_sidebar(supabase) -> dict:
             st.session_state['current_room'] = room_name
             st.session_state['ai_hint_text'] = ""
             st.session_state['ai_report_text'] = ""
-            st.session_state['ai_result_text'] = ""
             if st.session_state['joined']:
                 st.session_state['joined'] = False
                 log_audit("room_switched_to_lobby", room_name=room_name, actor_name=student_name, role=user_role, previous_room=prev_room)
