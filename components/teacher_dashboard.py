@@ -4,7 +4,8 @@ import plotly.express as px
 import streamlit as st
 
 from db import destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status
-from utils import create_analysis_image, get_kst_now
+from utils import create_analysis_image
+from components.opinion_change import _render_image_download
 from validators import with_fallback_author_role
 from utils import log_audit
 from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
@@ -69,19 +70,11 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             if ai:
                 st.caption("🤖 AI 배움 분석")
                 st.markdown(ai.replace("\n", "\n\n"))
-                try:
-                    img_bytes = create_analysis_image(selected, current_topic, pre, post, ai)
-                    filename = f"배움분석_{selected}_{get_kst_now().strftime('%Y%m%d_%H%M')}.png"
-                    st.download_button(
-                        "🖼️ 분석 결과 이미지로 저장",
-                        data=img_bytes,
-                        file_name=filename,
-                        mime="image/png",
-                        use_container_width=True,
-                        key="oc_img_download",
-                    )
-                except Exception:
-                    pass
+                _render_image_download(
+                    selected, current_topic, pre, post, ai,
+                    session_key=f"img_teacher_{room_name}_{selected}",
+                    btn_key="dl_analysis_teacher",
+                )
             else:
                 st.caption("AI 분석이 아직 없습니다.")
 

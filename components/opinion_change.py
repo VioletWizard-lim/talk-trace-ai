@@ -1,9 +1,8 @@
 import streamlit as st
 
 from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
-from utils import create_analysis_image, get_kst_now
+from utils import create_analysis_image
 from db import (
-    fetch_debate_status,
     fetch_live_messages,
     fetch_opinion_change,
     opinion_changes_available,
@@ -42,9 +41,9 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
         return
 
     row = fetch_opinion_change(supabase, room_name, student_name)
-    pre_opinion = (row or {}).get("pre_opinion") or ""
+    pre_opinion  = (row or {}).get("pre_opinion")  or ""
     post_opinion = (row or {}).get("post_opinion") or ""
-    ai_analysis = (row or {}).get("ai_analysis") or ""
+    ai_analysis  = (row or {}).get("ai_analysis")  or ""
 
     st.subheader("🔄 토론 후 생각 변화 기록")
 
@@ -78,24 +77,40 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
         if ai_analysis:
             st.info("🤖 **AI 배움 분석**")
             st.markdown(ai_analysis.replace("\n", "\n\n"))
-            try:
-                img_bytes = create_analysis_image(
-                    student_name, current_topic, pre_opinion, post_opinion, ai_analysis
-                )
-                filename = f"배움분석_{student_name}_{get_kst_now().strftime('%Y%m%d_%H%M')}.png"
-                st.download_button(
-                    "🖼️ 분석 결과 이미지로 저장",
-                    data=img_bytes,
-                    file_name=filename,
-                    mime="image/png",
-                    use_container_width=True,
-                )
-            except Exception:
-                pass
+            _render_image_download(
+                student_name, current_topic, pre_opinion, post_opinion, ai_analysis,
+                session_key=f"img_{room_name}_{student_name}",
+                btn_key="dl_analysis_student",
+            )
         else:
             if st.button("🤖 AI 배움 분석 받기", use_container_width=True):
                 _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_opinion)
                 st.rerun()
+
+
+def _render_image_download(student_name, topic, pre_opinion, post_opinion, ai_analysis,
+                           session_key, btn_key):
+    """이미지 bytes를 session_state에 캐시 후 download_button 렌더링."""
+    cache_key = session_key + "_bytes"
+    if cache_key not in st.session_state:
+        try:
+            st.session_state[cache_key] = create_analysis_image(
+                student_name, topic, pre_opinion, post_opinion, ai_analysis
+            )
+        except Exception:
+            st.session_state[cache_key] = None
+
+    img_bytes = st.session_state.get(cache_key)
+    if img_bytes:
+        filename = f"배움분석_{student_name}.png"
+        st.download_button(
+            "🖼️ 분석 결과 이미지로 저장",
+            data=img_bytes,
+            file_name=filename,
+            mime="image/png",
+            use_container_width=True,
+            key=btn_key,
+        )
 
 
 def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_opinion):
@@ -122,6 +137,9 @@ def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic
         )
         if res_text:
             save_opinion_analysis(supabase, room_name, student_name, res_text)
+            # 캐시 초기화 — 새 분석 결과로 이미지 재생성
+            cache_key = f"img_{room_name}_{student_name}_bytes"
+            st.session_state.pop(cache_key, None)
             st.toast("✅ AI 분석 완료!", icon="🎉")
         else:
             st.toast("🚨 AI 분석에 실패했습니다.", icon="❌")
