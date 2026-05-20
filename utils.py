@@ -87,6 +87,13 @@ _FONT_CANDIDATES = [
     "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
 ]
+_FONT_BOLD_CANDIDATES = [
+    "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+]
+
+_AI_SUBSECTION_LABELS = ("배움의 변화:", "성장한 점:", "한 줄 요약:")
 
 
 def _get_pil_font(size: int):
@@ -97,6 +104,16 @@ def _get_pil_font(size: int):
         except Exception:
             continue
     return ImageFont.load_default()
+
+
+def _get_pil_font_bold(size: int):
+    from PIL import ImageFont
+    for path in _FONT_BOLD_CANDIDATES:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+    return _get_pil_font(size)
 
 
 def _strip_non_renderable(text: str) -> str:
@@ -160,17 +177,34 @@ def create_analysis_image(
     C_DIVIDER   = (220, 220, 220)
     C_FTR_BG    = (245, 245, 248)
 
-    f_title = _get_pil_font(22)
-    f_label = _get_pil_font(15)
-    f_body  = _get_pil_font(17)
-    f_small = _get_pil_font(13)
+    f_title    = _get_pil_font(22)
+    f_label    = _get_pil_font(15)
+    f_sublabel = _get_pil_font_bold(16)
+    f_body     = _get_pil_font(17)
+    f_small    = _get_pil_font(13)
 
     LH_BODY    = 27   # body line height px
     LH_LABEL   = 22
+    LH_SUBLBL  = 24
     SEC_GAP    = 16
+    SUBSEC_GAP = 14   # extra gap between AI subsections
     HEADER_H   = 74
     FOOTER_H   = 38
     DIV_H      = 20
+
+    def _ai_paragraphs(text):
+        """AI 분석 텍스트를 (is_label, label_str, body_str) 튜플 리스트로 파싱."""
+        result = []
+        for para in _strip_non_renderable(text or "").split("\n"):
+            para = para.strip()
+            if not para:
+                continue
+            matched = next((lbl for lbl in _AI_SUBSECTION_LABELS if para.startswith(lbl)), None)
+            if matched:
+                result.append((True, matched, para[len(matched):].strip()))
+            else:
+                result.append((False, "", para))
+        return result or [(False, "", "(분석 없음)")]
 
     # ── measure total height with dummy canvas ──────────────────────────
     dummy = Image.new("RGB", (W, 10))
@@ -179,6 +213,17 @@ def create_analysis_image(
     def section_h(text):
         return LH_LABEL + 10 + len(_wrap_to_width(d, text, f_body, CONTENT_W)) * LH_BODY + SEC_GAP
 
+    def ai_section_h(text):
+        h = LH_LABEL + 10  # "AI 배움 분석" 헤더
+        paras = _ai_paragraphs(text)
+        for i, (is_lbl, lbl, body) in enumerate(paras):
+            if is_lbl and i > 0:
+                h += SUBSEC_GAP
+            if is_lbl:
+                h += LH_SUBLBL + 6
+            h += len(_wrap_to_width(d, body if is_lbl else lbl + body, f_body, CONTENT_W)) * LH_BODY
+        return h + SEC_GAP
+
     total_h = (
         HEADER_H + 18
         + LH_LABEL + 14      # info line
@@ -186,7 +231,7 @@ def create_analysis_image(
         + section_h(pre_opinion)
         + section_h(post_opinion)
         + DIV_H
-        + section_h(ai_analysis)
+        + ai_section_h(ai_analysis)
         + FOOTER_H
     )
 
@@ -220,11 +265,32 @@ def create_analysis_image(
             y += LH_BODY
         y += SEC_GAP
 
+    def ai_section(text):
+        nonlocal y
+        draw.text((PAD, y), "AI 배움 분석", font=f_label, fill=C_ACCENT)
+        y += LH_LABEL + 10
+        for i, (is_lbl, lbl, body) in enumerate(_ai_paragraphs(text)):
+            if is_lbl and i > 0:
+                y += SUBSEC_GAP
+            if is_lbl:
+                # 소제목: 굵은 강조색
+                draw.text((PAD, y), lbl, font=f_sublabel, fill=C_ACCENT)
+                y += LH_SUBLBL + 6
+                for line in _wrap_to_width(draw, body, f_body, CONTENT_W):
+                    draw.text((PAD + 8, y), line, font=f_body, fill=C_TEXT)
+                    y += LH_BODY
+            else:
+                full = (lbl + body).strip()
+                for line in _wrap_to_width(draw, full, f_body, CONTENT_W):
+                    draw.text((PAD, y), line, font=f_body, fill=C_TEXT)
+                    y += LH_BODY
+        y += SEC_GAP
+
     divider()
     section("토론 전 생각", pre_opinion or "(없음)")
     section("토론 후 생각", post_opinion or "(없음)")
     divider()
-    section("AI 배움 분석", ai_analysis or "(분석 없음)")
+    ai_section(ai_analysis)
 
     # Footer
     draw.rectangle([0, total_h - FOOTER_H, W, total_h], fill=C_FTR_BG)

@@ -91,7 +91,8 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
 def _render_image_download(student_name, topic, pre_opinion, post_opinion, ai_analysis,
                            session_key, btn_key):
     """이미지 bytes를 session_state에 캐시 후 download_button 렌더링."""
-    cache_key = session_key + "_bytes"
+    # ai_analysis 길이를 키에 포함해 분석 내용이 바뀌면 자동 재생성
+    cache_key = f"{session_key}_{len(ai_analysis)}_bytes"
     if cache_key not in st.session_state:
         try:
             st.session_state[cache_key] = create_analysis_image(
