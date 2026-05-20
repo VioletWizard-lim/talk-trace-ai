@@ -3,7 +3,8 @@ import logging
 import plotly.express as px
 import streamlit as st
 
-from db import destroy_room_data, fetch_debate_status, fetch_live_messages, session_control_available, set_debate_status
+from db import destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status
+from utils import create_analysis_image, get_kst_now
 from validators import with_fallback_author_role
 from utils import log_audit
 from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
@@ -46,6 +47,43 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             st.info("실명 참여 데이터가 없습니다.")
     else:
         st.info(f"{act_type} 데이터가 없습니다.")
+
+    if opinion_changes_available():
+        df_oc = fetch_all_opinion_changes(supabase, room_name)
+        if not df_oc.empty:
+            st.divider()
+            st.subheader("🔍 학생별 배움 분석")
+            students = df_oc["student_name"].tolist()
+            selected = st.selectbox("학생 선택", students, key="oc_student_select")
+            row = df_oc[df_oc["student_name"] == selected].iloc[0]
+            pre  = row.get("pre_opinion")  or "(없음)"
+            post = row.get("post_opinion") or "(없음)"
+            ai   = row.get("ai_analysis")  or ""
+            col_pre, col_post = st.columns(2)
+            with col_pre:
+                st.caption("📌 토론 전 생각")
+                st.info(pre)
+            with col_post:
+                st.caption("🔄 토론 후 생각")
+                st.info(post)
+            if ai:
+                st.caption("🤖 AI 배움 분석")
+                st.markdown(ai.replace("\n", "\n\n"))
+                try:
+                    img_bytes = create_analysis_image(selected, current_topic, pre, post, ai)
+                    filename = f"배움분석_{selected}_{get_kst_now().strftime('%Y%m%d_%H%M')}.png"
+                    st.download_button(
+                        "🖼️ 분석 결과 이미지로 저장",
+                        data=img_bytes,
+                        file_name=filename,
+                        mime="image/png",
+                        use_container_width=True,
+                        key="oc_img_download",
+                    )
+                except Exception:
+                    pass
+            else:
+                st.caption("AI 분석이 아직 없습니다.")
 
     if session_control_available():
         st.divider()
