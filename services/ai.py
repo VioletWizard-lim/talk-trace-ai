@@ -30,6 +30,25 @@ def build_summary_prompt(act_type, current_topic, full_history):
     )
 
 
+def build_opinion_change_prompt(act_type, current_topic, student_name, pre_opinion, post_opinion, debate_history):
+    return (
+        f"'{current_topic}' 주제로 진행된 고등학교 {act_type}에서 "
+        f"'{student_name}' 학생의 생각 변화를 분석합니다.\n\n"
+        f"[토론 전 생각]\n{pre_opinion}\n\n"
+        f"[토론 후 생각]\n{post_opinion}\n\n"
+        f"[토론 중 발언 기록]\n{debate_history}\n\n"
+        "[출력 형식 - 반드시 그대로]\n"
+        "배움의 변화: ...\n"
+        "성장한 점: ...\n"
+        "한 줄 요약: ...\n\n"
+        "[규칙]\n"
+        "- 3가지 항목을 줄바꿈으로 구분하여 출력합니다.\n"
+        "- 각 항목은 2~3문장으로 작성합니다.\n"
+        "- 제목/헤더(#,##), 불필요한 서론 없이 결과만 출력합니다.\n"
+        "- 학생의 실제 발언을 근거로 구체적으로 분석합니다."
+    )
+
+
 # ── API 키 초기화 상태 추적 (모듈 수준 1회만 실행) ──
 _initialized_api_key: str | None = None
 
