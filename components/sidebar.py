@@ -91,7 +91,14 @@ def render_sidebar(supabase) -> dict:
             st.session_state['teacher_id'] = ""
             if st.session_state.get('page') == "admin_approval":
                 st.session_state['page'] = "lobby"
-            student_number = st.text_input("학번", key="student_number_input", placeholder="예: 1101")
+            _joined = st.session_state.get('joined', False)
+            student_number = st.text_input(
+                "학번",
+                key="student_number_input",
+                placeholder="예: 1101",
+                disabled=_joined,
+                help="방 입장 후에는 학번을 변경할 수 없습니다." if _joined else None,
+            )
             if all_rooms:
                 room_name = st.selectbox("🏠 접속할 방 선택", all_rooms)
             else:

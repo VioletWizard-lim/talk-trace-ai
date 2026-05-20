@@ -62,7 +62,8 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
             placeholder="생각이 바뀌었다면 어떻게, 왜 바뀌었는지 — 바뀌지 않았다면 그 이유를 써보세요.",
             label_visibility="collapsed",
         )
-        if st.button("✅ 생각 변화 제출", use_container_width=True, type="primary"):
+        post_confirmed = st.checkbox("⚠️ 제출 후에는 수정이 불가능합니다. 확인했습니다.", key="post_confirm")
+        if st.button("✅ 생각 변화 제출", use_container_width=True, type="primary", disabled=not post_confirmed):
             if not post_input.strip():
                 st.warning("생각을 입력해 주세요.")
                 return
