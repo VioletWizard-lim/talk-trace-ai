@@ -23,7 +23,8 @@ def render_pre_opinion_form(supabase, room_name, student_name, current_topic):
         max_chars=500,
         placeholder="주제에 대한 나의 현재 생각, 입장, 이유를 자유롭게 써보세요.",
     )
-    if st.button("✅ 생각 제출 후 토론 참여", use_container_width=True, type="primary"):
+    confirmed = st.checkbox("⚠️ 제출 후에는 수정이 불가능합니다. 확인했습니다.")
+    if st.button("✅ 생각 제출 후 토론 참여", use_container_width=True, type="primary", disabled=not confirmed):
         if not pre_input.strip():
             st.warning("생각을 입력해 주세요.")
             return
