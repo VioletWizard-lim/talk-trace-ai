@@ -1,6 +1,7 @@
 import streamlit as st
 
 from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
+from utils import create_analysis_image, get_kst_now
 from db import (
     fetch_debate_status,
     fetch_live_messages,
@@ -77,6 +78,20 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
         if ai_analysis:
             st.info("🤖 **AI 배움 분석**")
             st.markdown(ai_analysis.replace("\n", "\n\n"))
+            try:
+                img_bytes = create_analysis_image(
+                    student_name, current_topic, pre_opinion, post_opinion, ai_analysis
+                )
+                filename = f"배움분석_{student_name}_{get_kst_now().strftime('%Y%m%d_%H%M')}.png"
+                st.download_button(
+                    "🖼️ 분석 결과 이미지로 저장",
+                    data=img_bytes,
+                    file_name=filename,
+                    mime="image/png",
+                    use_container_width=True,
+                )
+            except Exception:
+                pass
         else:
             if st.button("🤖 AI 배움 분석 받기", use_container_width=True):
                 _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_opinion)

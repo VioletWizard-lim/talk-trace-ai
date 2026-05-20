@@ -429,6 +429,21 @@ def upsert_post_opinion(supabase: Client, room_name: str, student_name: str, pos
     )
 
 
+def fetch_all_opinion_changes(supabase: Client, room_name: str):
+    if not opinion_changes_available():
+        return pd.DataFrame()
+    res = execute_query(
+        supabase.table("opinion_changes")
+        .select("student_name, pre_opinion, post_opinion, ai_analysis")
+        .eq("room_name", room_name)
+        .order("student_name"),
+        fail_message="학생별 생각 변화 조회 실패",
+    )
+    if not res or not res.data:
+        return pd.DataFrame()
+    return pd.DataFrame(res.data)
+
+
 def save_opinion_analysis(supabase: Client, room_name: str, student_name: str, ai_analysis: str):
     if not opinion_changes_available():
         return None
