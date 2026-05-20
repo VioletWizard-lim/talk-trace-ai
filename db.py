@@ -112,11 +112,13 @@ def check_schema_columns() -> dict:
     supabase = init_db()
 
     checks = [
-        ("debate.ip_address",           lambda: supabase.table("debate").select("ip_address").limit(1).execute()),
-        ("topic.entry_code",            lambda: supabase.table("topic").select("entry_code").limit(1).execute()),
-        ("topic.created_by_teacher_id", lambda: supabase.table("topic").select("created_by_teacher_id").limit(1).execute()),
-        ("topic.created_by",            lambda: supabase.table("topic").select("created_by").limit(1).execute()),
-        ("teacher_accounts.is_admin",   lambda: supabase.table("teacher_accounts").select("is_admin").limit(1).execute()),
+        ("debate.ip_address",              lambda: supabase.table("debate").select("ip_address").limit(1).execute()),
+        ("topic.entry_code",               lambda: supabase.table("topic").select("entry_code").limit(1).execute()),
+        ("topic.created_by_teacher_id",    lambda: supabase.table("topic").select("created_by_teacher_id").limit(1).execute()),
+        ("topic.created_by",               lambda: supabase.table("topic").select("created_by").limit(1).execute()),
+        ("teacher_accounts.is_admin",      lambda: supabase.table("teacher_accounts").select("is_admin").limit(1).execute()),
+        ("opinion_changes.pre_opinion",    lambda: supabase.table("opinion_changes").select("pre_opinion").limit(1).execute()),
+        ("session_control.status",         lambda: supabase.table("session_control").select("status").limit(1).execute()),
     ]
 
     results = {}
@@ -147,6 +149,12 @@ def topic_created_by_column_available() -> bool:
 def topic_owner_column_available() -> bool:
     schema = check_schema_columns()
     return schema.get("topic.created_by_teacher_id", False) or schema.get("topic.created_by", False)
+
+def opinion_changes_available() -> bool:
+    return check_schema_columns().get("opinion_changes.pre_opinion", False)
+
+def session_control_available() -> bool:
+    return check_schema_columns().get("session_control.status", False)
 
 def teacher_is_admin_column_available() -> bool:
     return check_schema_columns().get("teacher_accounts.is_admin", False)
@@ -350,11 +358,133 @@ def destroy_room_data(supabase: Client, room_name: str):
     )
     if topic_res is None or debate_res is None:
         return None
+    if opinion_changes_available():
+        execute_query(
+            supabase.table("opinion_changes").delete().eq("room_name", room_name),
+            fail_message="생각 변화 기록 삭제 실패",
+        )
+    if session_control_available():
+        execute_query(
+            supabase.table("session_control").delete().eq("room_name", room_name),
+            fail_message="토론 제어 상태 삭제 실패",
+        )
     return {"topic": topic_res, "debate": debate_res}
 
 
 # ==========================================
-# [7] 교사 계정(teacher_accounts) 관련 쿼리
+# [6] 생각 변화 기록(opinion_changes) 관련 쿼리
+# ==========================================
+
+def fetch_opinion_change(supabase: Client, room_name: str, student_name: str):
+    if not opinion_changes_available():
+        return None
+    res = execute_query(
+        supabase.table("opinion_changes")
+        .select("pre_opinion, post_opinion, ai_analysis")
+        .eq("room_name", room_name)
+        .eq("student_name", student_name)
+        .limit(1),
+        fail_message="생각 변화 조회 실패",
+    )
+    if not res or not res.data:
+        return None
+    return res.data[0]
+
+
+def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_opinion: str):
+    if not opinion_changes_available():
+        return None
+    existing = fetch_opinion_change(supabase, room_name, student_name)
+    if existing is not None:
+        return execute_query(
+            supabase.table("opinion_changes")
+            .update({"pre_opinion": pre_opinion})
+            .eq("room_name", room_name)
+            .eq("student_name", student_name),
+            fail_message="토론 전 생각 저장 실패",
+        )
+    return execute_query(
+        supabase.table("opinion_changes")
+        .insert({"room_name": room_name, "student_name": student_name, "pre_opinion": pre_opinion}),
+        fail_message="토론 전 생각 저장 실패",
+    )
+
+
+def upsert_post_opinion(supabase: Client, room_name: str, student_name: str, post_opinion: str):
+    if not opinion_changes_available():
+        return None
+    existing = fetch_opinion_change(supabase, room_name, student_name)
+    if existing is not None:
+        return execute_query(
+            supabase.table("opinion_changes")
+            .update({"post_opinion": post_opinion})
+            .eq("room_name", room_name)
+            .eq("student_name", student_name),
+            fail_message="토론 후 생각 저장 실패",
+        )
+    return execute_query(
+        supabase.table("opinion_changes")
+        .insert({"room_name": room_name, "student_name": student_name, "post_opinion": post_opinion}),
+        fail_message="토론 후 생각 저장 실패",
+    )
+
+
+def save_opinion_analysis(supabase: Client, room_name: str, student_name: str, ai_analysis: str):
+    if not opinion_changes_available():
+        return None
+    return execute_query(
+        supabase.table("opinion_changes")
+        .update({"ai_analysis": ai_analysis})
+        .eq("room_name", room_name)
+        .eq("student_name", student_name),
+        fail_message="AI 분석 저장 실패",
+    )
+
+
+# ==========================================
+# [7] 토론 제어(session_control) 관련 쿼리
+# ==========================================
+
+@st.cache_data(ttl=5)
+def fetch_debate_status(_supabase: Client, room_name: str) -> str:
+    if not session_control_available():
+        return "active"
+    res = execute_query(
+        _supabase.table("session_control")
+        .select("status")
+        .eq("room_name", room_name)
+        .limit(1),
+        fail_message="토론 상태 조회 실패",
+    )
+    if not res or not res.data:
+        return "active"
+    return res.data[0].get("status", "active")
+
+
+def set_debate_status(supabase: Client, room_name: str, status: str):
+    if not session_control_available():
+        return None
+    existing = execute_query(
+        supabase.table("session_control").select("room_name").eq("room_name", room_name).limit(1),
+        fail_message="토론 상태 확인 실패",
+    )
+    if existing and existing.data:
+        res = execute_query(
+            supabase.table("session_control").update({"status": status}).eq("room_name", room_name),
+            fail_message="토론 상태 변경 실패",
+        )
+    else:
+        res = execute_query(
+            supabase.table("session_control").insert({"room_name": room_name, "status": status}),
+            fail_message="토론 상태 생성 실패",
+        )
+    if res is not None:
+        fetch_debate_status.clear()
+    return res
+
+
+# ==========================================
+# [8] 교사 계정(teacher_accounts) 관련 쿼리
 # ==========================================
 
 def fetch_teacher_account(supabase: Client, teacher_id: str):

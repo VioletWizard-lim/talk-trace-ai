@@ -6,9 +6,12 @@ import streamlit as st
 from db import (
     debate_ip_column_available,
     ensure_db_login,
+    fetch_debate_status,
     fetch_live_messages,
+    fetch_opinion_change,
     fetch_topic_data,
     init_db,
+    opinion_changes_available,
     submit_opinion,
     using_service_role_key,
 )
@@ -61,6 +64,7 @@ if st.session_state['page'] == "home":
 # plotly / google.generativeai 임포트는 홈 화면에서 불필요 — st.stop() 이후에 로드
 from components.chat_board import render_chat_board
 from components.teacher_dashboard import render_teacher_dashboard
+from components.opinion_change import render_pre_opinion_form, render_post_opinion_section
 
 sidebar_ctx = render_sidebar(supabase)
 user_role = sidebar_ctx['user_role']
@@ -197,7 +201,20 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         time.sleep(0.5)
         st.rerun()
 
-_render_opinion_input(supabase, room_name, user_role, student_name, student_number, current_mode)
+if user_role == "학생" and opinion_changes_available():
+    debate_status = fetch_debate_status(supabase, room_name)
+    if debate_status == "ended":
+        render_post_opinion_section(supabase, room_name, student_name, act_type, current_topic)
+    else:
+        row = fetch_opinion_change(supabase, room_name, student_name)
+        has_pre_opinion = bool((row or {}).get("pre_opinion"))
+        if not has_pre_opinion:
+            render_pre_opinion_form(supabase, room_name, student_name, current_topic)
+            st.caption("💡 위에서 토론 전 생각을 제출하면 의견 작성이 활성화됩니다.")
+        else:
+            _render_opinion_input(supabase, room_name, user_role, student_name, student_number, current_mode)
+else:
+    _render_opinion_input(supabase, room_name, user_role, student_name, student_number, current_mode)
 
 st.divider()
 

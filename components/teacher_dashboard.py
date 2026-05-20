@@ -3,7 +3,7 @@ import logging
 import plotly.express as px
 import streamlit as st
 
-from db import destroy_room_data, fetch_live_messages
+from db import destroy_room_data, fetch_debate_status, fetch_live_messages, session_control_available, set_debate_status
 from validators import with_fallback_author_role
 from utils import log_audit
 from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
@@ -46,6 +46,23 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             st.info("실명 참여 데이터가 없습니다.")
     else:
         st.info(f"{act_type} 데이터가 없습니다.")
+
+    if session_control_available():
+        st.divider()
+        st.subheader("🎛️ 토론 진행 제어")
+        debate_status = fetch_debate_status(supabase, room_name)
+        if debate_status == "ended":
+            st.warning("🔴 **토론이 종료된 상태입니다.** 학생들은 '토론 후 생각 변화'를 작성 중입니다.")
+            if st.button("▶️ 토론 재개", use_container_width=True):
+                if set_debate_status(supabase, room_name, "active") is not None:
+                    st.toast("✅ 토론이 재개되었습니다.", icon="▶️")
+                    st.rerun()
+        else:
+            st.success("🟢 **토론 진행 중입니다.**")
+            if st.button("⏹️ 토론 종료 (학생 입력 마감)", use_container_width=True, type="primary"):
+                if set_debate_status(supabase, room_name, "ended") is not None:
+                    st.toast("⏹️ 토론이 종료되었습니다. 학생들에게 생각 변화 입력창이 표시됩니다.", icon="✅")
+                    st.rerun()
 
     st.divider()
     render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
