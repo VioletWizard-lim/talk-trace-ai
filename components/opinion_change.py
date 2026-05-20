@@ -90,27 +90,28 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
 
 def _render_image_download(student_name, topic, pre_opinion, post_opinion, ai_analysis,
                            session_key, btn_key):
-    """이미지 bytes를 session_state에 캐시 후 download_button 렌더링."""
-    # ai_analysis 길이를 키에 포함해 분석 내용이 바뀌면 자동 재생성
-    cache_key = f"{session_key}_{len(ai_analysis)}_bytes"
+    """이미지를 base64 데이터 URI 링크로 렌더링 — rerun 없이 즉시 다운로드."""
+    import base64
+    cache_key = f"{session_key}_{len(ai_analysis)}_b64"
     if cache_key not in st.session_state:
         try:
-            st.session_state[cache_key] = create_analysis_image(
+            img_bytes = create_analysis_image(
                 student_name, topic, pre_opinion, post_opinion, ai_analysis
             )
+            st.session_state[cache_key] = base64.b64encode(img_bytes).decode()
         except Exception:
             st.session_state[cache_key] = None
 
-    img_bytes = st.session_state.get(cache_key)
-    if img_bytes:
+    b64 = st.session_state.get(cache_key)
+    if b64:
         filename = f"배움분석_{student_name}.png"
-        st.download_button(
-            "🖼️ 분석 결과 이미지로 저장",
-            data=img_bytes,
-            file_name=filename,
-            mime="image/png",
-            use_container_width=True,
-            key=btn_key,
+        st.markdown(
+            f'<a href="data:image/png;base64,{b64}" download="{filename}" '
+            f'style="display:block;width:100%;padding:0.45rem 0.9rem;'
+            f'background:#1558a0;color:#fff;border-radius:0.5rem;'
+            f'text-align:center;text-decoration:none;font-size:1rem;font-weight:600;">'
+            f'🖼️ 분석 결과 이미지로 저장</a>',
+            unsafe_allow_html=True,
         )
 
 
