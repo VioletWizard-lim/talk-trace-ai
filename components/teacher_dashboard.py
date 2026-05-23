@@ -129,7 +129,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                                         showlegend=True,
                                         legend=dict(orientation="h"),
                                     )
-                                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"stance_chart_{col_name}_{room_name}")
                                 else:
                                     st.info("아직 입력된 입장이 없습니다.")
                 elif act_type == "토의":
