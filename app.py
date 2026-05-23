@@ -48,6 +48,7 @@ if 'admin_auth' not in st.session_state: st.session_state['admin_auth'] = False
 if 'teacher_id' not in st.session_state: st.session_state['teacher_id'] = ""
 if 'is_working' not in st.session_state: st.session_state['is_working'] = False
 if 'ai_hint_manual_mode' not in st.session_state: st.session_state['ai_hint_manual_mode'] = False
+if '_last_debate_status' not in st.session_state: st.session_state['_last_debate_status'] = None
 
 if st.session_state['page'] != "home":
     col_home_btn, _ = st.columns([1, 7])
@@ -101,6 +102,15 @@ if admin_auth:
 else:
     st.title(f"🎙️ 말자취(Talk-Trace) AI [{room_name}]")
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
+
+@st.fragment(run_every=3)
+def _poll_debate_status(room_name):
+    """학생 화면에서 3초마다 토론 상태를 확인하고 변경 시 전체 rerun."""
+    current = fetch_debate_status(supabase, room_name)
+    if current != st.session_state.get("_last_debate_status"):
+        st.session_state["_last_debate_status"] = current
+        st.rerun()
+
 
 @st.fragment
 def _render_opinion_input(supabase, room_name, user_role, student_name, student_number, current_mode):
@@ -202,6 +212,7 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         st.rerun()
 
 if user_role == "학생" and opinion_changes_available():
+    _poll_debate_status(room_name)
     debate_status = fetch_debate_status(supabase, room_name)
     if debate_status == "ended":
         render_post_opinion_section(supabase, room_name, student_name, act_type, current_topic)
