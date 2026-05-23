@@ -15,7 +15,7 @@ from env import get_secret
 from services.ai import build_opinion_change_prompt, generate_ai_response
 
 
-_STANCE_OPTIONS = ["🔵 찬성", "🔴 반대", "⚪ 중립"]
+_STANCE_OPTIONS = ["🔵 찬성", "🔴 반대"]
 
 
 def render_pre_opinion_form(supabase, room_name, student_name, current_topic, act_type="토론"):
