@@ -3,9 +3,10 @@ import logging
 import plotly.express as px
 import streamlit as st
 
-from db import destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status
+from db import destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status, stance_available
 from utils import create_analysis_image
-from components.opinion_change import _render_image_download
+from components.opinion_change import _render_image_download, _STANCE_OPTIONS
+from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from validators import with_fallback_author_role
 from utils import log_audit
 from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
@@ -60,6 +61,19 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             pre  = row.get("pre_opinion")  or "(없음)"
             post = row.get("post_opinion") or "(없음)"
             ai   = row.get("ai_analysis")  or ""
+
+            if stance_available() and act_type == "토론":
+                init_s = row.get("initial_stance") or ""
+                final_s = row.get("final_stance") or ""
+                if init_s or final_s:
+                    col_is, col_fs = st.columns(2)
+                    with col_is:
+                        st.caption("📌 토론 전 입장")
+                        st.info(init_s or "(미입력)")
+                    with col_fs:
+                        st.caption("🗳️ 토론 후 최종 입장")
+                        st.info(final_s or "(미입력)")
+
             col_pre, col_post = st.columns(2)
             with col_pre:
                 st.caption("📌 토론 전 생각")
@@ -77,6 +91,58 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                 )
             else:
                 st.caption("AI 분석이 아직 없습니다.")
+
+            # 입장 변화 도넛 차트 (토론) / 워드클라우드 (토의)
+            if stance_available():
+                st.divider()
+                if act_type == "토론":
+                    st.subheader("📊 입장 변화 현황")
+                    col_d1, col_d2 = st.columns(2)
+                    for col, col_name, label in [
+                        (col_d1, "initial_stance", "토론 전 초기 입장"),
+                        (col_d2, "final_stance",   "토론 후 최종 입장"),
+                    ]:
+                        if col_name in df_oc.columns:
+                            counts = (
+                                df_oc[col_name]
+                                .dropna()
+                                .value_counts()
+                                .reindex(_STANCE_OPTIONS, fill_value=0)
+                                .reset_index()
+                            )
+                            counts.columns = ["입장", "인원"]
+                            with col:
+                                st.caption(label)
+                                if counts["인원"].sum() > 0:
+                                    fig = px.pie(
+                                        counts, names="입장", values="인원",
+                                        hole=0.45,
+                                        color="입장",
+                                        color_discrete_map={
+                                            "🔵 찬성": "#1558a0",
+                                            "🔴 반대": "#d62728",
+                                            "⚪ 중립": "#aaaaaa",
+                                        },
+                                    )
+                                    fig.update_layout(
+                                        margin=dict(t=10, b=10, l=10, r=10),
+                                        font={"family": UI_FONT_FAMILY},
+                                        showlegend=True,
+                                        legend=dict(orientation="h"),
+                                    )
+                                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                                else:
+                                    st.info("아직 입력된 입장이 없습니다.")
+                elif act_type == "토의":
+                    if "discussion_conclusion" in df_oc.columns:
+                        conclusions = df_oc["discussion_conclusion"].dropna()
+                        if not conclusions.empty:
+                            st.subheader("☁️ 결론 워드클라우드")
+                            freq = build_word_frequencies(conclusions)
+                            if freq:
+                                st.markdown(build_circular_wordcloud_html(freq), unsafe_allow_html=True)
+                        else:
+                            st.info("아직 제출된 결론이 없습니다.")
 
     if session_control_available():
         st.divider()

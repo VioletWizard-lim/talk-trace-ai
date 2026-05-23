@@ -209,7 +209,7 @@ if user_role == "학생" and opinion_changes_available():
         row = fetch_opinion_change(supabase, room_name, student_name)
         has_pre_opinion = bool((row or {}).get("pre_opinion"))
         if not has_pre_opinion:
-            render_pre_opinion_form(supabase, room_name, student_name, current_topic)
+            render_pre_opinion_form(supabase, room_name, student_name, current_topic, act_type)
             st.caption("💡 위에서 토론 전 생각을 제출하면 의견 작성이 활성화됩니다.")
         else:
             _render_opinion_input(supabase, room_name, user_role, student_name, student_number, current_mode)

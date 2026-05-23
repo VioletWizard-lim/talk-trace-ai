@@ -7,6 +7,7 @@ from db import (
     fetch_opinion_change,
     opinion_changes_available,
     save_opinion_analysis,
+    stance_available,
     upsert_post_opinion,
     upsert_pre_opinion,
 )
@@ -14,9 +15,22 @@ from env import get_secret
 from services.ai import build_opinion_change_prompt, generate_ai_response
 
 
-def render_pre_opinion_form(supabase, room_name, student_name, current_topic):
+_STANCE_OPTIONS = ["🔵 찬성", "🔴 반대", "⚪ 중립"]
+
+
+def render_pre_opinion_form(supabase, room_name, student_name, current_topic, act_type="토론"):
     """토론 전 생각 입력 폼. 제출 완료 시 전체 앱 재실행."""
-    st.info(f"💬 **토론 전 내 생각 먼저 기록하기**\n\n'{current_topic}' 주제에 대한 나의 생각을 적어주세요. 제출 후 토론에 참여할 수 있습니다.")
+    st.info(f"💬 **{'토론' if act_type == '토론' else '토의'} 전 내 생각 먼저 기록하기**\n\n'{current_topic}' 주제에 대한 나의 생각을 적어주세요. 제출 후 {'토론' if act_type == '토론' else '토의'}에 참여할 수 있습니다.")
+
+    initial_stance = None
+    if act_type == "토론" and stance_available():
+        initial_stance = st.radio(
+            "📌 토론 전 나의 초기 입장",
+            _STANCE_OPTIONS,
+            horizontal=True,
+            key="pre_stance_radio",
+        )
+
     pre_input = st.text_area(
         "이 주제에 대한 내 생각은?",
         height=100,
@@ -28,7 +42,7 @@ def render_pre_opinion_form(supabase, room_name, student_name, current_topic):
         if not pre_input.strip():
             st.warning("생각을 입력해 주세요.")
             return
-        res = upsert_pre_opinion(supabase, room_name, student_name, pre_input.strip())
+        res = upsert_pre_opinion(supabase, room_name, student_name, pre_input.strip(), initial_stance=initial_stance)
         if res is not None:
             st.toast("✅ 내 생각이 기록되었습니다. 이제 토론에 참여할 수 있습니다!", icon="🎉")
             st.rerun()
@@ -54,7 +68,30 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
         st.caption("📌 토론 전 생각 기록 없음")
 
     if not post_opinion:
-        st.info("토론이 종료되었습니다. 토론 후 생각이 어떻게 바뀌었는지 기록해 주세요.")
+        end_label = "토론" if act_type == "토론" else "토의"
+        st.info(f"{end_label}이 종료되었습니다. {end_label} 후 생각이 어떻게 바뀌었는지 기록해 주세요.")
+
+        final_stance = None
+        discussion_conclusion = None
+
+        if act_type == "토론" and stance_available():
+            initial_stance_val = (row or {}).get("initial_stance") or ""
+            if initial_stance_val:
+                st.caption(f"📌 **토론 전 나의 입장:** {initial_stance_val}")
+            final_stance = st.radio(
+                "🗳️ 토론 후 최종 입장",
+                _STANCE_OPTIONS,
+                horizontal=True,
+                key="post_stance_radio",
+            )
+
+        if act_type == "토의" and stance_available():
+            discussion_conclusion = st.text_input(
+                "💡 가장 중요한 결론은?",
+                max_chars=200,
+                placeholder="이번 토의에서 얻은 가장 중요한 결론을 한 줄로 써보세요.",
+            )
+
         post_input = st.text_area(
             "토론 후 생각 변화",
             height=100,
@@ -67,13 +104,23 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
             if not post_input.strip():
                 st.warning("생각을 입력해 주세요.")
                 return
-            res = upsert_post_opinion(supabase, room_name, student_name, post_input.strip())
+            res = upsert_post_opinion(
+                supabase, room_name, student_name, post_input.strip(),
+                final_stance=final_stance,
+                discussion_conclusion=discussion_conclusion.strip() if discussion_conclusion else None,
+            )
             if res is not None:
                 _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_input.strip())
                 st.rerun()
             else:
                 st.error("저장에 실패했습니다. 다시 시도해 주세요.")
     else:
+        final_stance_val = (row or {}).get("final_stance") or ""
+        discussion_conclusion_val = (row or {}).get("discussion_conclusion") or ""
+        if act_type == "토론" and final_stance_val:
+            st.success(f"✅ **최종 입장:** {final_stance_val}")
+        if act_type == "토의" and discussion_conclusion_val:
+            st.success(f"✅ **나의 결론:** {discussion_conclusion_val}")
         st.success(f"✅ **토론 후 내 생각:** {post_opinion}")
         st.divider()
         if ai_analysis:

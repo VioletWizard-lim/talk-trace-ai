@@ -118,6 +118,7 @@ def check_schema_columns() -> dict:
         ("topic.created_by",               lambda: supabase.table("topic").select("created_by").limit(1).execute()),
         ("teacher_accounts.is_admin",      lambda: supabase.table("teacher_accounts").select("is_admin").limit(1).execute()),
         ("opinion_changes.pre_opinion",    lambda: supabase.table("opinion_changes").select("pre_opinion").limit(1).execute()),
+        ("opinion_changes.initial_stance", lambda: supabase.table("opinion_changes").select("initial_stance").limit(1).execute()),
         ("session_control.status",         lambda: supabase.table("session_control").select("status").limit(1).execute()),
     ]
 
@@ -152,6 +153,9 @@ def topic_owner_column_available() -> bool:
 
 def opinion_changes_available() -> bool:
     return check_schema_columns().get("opinion_changes.pre_opinion", False)
+
+def stance_available() -> bool:
+    return check_schema_columns().get("opinion_changes.initial_stance", False)
 
 def session_control_available() -> bool:
     return check_schema_columns().get("session_control.status", False)
@@ -380,7 +384,7 @@ def fetch_opinion_change(supabase: Client, room_name: str, student_name: str):
         return None
     res = execute_query(
         supabase.table("opinion_changes")
-        .select("pre_opinion, post_opinion, ai_analysis")
+        .select("*")
         .eq("room_name", room_name)
         .eq("student_name", student_name)
         .limit(1),
@@ -391,40 +395,40 @@ def fetch_opinion_change(supabase: Client, room_name: str, student_name: str):
     return res.data[0]
 
 
-def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_opinion: str):
+def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_opinion: str, initial_stance: str = None):
     if not opinion_changes_available():
         return None
+    payload = {"pre_opinion": pre_opinion}
+    if initial_stance and stance_available():
+        payload["initial_stance"] = initial_stance
     existing = fetch_opinion_change(supabase, room_name, student_name)
     if existing is not None:
         return execute_query(
-            supabase.table("opinion_changes")
-            .update({"pre_opinion": pre_opinion})
-            .eq("room_name", room_name)
-            .eq("student_name", student_name),
+            supabase.table("opinion_changes").update(payload).eq("room_name", room_name).eq("student_name", student_name),
             fail_message="토론 전 생각 저장 실패",
         )
     return execute_query(
-        supabase.table("opinion_changes")
-        .insert({"room_name": room_name, "student_name": student_name, "pre_opinion": pre_opinion}),
+        supabase.table("opinion_changes").insert({"room_name": room_name, "student_name": student_name, **payload}),
         fail_message="토론 전 생각 저장 실패",
     )
 
 
-def upsert_post_opinion(supabase: Client, room_name: str, student_name: str, post_opinion: str):
+def upsert_post_opinion(supabase: Client, room_name: str, student_name: str, post_opinion: str, final_stance: str = None, discussion_conclusion: str = None):
     if not opinion_changes_available():
         return None
+    payload = {"post_opinion": post_opinion}
+    if final_stance and stance_available():
+        payload["final_stance"] = final_stance
+    if discussion_conclusion and stance_available():
+        payload["discussion_conclusion"] = discussion_conclusion
     existing = fetch_opinion_change(supabase, room_name, student_name)
     if existing is not None:
         return execute_query(
-            supabase.table("opinion_changes")
-            .update({"post_opinion": post_opinion})
-            .eq("room_name", room_name)
-            .eq("student_name", student_name),
+            supabase.table("opinion_changes").update(payload).eq("room_name", room_name).eq("student_name", student_name),
             fail_message="토론 후 생각 저장 실패",
         )
     return execute_query(
-        supabase.table("opinion_changes")
-        .insert({"room_name": room_name, "student_name": student_name, "post_opinion": post_opinion}),
+        supabase.table("opinion_changes").insert({"room_name": room_name, "student_name": student_name, **payload}),
         fail_message="토론 후 생각 저장 실패",
     )
 
@@ -434,7 +438,7 @@ def fetch_all_opinion_changes(supabase: Client, room_name: str):
         return pd.DataFrame()
     res = execute_query(
         supabase.table("opinion_changes")
-        .select("student_name, pre_opinion, post_opinion, ai_analysis")
+        .select("*")
         .eq("room_name", room_name)
         .order("student_name"),
         fail_message="학생별 생각 변화 조회 실패",
