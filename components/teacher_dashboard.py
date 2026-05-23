@@ -62,14 +62,16 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             post = row.get("post_opinion") or "(없음)"
             ai   = row.get("ai_analysis")  or ""
 
-            # IP 표시
+            # IP 표시 — opinion_changes 행에서 직접 읽기 (debate 메시지 없어도 표시)
             student_ip = ""
-            if not df_all.empty and "ip_address" in df_all.columns:
+            ip_raw = row.get("ip_address") or ""
+            if ip_raw:
+                student_ip = str(ip_raw).replace(".0.0.", ".X.X.")
+            elif not df_all.empty and "ip_address" in df_all.columns:
                 student_msgs = df_all[df_all["student_name"] == selected]
                 if not student_msgs.empty:
-                    ip_val = student_msgs.iloc[-1].get("ip_address") or ""
+                    ip_val = student_msgs.iloc[0].get("ip_address") or ""
                     if ip_val:
-                        # 기존 A.0.0.D 형태도 A.X.X.D로 통일해서 표시
                         student_ip = str(ip_val).replace(".0.0.", ".X.X.")
 
             col_info, col_del = st.columns([6, 1])
