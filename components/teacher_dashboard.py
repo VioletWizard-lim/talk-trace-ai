@@ -121,7 +121,6 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                                         color_discrete_map={
                                             "🔵 찬성": "#1558a0",
                                             "🔴 반대": "#d62728",
-                                            "⚪ 중립": "#aaaaaa",
                                         },
                                     )
                                     fig.update_layout(
