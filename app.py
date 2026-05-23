@@ -181,7 +181,7 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
             }
             if debate_ip_column_available() and client_ip:
                 parts = client_ip.split(".")
-                anonymized_ip = f"{parts[0]}.0.0.{parts[3]}" if len(parts) == 4 else None
+                anonymized_ip = f"{parts[0]}.X.X.{parts[3]}" if len(parts) == 4 else None
                 if anonymized_ip:
                     insert_payload["ip_address"] = anonymized_ip
             try:

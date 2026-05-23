@@ -460,6 +460,18 @@ def save_opinion_analysis(supabase: Client, room_name: str, student_name: str, a
     )
 
 
+def delete_opinion_change(supabase: Client, room_name: str, student_name: str):
+    if not opinion_changes_available():
+        return None
+    return execute_query(
+        supabase.table("opinion_changes")
+        .delete()
+        .eq("room_name", room_name)
+        .eq("student_name", student_name),
+        fail_message="학생 배움 분석 기록 삭제 실패",
+    )
+
+
 # ==========================================
 # [7] 토론 제어(session_control) 관련 쿼리
 # ==========================================

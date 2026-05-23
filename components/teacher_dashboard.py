@@ -3,7 +3,7 @@ import logging
 import plotly.express as px
 import streamlit as st
 
-from db import destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status, stance_available
+from db import delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _STANCE_OPTIONS
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -61,6 +61,38 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             pre  = row.get("pre_opinion")  or "(없음)"
             post = row.get("post_opinion") or "(없음)"
             ai   = row.get("ai_analysis")  or ""
+
+            # IP 표시
+            student_ip = ""
+            if not df_all.empty and "ip_address" in df_all.columns:
+                student_msgs = df_all[df_all["student_name"] == selected]
+                if not student_msgs.empty:
+                    ip_val = student_msgs.iloc[-1].get("ip_address") or ""
+                    if ip_val:
+                        # 기존 A.0.0.D 형태도 A.X.X.D로 통일해서 표시
+                        student_ip = str(ip_val).replace(".0.0.", ".X.X.")
+
+            col_info, col_del = st.columns([6, 1])
+            with col_info:
+                if student_ip:
+                    st.caption(f"🌐 IP: `{student_ip}`")
+            with col_del:
+                if st.button("🗑️ 삭제", key=f"del_btn_{selected}", help="이 학생의 배움 분석 기록을 삭제합니다."):
+                    st.session_state[f"confirm_del_{selected}"] = True
+
+            if st.session_state.get(f"confirm_del_{selected}"):
+                st.warning(f"**'{selected}'** 학생의 배움 분석 기록을 완전히 삭제합니다. 되돌릴 수 없습니다.")
+                col_yes, col_no = st.columns(2)
+                with col_yes:
+                    if st.button("✅ 삭제 확인", type="primary", use_container_width=True, key=f"confirm_yes_{selected}"):
+                        delete_opinion_change(supabase, room_name, selected)
+                        st.session_state.pop(f"confirm_del_{selected}", None)
+                        st.toast(f"'{selected}' 학생 기록이 삭제되었습니다.", icon="🗑️")
+                        st.rerun()
+                with col_no:
+                    if st.button("❌ 취소", use_container_width=True, key=f"confirm_no_{selected}"):
+                        st.session_state.pop(f"confirm_del_{selected}", None)
+                        st.rerun()
 
             if stance_available() and act_type == "토론":
                 init_s = row.get("initial_stance") or ""
@@ -139,7 +171,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                             st.subheader("☁️ 결론 워드클라우드")
                             freq = build_word_frequencies(conclusions)
                             if freq:
-                                wc_col, _ = st.columns([1, 3])
+                                wc_col, _ = st.columns([1, 1])
                                 with wc_col:
                                     st.markdown(build_circular_wordcloud_html(freq), unsafe_allow_html=True)
                         else:
