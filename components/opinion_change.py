@@ -69,7 +69,8 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
 
     if not post_opinion:
         end_label = "토론" if act_type == "토론" else "토의"
-        st.info(f"{end_label}이 종료되었습니다. {end_label} 후 생각이 어떻게 바뀌었는지 기록해 주세요.")
+        end_subj  = "토론이" if act_type == "토론" else "토의가"
+        st.info(f"{end_subj} 종료되었습니다. {end_label} 후 생각이 어떻게 바뀌었는지 기록해 주세요.")
 
         final_stance = None
         discussion_conclusion = None
