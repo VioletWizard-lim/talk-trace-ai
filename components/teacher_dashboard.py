@@ -38,8 +38,8 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
     with col_select:
         selected = st.selectbox("학생 선택", students, key="oc_student_select")
     with col_del_btn:
-        st.markdown("<div style='margin-top:28px'></div>", unsafe_allow_html=True)
-        if st.button("🗑️ 삭제", key=f"del_btn_{selected}", help="이 학생의 배움 분석 기록을 삭제합니다."):
+        st.write("")
+        if st.button("🗑️ 삭제", key=f"del_btn_{selected}", use_container_width=True, help="이 학생의 배움 분석 기록을 삭제합니다."):
             st.session_state[f"confirm_del_{selected}"] = True
 
     if st.session_state.get(f"confirm_del_{selected}"):
