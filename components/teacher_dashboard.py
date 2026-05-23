@@ -129,7 +129,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                                         showlegend=True,
                                         legend=dict(orientation="h"),
                                     )
-                                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"stance_chart_{col_name}_{room_name}")
                                 else:
                                     st.info("아직 입력된 입장이 없습니다.")
                 elif act_type == "토의":
@@ -139,7 +139,9 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                             st.subheader("☁️ 결론 워드클라우드")
                             freq = build_word_frequencies(conclusions)
                             if freq:
-                                st.markdown(build_circular_wordcloud_html(freq), unsafe_allow_html=True)
+                                wc_col, _ = st.columns([1, 3])
+                                with wc_col:
+                                    st.markdown(build_circular_wordcloud_html(freq), unsafe_allow_html=True)
                         else:
                             st.info("아직 제출된 결론이 없습니다.")
 
