@@ -18,6 +18,142 @@ from components.teacher_records import render_records_section
 logger = logging.getLogger("talk_trace_ai")
 
 
+def _s(val, default=""):
+    return default if (val is None or (isinstance(val, float) and pd.isna(val))) else str(val)
+
+
+@st.fragment(run_every=10)
+def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
+    if not opinion_changes_available():
+        return
+    df_oc = fetch_all_opinion_changes(supabase, room_name)
+    if df_oc.empty:
+        return
+
+    st.divider()
+    st.subheader("🔍 학생별 배움 분석")
+    students = df_oc["student_name"].tolist()
+
+    col_select, col_del_btn = st.columns([6, 1])
+    with col_select:
+        selected = st.selectbox("학생 선택", students, key="oc_student_select")
+    with col_del_btn:
+        st.markdown("<div style='margin-top:28px'></div>", unsafe_allow_html=True)
+        if st.button("🗑️ 삭제", key=f"del_btn_{selected}", help="이 학생의 배움 분석 기록을 삭제합니다."):
+            st.session_state[f"confirm_del_{selected}"] = True
+
+    if st.session_state.get(f"confirm_del_{selected}"):
+        st.warning(f"**'{selected}'** 학생의 배움 분석 기록을 완전히 삭제합니다. 되돌릴 수 없습니다.")
+        col_yes, col_no = st.columns(2)
+        with col_yes:
+            if st.button("✅ 삭제 확인", type="primary", use_container_width=True, key=f"confirm_yes_{selected}"):
+                delete_opinion_change(supabase, room_name, selected)
+                st.session_state.pop(f"confirm_del_{selected}", None)
+                st.toast(f"'{selected}' 학생 기록이 삭제되었습니다.", icon="🗑️")
+                st.rerun()
+        with col_no:
+            if st.button("❌ 취소", use_container_width=True, key=f"confirm_no_{selected}"):
+                st.session_state.pop(f"confirm_del_{selected}", None)
+                st.rerun()
+
+    row = df_oc[df_oc["student_name"] == selected].iloc[0]
+    pre  = _s(row.get("pre_opinion"),  "(없음)")
+    post = _s(row.get("post_opinion"), "(없음)")
+    ai   = _s(row.get("ai_analysis"),  "")
+
+    ip_raw = _s(row.get("ip_address"))
+    student_ip = ip_raw.replace(".0.0.", ".X.X.") if ip_raw else ""
+    if not student_ip and not df_all.empty and "ip_address" in df_all.columns:
+        student_msgs = df_all[df_all["student_name"] == selected]
+        if not student_msgs.empty:
+            ip_val = _s(student_msgs.iloc[0].get("ip_address"))
+            student_ip = ip_val.replace(".0.0.", ".X.X.") if ip_val else ""
+    if student_ip:
+        st.caption(f"🌐 IP: `{student_ip}`")
+
+    if stance_available() and act_type == "토론":
+        init_s = _s(row.get("initial_stance"))
+        final_s = _s(row.get("final_stance"))
+        if init_s or final_s:
+            col_is, col_fs = st.columns(2)
+            with col_is:
+                st.caption("📌 토론 전 입장")
+                st.info(init_s or "(미입력)")
+            with col_fs:
+                st.caption("🗳️ 토론 후 최종 입장")
+                st.info(final_s or "(미입력)")
+
+    col_pre, col_post = st.columns(2)
+    with col_pre:
+        st.caption("📌 토론 전 생각")
+        st.info(pre)
+    with col_post:
+        st.caption("🔄 토론 후 생각")
+        st.info(post)
+    if ai:
+        st.caption("🤖 AI 배움 분석")
+        st.markdown(ai.replace("\n", "\n\n"))
+        _render_image_download(
+            selected, current_topic, pre, post, ai,
+            session_key=f"img_teacher_{room_name}_{selected}",
+            btn_key="dl_analysis_teacher",
+        )
+    else:
+        st.caption("AI 분석이 아직 없습니다.")
+
+    if stance_available():
+        st.divider()
+        if act_type == "토론":
+            st.subheader("📊 입장 변화 현황")
+            col_d1, col_d2 = st.columns(2)
+            for col, col_name, label in [
+                (col_d1, "initial_stance", "토론 전 초기 입장"),
+                (col_d2, "final_stance",   "토론 후 최종 입장"),
+            ]:
+                if col_name in df_oc.columns:
+                    counts = (
+                        df_oc[col_name]
+                        .dropna()
+                        .value_counts()
+                        .reindex(_STANCE_OPTIONS, fill_value=0)
+                        .reset_index()
+                    )
+                    counts.columns = ["입장", "인원"]
+                    with col:
+                        st.caption(label)
+                        if counts["인원"].sum() > 0:
+                            fig = px.pie(
+                                counts, names="입장", values="인원",
+                                hole=0.45,
+                                color="입장",
+                                color_discrete_map={
+                                    "🔵 찬성": "#1558a0",
+                                    "🔴 반대": "#d62728",
+                                },
+                            )
+                            fig.update_layout(
+                                margin=dict(t=10, b=10, l=10, r=10),
+                                font={"family": UI_FONT_FAMILY},
+                                showlegend=True,
+                                legend=dict(orientation="h"),
+                            )
+                            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"stance_chart_{col_name}_{room_name}")
+                        else:
+                            st.info("아직 입력된 입장이 없습니다.")
+        elif act_type == "토의":
+            if "discussion_conclusion" in df_oc.columns:
+                conclusions = df_oc["discussion_conclusion"].dropna()
+                if not conclusions.empty:
+                    st.subheader("☁️ 결론 워드클라우드")
+                    freq = build_word_frequencies(conclusions)
+                    if freq:
+                        wc_col, _ = st.columns([1, 1])
+                        with wc_col:
+                            st.markdown(build_circular_wordcloud_html(freq), unsafe_allow_html=True)
+                else:
+                    st.info("아직 제출된 결론이 없습니다.")
+
+
 def render_teacher_dashboard(supabase, room_name, user_role, student_name, current_topic, current_mode, act_type):
     st.divider()
     col_dash_title, col_dash_refresh = st.columns([8, 2])
@@ -51,138 +187,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     else:
         st.info(f"{act_type} 데이터가 없습니다.")
 
-    if opinion_changes_available():
-        df_oc = fetch_all_opinion_changes(supabase, room_name)
-        if not df_oc.empty:
-            st.divider()
-            st.subheader("🔍 학생별 배움 분석")
-            students = df_oc["student_name"].tolist()
-            selected = st.selectbox("학생 선택", students, key="oc_student_select")
-            row = df_oc[df_oc["student_name"] == selected].iloc[0]
-
-            def _s(val, default=""):
-                return default if (val is None or (isinstance(val, float) and pd.isna(val))) else str(val)
-
-            pre  = _s(row.get("pre_opinion"),  "(없음)")
-            post = _s(row.get("post_opinion"), "(없음)")
-            ai   = _s(row.get("ai_analysis"),  "")
-
-            # IP 표시 — opinion_changes 행에서 직접 읽기 (debate 메시지 없어도 표시)
-            student_ip = ""
-            ip_raw = row.get("ip_address") or ""
-            if ip_raw:
-                student_ip = str(ip_raw).replace(".0.0.", ".X.X.")
-            elif not df_all.empty and "ip_address" in df_all.columns:
-                student_msgs = df_all[df_all["student_name"] == selected]
-                if not student_msgs.empty:
-                    ip_val = student_msgs.iloc[0].get("ip_address") or ""
-                    if ip_val:
-                        student_ip = str(ip_val).replace(".0.0.", ".X.X.")
-
-            col_info, col_del = st.columns([6, 1])
-            with col_info:
-                if student_ip:
-                    st.caption(f"🌐 IP: `{student_ip}`")
-            with col_del:
-                if st.button("🗑️ 삭제", key=f"del_btn_{selected}", help="이 학생의 배움 분석 기록을 삭제합니다."):
-                    st.session_state[f"confirm_del_{selected}"] = True
-
-            if st.session_state.get(f"confirm_del_{selected}"):
-                st.warning(f"**'{selected}'** 학생의 배움 분석 기록을 완전히 삭제합니다. 되돌릴 수 없습니다.")
-                col_yes, col_no = st.columns(2)
-                with col_yes:
-                    if st.button("✅ 삭제 확인", type="primary", use_container_width=True, key=f"confirm_yes_{selected}"):
-                        delete_opinion_change(supabase, room_name, selected)
-                        st.session_state.pop(f"confirm_del_{selected}", None)
-                        st.toast(f"'{selected}' 학생 기록이 삭제되었습니다.", icon="🗑️")
-                        st.rerun()
-                with col_no:
-                    if st.button("❌ 취소", use_container_width=True, key=f"confirm_no_{selected}"):
-                        st.session_state.pop(f"confirm_del_{selected}", None)
-                        st.rerun()
-
-            if stance_available() and act_type == "토론":
-                init_s = _s(row.get("initial_stance"))
-                final_s = _s(row.get("final_stance"))
-                if init_s or final_s:
-                    col_is, col_fs = st.columns(2)
-                    with col_is:
-                        st.caption("📌 토론 전 입장")
-                        st.info(init_s or "(미입력)")
-                    with col_fs:
-                        st.caption("🗳️ 토론 후 최종 입장")
-                        st.info(final_s or "(미입력)")
-
-            col_pre, col_post = st.columns(2)
-            with col_pre:
-                st.caption("📌 토론 전 생각")
-                st.info(pre)
-            with col_post:
-                st.caption("🔄 토론 후 생각")
-                st.info(post)
-            if ai:
-                st.caption("🤖 AI 배움 분석")
-                st.markdown(ai.replace("\n", "\n\n"))
-                _render_image_download(
-                    selected, current_topic, pre, post, ai,
-                    session_key=f"img_teacher_{room_name}_{selected}",
-                    btn_key="dl_analysis_teacher",
-                )
-            else:
-                st.caption("AI 분석이 아직 없습니다.")
-
-            # 입장 변화 도넛 차트 (토론) / 워드클라우드 (토의)
-            if stance_available():
-                st.divider()
-                if act_type == "토론":
-                    st.subheader("📊 입장 변화 현황")
-                    col_d1, col_d2 = st.columns(2)
-                    for col, col_name, label in [
-                        (col_d1, "initial_stance", "토론 전 초기 입장"),
-                        (col_d2, "final_stance",   "토론 후 최종 입장"),
-                    ]:
-                        if col_name in df_oc.columns:
-                            counts = (
-                                df_oc[col_name]
-                                .dropna()
-                                .value_counts()
-                                .reindex(_STANCE_OPTIONS, fill_value=0)
-                                .reset_index()
-                            )
-                            counts.columns = ["입장", "인원"]
-                            with col:
-                                st.caption(label)
-                                if counts["인원"].sum() > 0:
-                                    fig = px.pie(
-                                        counts, names="입장", values="인원",
-                                        hole=0.45,
-                                        color="입장",
-                                        color_discrete_map={
-                                            "🔵 찬성": "#1558a0",
-                                            "🔴 반대": "#d62728",
-                                        },
-                                    )
-                                    fig.update_layout(
-                                        margin=dict(t=10, b=10, l=10, r=10),
-                                        font={"family": UI_FONT_FAMILY},
-                                        showlegend=True,
-                                        legend=dict(orientation="h"),
-                                    )
-                                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"stance_chart_{col_name}_{room_name}")
-                                else:
-                                    st.info("아직 입력된 입장이 없습니다.")
-                elif act_type == "토의":
-                    if "discussion_conclusion" in df_oc.columns:
-                        conclusions = df_oc["discussion_conclusion"].dropna()
-                        if not conclusions.empty:
-                            st.subheader("☁️ 결론 워드클라우드")
-                            freq = build_word_frequencies(conclusions)
-                            if freq:
-                                wc_col, _ = st.columns([1, 1])
-                                with wc_col:
-                                    st.markdown(build_circular_wordcloud_html(freq), unsafe_allow_html=True)
-                        else:
-                            st.info("아직 제출된 결론이 없습니다.")
+    _render_oc_section(supabase, room_name, act_type, current_topic, df_all)
 
     if session_control_available():
         st.divider()
