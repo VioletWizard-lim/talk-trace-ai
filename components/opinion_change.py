@@ -1,7 +1,7 @@
 import streamlit as st
 
 from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
-from utils import create_analysis_image
+from utils import create_analysis_image, get_client_ip
 from db import (
     fetch_live_messages,
     fetch_opinion_change,
@@ -42,7 +42,10 @@ def render_pre_opinion_form(supabase, room_name, student_name, current_topic, ac
         if not pre_input.strip():
             st.warning("생각을 입력해 주세요.")
             return
-        res = upsert_pre_opinion(supabase, room_name, student_name, pre_input.strip(), initial_stance=initial_stance)
+        raw_ip = get_client_ip()
+        parts = raw_ip.split(".")
+        anon_ip = f"{parts[0]}.X.X.{parts[3]}" if len(parts) == 4 else None
+        res = upsert_pre_opinion(supabase, room_name, student_name, pre_input.strip(), initial_stance=initial_stance, ip_address=anon_ip)
         if res is not None:
             st.toast("✅ 내 생각이 기록되었습니다. 이제 토론에 참여할 수 있습니다!", icon="🎉")
             st.rerun()
@@ -69,7 +72,8 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
 
     if not post_opinion:
         end_label = "토론" if act_type == "토론" else "토의"
-        st.info(f"{end_label}이 종료되었습니다. {end_label} 후 생각이 어떻게 바뀌었는지 기록해 주세요.")
+        end_subj  = "토론이" if act_type == "토론" else "토의가"
+        st.info(f"{end_subj} 종료되었습니다. {end_label} 후 생각이 어떻게 바뀌었는지 기록해 주세요.")
 
         final_stance = None
         discussion_conclusion = None
