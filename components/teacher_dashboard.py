@@ -1,5 +1,6 @@
 import logging
 
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
@@ -58,9 +59,13 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             students = df_oc["student_name"].tolist()
             selected = st.selectbox("학생 선택", students, key="oc_student_select")
             row = df_oc[df_oc["student_name"] == selected].iloc[0]
-            pre  = row.get("pre_opinion")  or "(없음)"
-            post = row.get("post_opinion") or "(없음)"
-            ai   = row.get("ai_analysis")  or ""
+
+            def _s(val, default=""):
+                return default if (val is None or (isinstance(val, float) and pd.isna(val))) else str(val)
+
+            pre  = _s(row.get("pre_opinion"),  "(없음)")
+            post = _s(row.get("post_opinion"), "(없음)")
+            ai   = _s(row.get("ai_analysis"),  "")
 
             # IP 표시 — opinion_changes 행에서 직접 읽기 (debate 메시지 없어도 표시)
             student_ip = ""
@@ -97,8 +102,8 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                         st.rerun()
 
             if stance_available() and act_type == "토론":
-                init_s = row.get("initial_stance") or ""
-                final_s = row.get("final_stance") or ""
+                init_s = _s(row.get("initial_stance"))
+                final_s = _s(row.get("final_stance"))
                 if init_s or final_s:
                     col_is, col_fs = st.columns(2)
                     with col_is:
