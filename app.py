@@ -9,6 +9,7 @@ from db import (
     fetch_debate_status,
     fetch_live_messages,
     fetch_opinion_change,
+    fetch_pending_teacher_accounts,
     fetch_topic_data,
     init_db,
     opinion_changes_available,
@@ -75,6 +76,14 @@ teacher_auth = sidebar_ctx['teacher_auth']
 admin_auth = sidebar_ctx['admin_auth']
 student_name = sidebar_ctx['student_name']
 student_number = sidebar_ctx['student_number']
+
+# admin 첫 접속 시 pending 여부에 따라 첫 화면 결정 (최초 1회)
+if admin_auth and not st.session_state.get('_admin_redirected'):
+    _pending = fetch_pending_teacher_accounts(supabase)
+    st.session_state['page'] = "admin_approval" if _pending else "lobby"
+    st.session_state['joined'] = False
+    st.session_state['_admin_redirected'] = True
+    st.rerun()
 
 if st.session_state['page'] == "admin_approval":
     render_admin_page(supabase, user_role, teacher_auth, admin_auth)

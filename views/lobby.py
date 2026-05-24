@@ -1,21 +1,7 @@
 import streamlit as st
-from db import fetch_pending_teacher_accounts, fetch_room_entry_code
+from db import fetch_room_entry_code
 from validators import normalize_user_text
 from config import AUTO_JOIN_ON_REFRESH
-
-
-def _admin_first_redirect(supabase):
-    """admin 최초 입장 시 pending 여부에 따라 페이지를 결정한다.
-    pending → admin_approval (joined=True), 없음 → lobby (joined=False).
-    """
-    pending = fetch_pending_teacher_accounts(supabase)
-    if pending:
-        st.session_state['joined'] = True
-        st.session_state['page'] = "admin_approval"
-    else:
-        st.session_state['joined'] = False
-        st.session_state['page'] = "lobby"
-    st.session_state['_admin_redirected'] = True
 
 
 def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_number):
@@ -53,15 +39,9 @@ def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_numb
                     st.session_state['joined'] = True
                     st.rerun()
         else:
-            # admin 계정: 첫 로그인 시 pending 여부에 따라 자동 분기 (한 번만 실행)
-            if admin_auth and not st.session_state.get('_admin_redirected'):
-                _admin_first_redirect(supabase)
-                st.rerun()
-
             if AUTO_JOIN_ON_REFRESH and teacher_auth and not admin_auth:
                 st.session_state['joined'] = True
                 st.rerun()
-
             if st.button(f"🚀 '{room_name}' 관리자 권한으로 입장", type="primary", use_container_width=True):
                 st.session_state['joined'] = True
                 st.rerun()
