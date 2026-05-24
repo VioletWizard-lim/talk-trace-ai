@@ -230,6 +230,13 @@ def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
     return [item.get("room_name", "") for item in res.data if str(item.get("room_name", "")).strip()]
 
 
+def update_topic(supabase: Client, room_name, title, mode):
+    return execute_query(
+        supabase.table("topic").update({"title": title, "mode": mode}).eq("room_name", room_name),
+        fail_message="주제 수정 실패",
+    )
+
+
 def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code, created_by=None):
     payload = {
         "room_name": room_name,
