@@ -5,9 +5,7 @@ from db import (
     fetch_teacher_account,
     request_teacher_account,
     upgrade_teacher_password,
-    using_service_role_key,
 )
-from env import get_secret
 from validators import validate_teacher_credential
 from utils import to_bool_flag
 
@@ -46,19 +44,6 @@ def _handle_login(supabase, teacher_id_input, teacher_pw_input):
         _reset_auth_state()
         _redirect_from_admin_if_needed()
         st.error("🚨 등록되지 않은 교사 ID입니다.")
-        if not using_service_role_key():
-            st.warning(
-                "⚠️ 현재 앱이 SERVICE ROLE KEY 없이 동작 중입니다. "
-                "teacher_accounts 테이블에 RLS 정책이 없으면 Data API 조회 결과가 0건으로 나와 "
-                "등록된 계정도 미등록으로 보일 수 있습니다."
-            )
-        try:
-            supabase_url = str(get_secret("SUPABASE_URL", ""))
-            project_ref = supabase_url.split("//", 1)[-1].split(".", 1)[0] if supabase_url else ""
-            if project_ref:
-                st.caption(f"현재 앱 연결 DB 프로젝트: `{project_ref}`")
-        except Exception:
-            pass
     elif not _verify_password(safe_pw, account.get("teacher_pw", "")):
         _reset_auth_state()
         _redirect_from_admin_if_needed()
@@ -133,5 +118,6 @@ def render_teacher_auth(supabase) -> None:
             st.session_state['teacher_pw_input'] = ""
             st.session_state['joined'] = False
             st.session_state['page'] = "lobby"
+            st.session_state.pop('_admin_redirected', None)
             st.rerun()
         st.divider()
