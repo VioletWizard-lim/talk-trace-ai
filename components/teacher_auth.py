@@ -118,5 +118,6 @@ def render_teacher_auth(supabase) -> None:
             st.session_state['teacher_pw_input'] = ""
             st.session_state['joined'] = False
             st.session_state['page'] = "lobby"
+            st.session_state.pop('_admin_redirected', None)
             st.rerun()
         st.divider()
