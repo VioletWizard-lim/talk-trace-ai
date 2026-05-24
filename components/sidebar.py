@@ -23,6 +23,7 @@ def _reset_joined_state():
     st.session_state['teacher_auth'] = False
     st.session_state['admin_auth'] = False
     st.session_state['teacher_id'] = ""
+    st.session_state.pop('_admin_redirected', None)
 
 
 def render_sidebar(supabase) -> dict:
@@ -112,6 +113,7 @@ def render_sidebar(supabase) -> dict:
             st.session_state['current_room'] = room_name
             st.session_state['ai_hint_text'] = ""
             st.session_state['ai_report_text'] = ""
+            st.session_state.pop('_admin_redirected', None)
             if st.session_state['joined']:
                 st.session_state['joined'] = False
                 log_audit("room_switched_to_lobby", room_name=room_name, actor_name=student_name, role=user_role, previous_room=prev_room)
@@ -121,6 +123,7 @@ def render_sidebar(supabase) -> dict:
             st.divider()
             if st.button("🚪 방 나가기 (대기실로)"):
                 st.session_state['joined'] = False
+                st.session_state.pop('_admin_redirected', None)
                 st.rerun()
 
     return {
