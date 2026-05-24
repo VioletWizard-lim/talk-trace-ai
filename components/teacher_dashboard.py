@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status, stance_available, update_topic
+from db import delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _STANCE_OPTIONS
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -162,29 +162,6 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     with col_dash_refresh:
         if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
             st.rerun()
-
-    with st.expander("✏️ 주제 수정", expanded=False):
-        new_title = st.text_input(
-            "새 주제",
-            value=current_topic,
-            max_chars=120,
-            key="edit_topic_title",
-        )
-        new_mode = st.radio(
-            "진행 방식",
-            ["⚔️ 찬반 토론", "💡 자유 토의"],
-            index=0 if "토론" in current_mode else 1,
-            horizontal=True,
-            key="edit_topic_mode",
-        )
-        if st.button("✅ 주제 저장", type="primary", use_container_width=True, key="edit_topic_save"):
-            if not new_title.strip():
-                st.warning("주제를 입력해 주세요.")
-            else:
-                res = update_topic(supabase, room_name, new_title.strip(), new_mode)
-                if res is not None:
-                    st.toast("✅ 주제가 수정되었습니다.", icon="✏️")
-                    st.rerun()
 
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
     student_only_df = (

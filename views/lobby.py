@@ -1,7 +1,13 @@
 import streamlit as st
-from db import fetch_room_entry_code
+from db import fetch_pending_teacher_accounts, fetch_room_entry_code
 from validators import normalize_user_text
 from config import AUTO_JOIN_ON_REFRESH
+
+
+def _admin_join_redirect(supabase):
+    """admin 입장 시 pending 요청 유무에 따라 첫 화면을 결정한다."""
+    pending = fetch_pending_teacher_accounts(supabase)
+    st.session_state['page'] = "admin_approval" if pending else "lobby"
 
 
 def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_number):
@@ -41,8 +47,12 @@ def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_numb
         else:
             if AUTO_JOIN_ON_REFRESH and teacher_auth:
                 st.session_state['joined'] = True
+                if admin_auth:
+                    _admin_join_redirect(supabase)
                 st.rerun()
             if st.button(f"🚀 '{room_name}' 관리자 권한으로 입장", type="primary", use_container_width=True):
                 st.session_state['joined'] = True
+                if admin_auth:
+                    _admin_join_redirect(supabase)
                 st.rerun()
     st.stop()
