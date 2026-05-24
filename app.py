@@ -13,6 +13,7 @@ from db import (
     init_db,
     opinion_changes_available,
     submit_opinion,
+    update_topic,
     using_service_role_key,
 )
 from config import APP_CSS, MAX_STUDENT_NAME_LEN
@@ -102,6 +103,22 @@ if admin_auth:
 else:
     st.title(f"🎙️ 말자취(Talk-Trace) AI [{room_name}]")
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
+
+if user_role == "교사" and teacher_auth:
+    with st.expander("✏️ 주제 수정", expanded=False):
+        _edit_title = st.text_input("새 주제", value=current_topic, max_chars=120, key="edit_topic_title")
+        _edit_mode = st.radio(
+            "진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"],
+            index=0 if "토론" in current_mode else 1,
+            horizontal=True, key="edit_topic_mode",
+        )
+        if st.button("✅ 주제 저장", type="primary", use_container_width=True, key="edit_topic_save"):
+            if not _edit_title.strip():
+                st.warning("주제를 입력해 주세요.")
+            else:
+                if update_topic(supabase, room_name, _edit_title.strip(), _edit_mode) is not None:
+                    st.toast("✅ 주제가 수정되었습니다.", icon="✏️")
+                    st.rerun()
 
 @st.fragment(run_every=3)
 def _poll_debate_status(room_name):
