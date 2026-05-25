@@ -120,6 +120,7 @@ def check_schema_columns() -> dict:
         ("opinion_changes.pre_opinion",    lambda: supabase.table("opinion_changes").select("pre_opinion").limit(1).execute()),
         ("opinion_changes.initial_stance", lambda: supabase.table("opinion_changes").select("initial_stance").limit(1).execute()),
         ("session_control.status",         lambda: supabase.table("session_control").select("status").limit(1).execute()),
+        ("likes.opinion_id",               lambda: supabase.table("likes").select("opinion_id").limit(1).execute()),
     ]
 
     results = {}
@@ -162,6 +163,9 @@ def session_control_available() -> bool:
 
 def teacher_is_admin_column_available() -> bool:
     return check_schema_columns().get("teacher_accounts.is_admin", False)
+
+def likes_available() -> bool:
+    return check_schema_columns().get("likes.opinion_id", False)
 
 
 # ==========================================
@@ -604,3 +608,37 @@ def reject_teacher_account(supabase: Client, account_id: int):
         supabase.table("teacher_accounts").delete().eq("id", account_id),
         fail_message="교사 계정 거절 실패",
     )
+
+
+# ==========================================
+# [공감(likes)] 관련 쿼리
+# ==========================================
+
+@st.cache_data(ttl=3)
+def fetch_room_likes(_supabase: Client, room_name: str):
+    """방의 모든 공감 데이터를 반환한다: [{"opinion_id": ..., "student_name": ...}, ...]"""
+    res = execute_query(
+        _supabase.table("likes").select("opinion_id, student_name").eq("room_name", room_name),
+        fail_message="공감 데이터 조회 실패",
+    )
+    return res.data if res and res.data else []
+
+
+def toggle_like(supabase: Client, opinion_id: int, room_name: str, student_name: str) -> bool:
+    """공감 토글. 이미 공감 시 취소(False 반환), 없으면 추가(True 반환)."""
+    existing = execute_query(
+        supabase.table("likes").select("id").eq("opinion_id", opinion_id).eq("student_name", student_name),
+        fail_message="공감 확인 실패",
+    )
+    if existing and existing.data:
+        execute_query(
+            supabase.table("likes").delete().eq("opinion_id", opinion_id).eq("student_name", student_name),
+            fail_message="공감 취소 실패",
+        )
+        return False
+    else:
+        execute_query(
+            supabase.table("likes").insert({"opinion_id": opinion_id, "room_name": room_name, "student_name": student_name}),
+            fail_message="공감 추가 실패",
+        )
+        return True
