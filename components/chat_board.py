@@ -108,7 +108,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             # 셀프 공감 차단: 의견 작성자 IP와 현재 사용자 IP 비교
             row_ip = str(row.get("ip_address", "")).strip() if hasattr(row, "get") else ""
             is_self = bool(my_anon_ip and row_ip and my_anon_ip == row_ip)
-            like_disabled = is_self or not use_likes or on_like_cooldown
+            like_disabled = is_self or not use_likes or (on_like_cooldown and not is_liked)
             like_label = f"👍 {count}" if count > 0 else "👍"
             like_type = "primary" if is_liked else "secondary"
 
