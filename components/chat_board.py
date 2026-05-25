@@ -1,10 +1,19 @@
 import streamlit as st
 import plotly.express as px
-from db import fetch_live_messages, delete_opinion_message
+from collections import Counter
+from db import fetch_live_messages, delete_opinion_message, fetch_room_likes, toggle_like, likes_available
 from validators import with_fallback_author_role, mask_ip_for_teacher
-from utils import format_kst_datetime, log_audit
+from utils import format_kst_datetime, get_client_ip, log_audit
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, LIVE_REFRESH_INTERVAL, UI_FONT_FAMILY
+
+
+_RANK_BADGES = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+
+def _anon_ip(raw_ip: str) -> str:
+    parts = raw_ip.split(".")
+    return f"{parts[0]}.X.X.{parts[3]}" if len(parts) == 4 else ""
 
 
 def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
@@ -47,6 +56,23 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
 
         student_df = opinion_df[~opinion_df['student_name'].str.contains('선생님', na=False)]
 
+        # 공감 데이터 로드
+        use_likes = likes_available()
+        likes_count = {}
+        my_likes = set()
+        badge_map = {}
+        my_anon_ip = ""
+        if use_likes:
+            likes_data = fetch_room_likes(supabase, room_name)
+            likes_count = Counter(item['opinion_id'] for item in likes_data)
+            my_likes = {item['opinion_id'] for item in likes_data if item['student_name'] == student_name}
+            raw_client_ip = get_client_ip()
+            if raw_client_ip:
+                my_anon_ip = _anon_ip(raw_client_ip)
+            # 상위 3개 뱃지
+            top3 = [oid for oid, _ in likes_count.most_common(3) if likes_count[oid] > 0]
+            badge_map = {oid: _RANK_BADGES[rank] for rank, oid in enumerate(top3, 1)}
+
         def delete_chat_msg(msg_id):
             try:
                 if delete_opinion_message(supabase, msg_id) is None:
@@ -57,21 +83,56 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             except Exception as e:
                 st.error(f"삭제 실패: {e}")
 
+        def do_toggle_like(msg_id):
+            toggle_like(supabase, msg_id, room_name, student_name)
+            fetch_room_likes.clear()
+
         def render_msg(row):
             formatted_timestamp = format_kst_datetime(row.get("timestamp", ""))
+            msg_id = row['id']
+            count = likes_count.get(msg_id, 0)
+            is_liked = msg_id in my_likes
+            badge = badge_map.get(msg_id, "")
+
+            # 셀프 공감 차단: 의견 작성자 IP와 현재 사용자 IP 비교
+            row_ip = str(row.get("ip_address", "")).strip() if hasattr(row, "get") else ""
+            is_self = bool(my_anon_ip and row_ip and my_anon_ip == row_ip)
+            like_disabled = is_self or not use_likes
+            like_label = f"👍 {count}" if count > 0 else "👍"
+            like_type = "primary" if is_liked else "secondary"
+
+            name_badge = f"{badge} " if badge else ""
+
             if user_role == "교사" and teacher_auth:
-                c_name, c_btn = st.columns([5, 1])
+                c_name, c_like, c_del = st.columns([5, 1, 1])
                 with c_name:
-                    st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>", unsafe_allow_html=True)
-                    row_ip = str(row.get("ip_address", "")).strip() if hasattr(row, "get") else ""
+                    st.markdown(
+                        f"**{name_badge}{row['student_name']}** "
+                        f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
+                        unsafe_allow_html=True,
+                    )
                     if row_ip:
                         st.caption(f"IP: {mask_ip_for_teacher(row_ip)}")
-                with c_btn:
-                    st.button("❌", key=f"del_{row['id']}", help="강제 삭제", on_click=delete_chat_msg, args=(row['id'],))
-                st.info(row['content'])
+                with c_like:
+                    st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
+                              type=like_type, use_container_width=True,
+                              on_click=do_toggle_like, args=(msg_id,))
+                with c_del:
+                    st.button("❌", key=f"del_{msg_id}", help="강제 삭제",
+                              on_click=delete_chat_msg, args=(msg_id,))
             else:
-                st.markdown(f"**{row['student_name']}** <span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>", unsafe_allow_html=True)
-                st.info(row['content'])
+                c_name, c_like = st.columns([5, 1])
+                with c_name:
+                    st.markdown(
+                        f"**{name_badge}{row['student_name']}** "
+                        f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
+                        unsafe_allow_html=True,
+                    )
+                with c_like:
+                    st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
+                              type=like_type, use_container_width=True,
+                              on_click=do_toggle_like, args=(msg_id,))
+            st.info(row['content'])
             st.write("")
 
         if current_mode == "⚔️ 찬반 토론":
