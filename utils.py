@@ -60,10 +60,18 @@ def get_client_ip():
         return ""
     if not headers:
         return ""
-    for key in ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "fly-client-ip"]:
+    for key in ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "fly-client-ip",
+                "X-Forwarded-For", "X-Real-Ip", "CF-Connecting-IP", "True-Client-Ip",
+                "true-client-ip"]:
         raw_ip = headers.get(key)
         if raw_ip:
             return str(raw_ip).split(",")[0].strip()
+    # 헤더에서 IP를 찾지 못한 경우 사용 가능한 헤더 목록을 로그로 남김
+    try:
+        all_keys = list(headers.keys()) if headers else []
+        logger.info("get_client_ip: IP 헤더 없음. 수신된 헤더 키: %s", all_keys)
+    except Exception:
+        pass
     return ""
 
 
