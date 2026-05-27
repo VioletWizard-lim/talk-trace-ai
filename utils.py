@@ -160,6 +160,7 @@ def create_analysis_image(
     pre_opinion: str,
     post_opinion: str,
     ai_analysis: str,
+    ai_feedback: str = "",
 ) -> bytes:
     """AI 배움 분석 결과를 PNG 이미지 bytes로 반환합니다."""
     from PIL import Image, ImageDraw
@@ -232,6 +233,7 @@ def create_analysis_image(
         + section_h(post_opinion)
         + DIV_H
         + ai_section_h(ai_analysis)
+        + (DIV_H + section_h(ai_feedback) if ai_feedback else 0)
         + FOOTER_H
     )
 
@@ -291,6 +293,9 @@ def create_analysis_image(
     section("토론 후 생각", post_opinion or "(없음)")
     divider()
     ai_section(ai_analysis)
+    if ai_feedback:
+        divider()
+        section("AI 피드백 카드 (잘한 점 / 발전할 점)", ai_feedback)
 
     # Footer
     draw.rectangle([0, total_h - FOOTER_H, W, total_h], fill=C_FTR_BG)

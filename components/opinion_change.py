@@ -27,17 +27,25 @@ def render_feedback_card(ai_feedback: str) -> None:
     if not ai_feedback:
         return
 
-    # 유연한 파싱: 이모지·마크다운 무관하게 섹션 분리
+    # 유연한 파싱: 콜론 이후 같은 줄 내용 + 이후 줄 모두 포함
     well_text = ""
     grow_text = ""
 
-    well_match = re.search(r'잘한\s*점[^\n]*\n?(.*?)(?=발전할\s*점|$)', ai_feedback, re.DOTALL)
-    grow_match = re.search(r'발전할\s*점[^\n]*\n?(.*?)$', ai_feedback, re.DOTALL)
+    # "잘한 점:" 이후 내용 ~ "발전할 점" 직전까지
+    well_match = re.search(
+        r'잘한\s*점\s*[^\n:：]*[:：]?\s*(.*?)(?=\n\s*\n?\s*[✅🌱]?\s*발전할\s*점|$)',
+        ai_feedback, re.DOTALL
+    )
+    # "발전할 점:" 이후 내용 ~ 끝까지
+    grow_match = re.search(
+        r'발전할\s*점\s*[^\n:：]*[:：]?\s*(.*?)$',
+        ai_feedback, re.DOTALL
+    )
 
     if well_match:
-        well_text = re.sub(r'^[\s:：✅*#]+', '', well_match.group(1)).strip()
+        well_text = well_match.group(1).strip()
     if grow_match:
-        grow_text = re.sub(r'^[\s:：🌱*#]+', '', grow_match.group(1)).strip()
+        grow_text = grow_match.group(1).strip()
 
     col_well, col_grow = st.columns(2)
     if well_text or grow_text:
@@ -178,6 +186,7 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
                 student_name, current_topic, pre_opinion, post_opinion, ai_analysis,
                 session_key=f"img_{room_name}_{student_name}",
                 btn_key="dl_analysis_student",
+                ai_feedback=ai_feedback,
             )
         else:
             if st.button("🤖 AI 배움 분석 받기", use_container_width=True):
@@ -186,14 +195,14 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
 
 
 def _render_image_download(student_name, topic, pre_opinion, post_opinion, ai_analysis,
-                           session_key, btn_key):
+                           session_key, btn_key, ai_feedback=""):
     """이미지를 base64 데이터 URI 링크로 렌더링 — rerun 없이 즉시 다운로드."""
     import base64
-    cache_key = f"{session_key}_{len(ai_analysis)}_b64"
+    cache_key = f"{session_key}_{len(ai_analysis)}_{len(ai_feedback)}_b64"
     if cache_key not in st.session_state:
         try:
             img_bytes = create_analysis_image(
-                student_name, topic, pre_opinion, post_opinion, ai_analysis
+                student_name, topic, pre_opinion, post_opinion, ai_analysis, ai_feedback
             )
             st.session_state[cache_key] = base64.b64encode(img_bytes).decode()
         except Exception:
