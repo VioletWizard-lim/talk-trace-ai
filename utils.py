@@ -78,13 +78,16 @@ def anonymize_ip(raw_ip: str) -> str | None:
     """IP를 익명화하여 반환합니다. 저장 불가 시 None 반환.
 
     IPv4: 첫 번째·마지막 옥텟 유지, 중간 0으로 대체 (예: 165.0.0.41)
-    IPv6: 앞 4그룹(64비트 프리픽스) 유지, 나머지 :: 처리 (예: 2406:5900:117c:424b::)
+    IPv6: 앞 4그룹·마지막 그룹 유지, 중간 :: 처리 (예: 2406:5900:117c:424b::4444)
+          → 같은 Wi-Fi라도 기기별 구분 가능
     """
     ip = str(raw_ip or "").strip()
     if not ip:
         return None
     if ":" in ip:  # IPv6
-        groups = ip.split(":")
+        groups = [g for g in ip.split(":") if g]  # 빈 그룹 제거
+        if len(groups) >= 5:
+            return ":".join(groups[:4]) + "::" + groups[-1]
         if len(groups) >= 4:
             return ":".join(groups[:4]) + "::"
         return None
