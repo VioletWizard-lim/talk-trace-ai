@@ -6,7 +6,7 @@ import streamlit as st
 
 from db import ai_feedback_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status, stance_available
 from utils import create_analysis_image
-from components.opinion_change import _render_image_download, _STANCE_OPTIONS
+from components.opinion_change import _render_image_download, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from validators import with_fallback_author_role
 from utils import log_audit
@@ -94,29 +94,7 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
         st.info(post)
     if ai_feedback and ai_feedback_available():
         st.caption("🌟 AI 피드백 카드")
-        col_well, col_grow = st.columns(2)
-        lines = ai_feedback.strip().splitlines()
-        well_lines, grow_lines = [], []
-        section = None
-        for line in lines:
-            if line.startswith("✅ 잘한 점"):
-                section = "well"
-                rest = line[len("✅ 잘한 점"):].lstrip(":").strip()
-                if rest:
-                    well_lines.append(rest)
-            elif line.startswith("🌱 발전할 점"):
-                section = "grow"
-                rest = line[len("🌱 발전할 점"):].lstrip(":").strip()
-                if rest:
-                    grow_lines.append(rest)
-            elif section == "well" and line.strip():
-                well_lines.append(line.strip())
-            elif section == "grow" and line.strip():
-                grow_lines.append(line.strip())
-        with col_well:
-            st.success("**✅ 잘한 점**\n\n" + "\n\n".join(well_lines) if well_lines else "**✅ 잘한 점**\n\n(없음)")
-        with col_grow:
-            st.warning("**🌱 발전할 점**\n\n" + "\n\n".join(grow_lines) if grow_lines else "**🌱 발전할 점**\n\n(없음)")
+        render_feedback_card(ai_feedback)
 
     if ai:
         st.caption("🤖 AI 배움 분석")

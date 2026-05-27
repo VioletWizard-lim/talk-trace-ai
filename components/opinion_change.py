@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 
 from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
@@ -18,6 +19,34 @@ from services.ai import build_feedback_prompt, build_opinion_change_prompt, gene
 
 
 _STANCE_OPTIONS = ["🔵 찬성", "🔴 반대"]
+
+
+def render_feedback_card(ai_feedback: str) -> None:
+    """잘한 점 / 발전할 점 피드백 카드를 렌더링합니다."""
+    if not ai_feedback:
+        return
+
+    # 유연한 파싱: 이모지·마크다운 무관하게 섹션 분리
+    well_text = ""
+    grow_text = ""
+
+    well_match = re.search(r'잘한\s*점[^\n]*\n?(.*?)(?=발전할\s*점|$)', ai_feedback, re.DOTALL)
+    grow_match = re.search(r'발전할\s*점[^\n]*\n?(.*?)$', ai_feedback, re.DOTALL)
+
+    if well_match:
+        well_text = re.sub(r'^[\s:：✅*#]+', '', well_match.group(1)).strip()
+    if grow_match:
+        grow_text = re.sub(r'^[\s:：🌱*#]+', '', grow_match.group(1)).strip()
+
+    col_well, col_grow = st.columns(2)
+    if well_text or grow_text:
+        with col_well:
+            st.success(f"**✅ 잘한 점**\n\n{well_text}" if well_text else "**✅ 잘한 점**\n\n(내용 없음)")
+        with col_grow:
+            st.warning(f"**🌱 발전할 점**\n\n{grow_text}" if grow_text else "**🌱 발전할 점**\n\n(내용 없음)")
+    else:
+        # 파싱 완전 실패 시 원문 표시
+        st.info(ai_feedback)
 
 
 def render_pre_opinion_form(supabase, room_name, student_name, current_topic, act_type="토론"):
@@ -134,30 +163,7 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
         # AI 피드백 카드
         if ai_feedback and ai_feedback_available():
             st.markdown("### 🌟 나의 AI 피드백 카드")
-            lines = ai_feedback.strip().splitlines()
-            well_lines, grow_lines = [], []
-            section = None
-            for line in lines:
-                if line.startswith("✅ 잘한 점"):
-                    section = "well"
-                    rest = line[len("✅ 잘한 점"):].lstrip(":").strip()
-                    if rest:
-                        well_lines.append(rest)
-                elif line.startswith("🌱 발전할 점"):
-                    section = "grow"
-                    rest = line[len("🌱 발전할 점"):].lstrip(":").strip()
-                    if rest:
-                        grow_lines.append(rest)
-                elif section == "well" and line.strip():
-                    well_lines.append(line.strip())
-                elif section == "grow" and line.strip():
-                    grow_lines.append(line.strip())
-
-            col_well, col_grow = st.columns(2)
-            with col_well:
-                st.success("**✅ 잘한 점**\n\n" + "\n\n".join(well_lines) if well_lines else "**✅ 잘한 점**\n\n(분석 중...)")
-            with col_grow:
-                st.warning("**🌱 발전할 점**\n\n" + "\n\n".join(grow_lines) if grow_lines else "**🌱 발전할 점**\n\n(분석 중...)")
+            render_feedback_card(ai_feedback)
             st.divider()
 
         if ai_analysis:
