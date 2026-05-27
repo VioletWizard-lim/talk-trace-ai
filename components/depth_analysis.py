@@ -121,6 +121,35 @@ def render_depth_analysis_section(supabase, room_name: str, act_type: str) -> No
     classified_df["depth_level"] = classified_df["depth_level"].astype(int)
     classified_df["depth_label"] = classified_df["depth_level"].map(_DEPTH_LABELS)
 
+    # ── 학생 필터 ──
+    all_students = sorted(classified_df["student_name"].unique().tolist())
+    filter_key = f"depth_student_filter_{room_name}"
+    if filter_key not in st.session_state:
+        st.session_state[filter_key] = all_students
+
+    col_sel_all, col_desel_all, col_filter = st.columns([1, 1, 6])
+    with col_sel_all:
+        if st.button("✅ 전체 선택", use_container_width=True, key=f"depth_sel_all_{room_name}"):
+            st.session_state[filter_key] = all_students
+    with col_desel_all:
+        if st.button("⬜ 전체 해제", use_container_width=True, key=f"depth_desel_all_{room_name}"):
+            st.session_state[filter_key] = []
+    with col_filter:
+        selected_students = st.multiselect(
+            "학생 필터",
+            options=all_students,
+            default=st.session_state[filter_key],
+            key=f"depth_multisel_{room_name}",
+            label_visibility="collapsed",
+        )
+        st.session_state[filter_key] = selected_students
+
+    if not selected_students:
+        st.info("학생을 한 명 이상 선택해 주세요.")
+        return
+
+    classified_df = classified_df[classified_df["student_name"].isin(selected_students)]
+
     col_chart1, col_chart2 = st.columns(2)
 
     # ── 차트 1: 발언 깊이 분포 막대 그래프 ──
