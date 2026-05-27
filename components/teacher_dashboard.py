@@ -197,8 +197,6 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     # ── 3. 수업 종료 및 전체 토의 요약 리포트 ──
     st.divider()
     render_summary_section(room_name, act_type, current_topic, df_all)
-    st.divider()
-    render_records_section(room_name, act_type, df_all)
 
     # ── 4. 학생 참여도 현황 ──
     st.divider()
@@ -219,6 +217,10 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
 
     _render_oc_section(supabase, room_name, act_type, current_topic, df_all)
     render_depth_analysis_section(supabase, room_name, act_type)
+
+    # ── 5. 활동 데이터 다운로드 ──
+    st.divider()
+    render_records_section(room_name, act_type, df_all)
 
     st.divider()
     st.subheader("🚨 위험 구역 (방 폭파)")
