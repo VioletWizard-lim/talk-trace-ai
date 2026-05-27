@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status, stance_available
+from db import ai_feedback_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _STANCE_OPTIONS
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -58,9 +58,10 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
                 st.rerun()
 
     row = df_oc[df_oc["student_name"] == selected].iloc[0]
-    pre  = _s(row.get("pre_opinion"),  "(없음)")
-    post = _s(row.get("post_opinion"), "(없음)")
-    ai   = _s(row.get("ai_analysis"),  "")
+    pre         = _s(row.get("pre_opinion"),  "(없음)")
+    post        = _s(row.get("post_opinion"), "(없음)")
+    ai          = _s(row.get("ai_analysis"),  "")
+    ai_feedback = _s(row.get("ai_feedback"),  "")
 
     ip_raw = _s(row.get("ip_address"))
     student_ip = ip_raw.replace(".0.0.", ".X.X.") if ip_raw else ""
@@ -91,6 +92,32 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
     with col_post:
         st.caption("🔄 토론 후 생각")
         st.info(post)
+    if ai_feedback and ai_feedback_available():
+        st.caption("🌟 AI 피드백 카드")
+        col_well, col_grow = st.columns(2)
+        lines = ai_feedback.strip().splitlines()
+        well_lines, grow_lines = [], []
+        section = None
+        for line in lines:
+            if line.startswith("✅ 잘한 점"):
+                section = "well"
+                rest = line[len("✅ 잘한 점"):].lstrip(":").strip()
+                if rest:
+                    well_lines.append(rest)
+            elif line.startswith("🌱 발전할 점"):
+                section = "grow"
+                rest = line[len("🌱 발전할 점"):].lstrip(":").strip()
+                if rest:
+                    grow_lines.append(rest)
+            elif section == "well" and line.strip():
+                well_lines.append(line.strip())
+            elif section == "grow" and line.strip():
+                grow_lines.append(line.strip())
+        with col_well:
+            st.success("**✅ 잘한 점**\n\n" + "\n\n".join(well_lines) if well_lines else "**✅ 잘한 점**\n\n(없음)")
+        with col_grow:
+            st.warning("**🌱 발전할 점**\n\n" + "\n\n".join(grow_lines) if grow_lines else "**🌱 발전할 점**\n\n(없음)")
+
     if ai:
         st.caption("🤖 AI 배움 분석")
         st.markdown(ai.replace("\n", "\n\n"))
