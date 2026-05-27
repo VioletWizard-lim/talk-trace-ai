@@ -60,10 +60,18 @@ def get_client_ip():
         return ""
     if not headers:
         return ""
-    for key in ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "fly-client-ip"]:
+    for key in ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "fly-client-ip",
+                "X-Forwarded-For", "X-Real-Ip", "CF-Connecting-IP", "True-Client-Ip",
+                "true-client-ip"]:
         raw_ip = headers.get(key)
         if raw_ip:
             return str(raw_ip).split(",")[0].strip()
+    # 헤더에서 IP를 찾지 못한 경우 사용 가능한 헤더 목록을 로그로 남김
+    try:
+        all_keys = list(headers.keys()) if headers else []
+        logger.info("get_client_ip: IP 헤더 없음. 수신된 헤더 키: %s", all_keys)
+    except Exception:
+        pass
     return ""
 
 
@@ -116,8 +124,33 @@ def _get_pil_font_bold(size: int):
     return _get_pil_font(size)
 
 
+_EMOJI_TEXT_SUBS = [
+    # AI 피드백 카드 레이블
+    ("✅", "[완료]"),
+    ("🌱", "[성장]"),
+    # 섹션 마커
+    ("📌", ">>"),
+    ("🔄", ">>"),
+    ("🤖", "[AI]"),
+    ("👨‍🏫", "[교사]"),
+    # 기타 자주 쓰이는 이모지
+    ("💡", "[아이디어]"),
+    ("➕", "[보충]"),
+    ("❓", "[질문]"),
+    ("🔵", "[찬성]"),
+    ("🔴", "[반대]"),
+    ("👍", "[좋아요]"),
+    ("🎉", ""),
+    ("⚠️", "[주의]"),
+]
+
+
 def _strip_non_renderable(text: str) -> str:
-    """이미지 렌더링 시 깨질 수 있는 이모지/심볼 제거."""
+    """이미지 렌더링 시 깨질 수 있는 이모지/심볼을 텍스트로 대체하거나 제거."""
+    # 1단계: 알려진 이모지를 텍스트 레이블로 치환
+    for emoji, replacement in _EMOJI_TEXT_SUBS:
+        text = (text or "").replace(emoji, replacement)
+    # 2단계: 나머지 렌더링 불가 문자 제거
     result = []
     for ch in (text or ""):
         code = ord(ch)
