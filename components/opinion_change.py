@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 
 from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
-from utils import create_analysis_image, get_client_ip
+from utils import anonymize_ip, create_analysis_image, get_client_ip
 from db import (
     ai_feedback_available,
     fetch_live_messages,
