@@ -46,7 +46,7 @@ def render_pre_opinion_form(supabase, room_name, student_name, current_topic, ac
             return
         raw_ip = get_client_ip()
         parts = raw_ip.split(".")
-        anon_ip = f"{parts[0]}.X.X.{parts[3]}" if len(parts) == 4 else None
+        anon_ip = f"{parts[0]}.0.0.{parts[3]}" if len(parts) == 4 else None
         res = upsert_pre_opinion(supabase, room_name, student_name, pre_input.strip(), initial_stance=initial_stance, ip_address=anon_ip)
         if res is not None:
             st.toast("✅ 내 생각이 기록되었습니다. 이제 토론에 참여할 수 있습니다!", icon="🎉")
