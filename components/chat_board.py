@@ -14,8 +14,8 @@ _LIKE_COOLDOWN = 3
 
 
 def _anon_ip(raw_ip: str) -> str:
-    parts = raw_ip.split(".")
-    return f"{parts[0]}.0.0.{parts[3]}" if len(parts) == 4 else ""
+    from utils import anonymize_ip
+    return anonymize_ip(raw_ip) or ""
 
 
 def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):

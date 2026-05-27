@@ -18,7 +18,7 @@ from db import (
     using_service_role_key,
 )
 from config import APP_CSS, MAX_STUDENT_NAME_LEN
-from utils import get_client_ip, get_kst_now_str, log_audit
+from utils import anonymize_ip, get_client_ip, get_kst_now_str, log_audit
 from validators import validate_opinion_content, validate_student_name
 from views.home import render_home_page
 from views.lobby import render_lobby_page
@@ -206,8 +206,7 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
                 "content": safe_input, "sentiment": sentiment, "author_role": author_role_for_submit,
             }
             if debate_ip_column_available() and client_ip:
-                parts = client_ip.split(".")
-                anonymized_ip = f"{parts[0]}.0.0.{parts[3]}" if len(parts) == 4 else None
+                anonymized_ip = anonymize_ip(client_ip)
                 if anonymized_ip:
                     insert_payload["ip_address"] = anonymized_ip
             try:
