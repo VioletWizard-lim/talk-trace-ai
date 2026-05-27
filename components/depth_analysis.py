@@ -121,35 +121,6 @@ def render_depth_analysis_section(supabase, room_name: str, act_type: str) -> No
     classified_df["depth_level"] = classified_df["depth_level"].astype(int)
     classified_df["depth_label"] = classified_df["depth_level"].map(_DEPTH_LABELS)
 
-    # ── 학생 필터 ──
-    all_students = sorted(classified_df["student_name"].unique().tolist())
-    filter_key = f"depth_student_filter_{room_name}"
-    if filter_key not in st.session_state:
-        st.session_state[filter_key] = all_students
-
-    col_sel_all, col_desel_all, col_filter = st.columns([1, 1, 6])
-    with col_sel_all:
-        if st.button("✅ 전체 선택", use_container_width=True, key=f"depth_sel_all_{room_name}"):
-            st.session_state[filter_key] = all_students
-    with col_desel_all:
-        if st.button("⬜ 전체 해제", use_container_width=True, key=f"depth_desel_all_{room_name}"):
-            st.session_state[filter_key] = []
-    with col_filter:
-        selected_students = st.multiselect(
-            "학생 필터",
-            options=all_students,
-            default=st.session_state[filter_key],
-            key=f"depth_multisel_{room_name}",
-            label_visibility="collapsed",
-        )
-        st.session_state[filter_key] = selected_students
-
-    if not selected_students:
-        st.info("학생을 한 명 이상 선택해 주세요.")
-        return
-
-    classified_df = classified_df[classified_df["student_name"].isin(selected_students)]
-
     col_chart1, col_chart2 = st.columns(2)
 
     # ── 차트 1: 발언 깊이 분포 막대 그래프 ──
@@ -197,8 +168,21 @@ def render_depth_analysis_section(supabase, room_name: str, act_type: str) -> No
             yaxis=dict(tickvals=[1, 2, 3, 4], ticktext=list(_DEPTH_LABELS.values()), range=[0.5, 4.5]),
             dragmode=False,
             font={"family": UI_FONT_FAMILY},
-            margin=dict(t=20, b=10),
+            margin=dict(t=50, b=10),
             xaxis_title="발언 순서",
+            legend_title="학생 (클릭: 개별 토글)",
+            updatemenus=[dict(
+                type="buttons",
+                direction="left",
+                x=0, y=1.18,
+                buttons=[
+                    dict(label="✅ 전체 선택", method="restyle", args=["visible", True]),
+                    dict(label="⬜ 전체 해제", method="restyle", args=["visible", "legendonly"]),
+                ],
+                bgcolor="#f0f2f6",
+                bordercolor="#ccc",
+                font=dict(size=12),
+            )],
         )
         st.plotly_chart(fig_scatter, use_container_width=True, config={"displayModeBar": False})
 
