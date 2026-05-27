@@ -121,7 +121,15 @@ def _strip_non_renderable(text: str) -> str:
     result = []
     for ch in (text or ""):
         code = ord(ch)
+        # 4바이트 유니코드 (이모지 대부분)
         if code > 0xFFFF or 0xD800 <= code <= 0xDFFF:
+            continue
+        # BMP 내 이모지/기호 블록
+        if 0x2190 <= code <= 0x27FF:  # 화살표, 기술기호, 딩뱃(✅ 등)
+            continue
+        if 0x2B00 <= code <= 0x2BFF:  # 기타 기호·화살표
+            continue
+        if 0xFE00 <= code <= 0xFEFF:  # 변형 선택자 등
             continue
         result.append(ch)
     return "".join(result)
