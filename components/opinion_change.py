@@ -3,16 +3,18 @@ import streamlit as st
 from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
 from utils import create_analysis_image, get_client_ip
 from db import (
+    ai_feedback_available,
     fetch_live_messages,
     fetch_opinion_change,
     opinion_changes_available,
     save_opinion_analysis,
+    save_opinion_feedback,
     stance_available,
     upsert_post_opinion,
     upsert_pre_opinion,
 )
 from env import get_secret
-from services.ai import build_opinion_change_prompt, generate_ai_response
+from services.ai import build_feedback_prompt, build_opinion_change_prompt, generate_ai_response
 
 
 _STANCE_OPTIONS = ["🔵 찬성", "🔴 반대"]
@@ -121,12 +123,43 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
     else:
         final_stance_val = (row or {}).get("final_stance") or ""
         discussion_conclusion_val = (row or {}).get("discussion_conclusion") or ""
+        ai_feedback = (row or {}).get("ai_feedback") or ""
         if act_type == "토론" and final_stance_val:
             st.success(f"✅ **최종 입장:** {final_stance_val}")
         if act_type == "토의" and discussion_conclusion_val:
             st.success(f"✅ **나의 결론:** {discussion_conclusion_val}")
         st.success(f"✅ **토론 후 내 생각:** {post_opinion}")
         st.divider()
+
+        # AI 피드백 카드
+        if ai_feedback and ai_feedback_available():
+            st.markdown("### 🌟 나의 AI 피드백 카드")
+            lines = ai_feedback.strip().splitlines()
+            well_lines, grow_lines = [], []
+            section = None
+            for line in lines:
+                if line.startswith("✅ 잘한 점"):
+                    section = "well"
+                    rest = line[len("✅ 잘한 점"):].lstrip(":").strip()
+                    if rest:
+                        well_lines.append(rest)
+                elif line.startswith("🌱 발전할 점"):
+                    section = "grow"
+                    rest = line[len("🌱 발전할 점"):].lstrip(":").strip()
+                    if rest:
+                        grow_lines.append(rest)
+                elif section == "well" and line.strip():
+                    well_lines.append(line.strip())
+                elif section == "grow" and line.strip():
+                    grow_lines.append(line.strip())
+
+            col_well, col_grow = st.columns(2)
+            with col_well:
+                st.success("**✅ 잘한 점**\n\n" + "\n\n".join(well_lines) if well_lines else "**✅ 잘한 점**\n\n(분석 중...)")
+            with col_grow:
+                st.warning("**🌱 발전할 점**\n\n" + "\n\n".join(grow_lines) if grow_lines else "**🌱 발전할 점**\n\n(분석 중...)")
+            st.divider()
+
         if ai_analysis:
             st.info("🤖 **AI 배움 분석**")
             st.markdown(ai_analysis.replace("\n", "\n\n"))
@@ -178,23 +211,41 @@ def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic
     else:
         debate_history = "(토론 발언 기록 없음)"
 
+    api_key = get_secret("GEMINI_API_KEY", "")
+
     with st.spinner("🤖 AI가 배움의 변화를 분석하고 있습니다..."):
+        # 배움 분석
         prompt = build_opinion_change_prompt(
             act_type, current_topic, student_name, pre_opinion, post_opinion, debate_history
         )
         res_text = generate_ai_response(
             prompt,
             model_name=AI_MODEL_NAME,
-            api_key=get_secret("GEMINI_API_KEY", ""),
+            api_key=api_key,
             log_message="AI 생각 변화 분석 실패",
             room_name=room_name,
             student=student_name,
         )
         if res_text:
             save_opinion_analysis(supabase, room_name, student_name, res_text)
-            # 캐시 초기화 — 새 분석 결과로 이미지 재생성
             cache_key = f"img_{room_name}_{student_name}_bytes"
             st.session_state.pop(cache_key, None)
+
+        # AI 피드백 카드 (잘한 점 / 발전할 점)
+        if ai_feedback_available():
+            feedback_prompt = build_feedback_prompt(act_type, current_topic, student_name, debate_history)
+            feedback_text = generate_ai_response(
+                feedback_prompt,
+                model_name=AI_MODEL_NAME,
+                api_key=api_key,
+                log_message="AI 피드백 카드 생성 실패",
+                room_name=room_name,
+                student=student_name,
+            )
+            if feedback_text:
+                save_opinion_feedback(supabase, room_name, student_name, feedback_text)
+
+        if res_text:
             st.toast("✅ AI 분석 완료!", icon="🎉")
         else:
             st.toast("🚨 AI 분석에 실패했습니다.", icon="❌")

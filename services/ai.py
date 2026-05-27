@@ -51,6 +51,23 @@ def build_opinion_change_prompt(act_type, current_topic, student_name, pre_opini
     )
 
 
+def build_feedback_prompt(act_type: str, current_topic: str, student_name: str, debate_history: str) -> str:
+    return (
+        f"'{current_topic}' 주제의 고등학교 {act_type}에서 "
+        f"'{student_name}' 학생의 발언을 분석해 개인 피드백을 작성하세요.\n\n"
+        f"[발언 기록]\n{debate_history}\n\n"
+        "[출력 형식 - 반드시 그대로]\n"
+        "✅ 잘한 점: ...\n"
+        "🌱 발전할 점: ...\n\n"
+        "[규칙]\n"
+        "- 학생의 실제 발언을 근거로 구체적으로 작성하세요.\n"
+        "- 각 항목은 2~3문장으로 작성하세요.\n"
+        "- 긍정적이고 격려하는 톤으로 작성하세요.\n"
+        "- 제목/헤더(#,##), 불필요한 서론 없이 결과만 출력하세요.\n"
+        "- 발언이 없거나 부족하면 '발언 기록이 부족하여 분석이 어렵습니다.'라고만 출력하세요."
+    )
+
+
 def build_depth_analysis_prompt(opinions: list) -> str:
     """
     opinions: list of (id, content) tuples

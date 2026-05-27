@@ -122,6 +122,7 @@ def check_schema_columns() -> dict:
         ("session_control.status",         lambda: supabase.table("session_control").select("status").limit(1).execute()),
         ("likes.opinion_id",               lambda: supabase.table("likes").select("opinion_id").limit(1).execute()),
         ("debate.depth_level",             lambda: supabase.table("debate").select("depth_level").limit(1).execute()),
+        ("opinion_changes.ai_feedback",    lambda: supabase.table("opinion_changes").select("ai_feedback").limit(1).execute()),
     ]
 
     results = {}
@@ -170,6 +171,9 @@ def likes_available() -> bool:
 
 def depth_level_available() -> bool:
     return check_schema_columns().get("debate.depth_level", False)
+
+def ai_feedback_available() -> bool:
+    return check_schema_columns().get("opinion_changes.ai_feedback", False)
 
 
 # ==========================================
@@ -469,6 +473,18 @@ def fetch_all_opinion_changes(supabase: Client, room_name: str):
     if not res or not res.data:
         return pd.DataFrame()
     return pd.DataFrame(res.data)
+
+
+def save_opinion_feedback(supabase: Client, room_name: str, student_name: str, ai_feedback: str):
+    if not ai_feedback_available():
+        return None
+    return execute_query(
+        supabase.table("opinion_changes")
+        .update({"ai_feedback": ai_feedback})
+        .eq("room_name", room_name)
+        .eq("student_name", student_name),
+        fail_message="AI 피드백 저장 실패",
+    )
 
 
 def save_opinion_analysis(supabase: Client, room_name: str, student_name: str, ai_analysis: str):
