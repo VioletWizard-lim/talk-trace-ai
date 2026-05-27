@@ -109,9 +109,7 @@ def render_depth_analysis_section(supabase, room_name: str, act_type: str) -> No
         success = bulk_update_depth_levels(supabase, updates)
         if success:
             st.toast(f"✅ {len(updates)}개 발언 분류 완료!", icon="📈")
-            # 캐시 무효화 후 최신 데이터 다시 로드
-            opinions = fetch_opinions_for_depth(supabase, room_name)
-            df = pd.DataFrame(opinions)
+            st.rerun()
         else:
             st.error("일부 발언 저장에 실패했습니다. 다시 시도해 주세요.")
 
