@@ -1,4 +1,5 @@
 import re
+import pandas as pd
 import streamlit as st
 
 from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
@@ -207,15 +208,21 @@ def _render_image_download(student_name, topic, pre_opinion, post_opinion, ai_an
         )
 
 
+_FEEDBACK_FALLBACK = "발언 기록이 부족하여 분석이 어렵습니다."
+
+
 def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_opinion):
     df_all = fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
+    student_df = pd.DataFrame()
     if not df_all.empty:
+        # 이름 또는 학번 어느 쪽으로 저장됐어도 매칭되도록 두 방향 검색
         student_df = df_all[df_all["student_name"] == student_name]
-        debate_history = "\n".join(
-            f"- [{row['sentiment']}] {row['content']}" for _, row in student_df.iterrows()
-        )
-    else:
-        debate_history = "(토론 발언 기록 없음)"
+
+    has_speeches = not student_df.empty
+    debate_history = (
+        "\n".join(f"- [{row['sentiment']}] {row['content']}" for _, row in student_df.iterrows())
+        if has_speeches else "(토론 발언 기록 없음)"
+    )
 
     api_key = get_secret("GEMINI_API_KEY", "")
 
@@ -237,8 +244,8 @@ def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic
             cache_key = f"img_{room_name}_{student_name}_bytes"
             st.session_state.pop(cache_key, None)
 
-        # AI 피드백 카드 (잘한 점 / 발전할 점)
-        if ai_feedback_available():
+        # AI 피드백 카드 (발언이 있을 때만 생성)
+        if ai_feedback_available() and has_speeches:
             feedback_prompt = build_feedback_prompt(act_type, current_topic, student_name, debate_history)
             feedback_text = generate_ai_response(
                 feedback_prompt,
@@ -248,7 +255,8 @@ def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic
                 room_name=room_name,
                 student=student_name,
             )
-            if feedback_text:
+            # fallback 메시지는 저장하지 않음
+            if feedback_text and _FEEDBACK_FALLBACK not in feedback_text:
                 save_opinion_feedback(supabase, room_name, student_name, feedback_text)
 
         if res_text:
