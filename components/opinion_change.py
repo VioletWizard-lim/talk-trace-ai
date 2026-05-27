@@ -166,6 +166,10 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
             st.markdown("### 🌟 나의 AI 피드백 카드")
             render_feedback_card(ai_feedback)
             st.divider()
+        elif ai_feedback_available():
+            if st.button("🌟 AI 피드백 카드 받기", use_container_width=True):
+                _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic)
+                st.rerun()
 
         if ai_analysis:
             st.info("🤖 **AI 배움 분석**")
@@ -211,18 +215,47 @@ def _render_image_download(student_name, topic, pre_opinion, post_opinion, ai_an
 _FEEDBACK_FALLBACK = "발언 기록이 부족하여 분석이 어렵습니다."
 
 
-def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_opinion):
+def _get_debate_history(supabase, room_name, student_name):
+    """학생 발언 기록을 문자열로 반환. 없으면 None."""
     df_all = fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
-    student_df = pd.DataFrame()
-    if not df_all.empty:
-        # 이름 또는 학번 어느 쪽으로 저장됐어도 매칭되도록 두 방향 검색
-        student_df = df_all[df_all["student_name"] == student_name]
+    if df_all.empty:
+        return None
+    student_df = df_all[df_all["student_name"] == student_name]
+    if student_df.empty:
+        return None
+    return "\n".join(f"- [{row['sentiment']}] {row['content']}" for _, row in student_df.iterrows())
 
-    has_speeches = not student_df.empty
-    debate_history = (
-        "\n".join(f"- [{row['sentiment']}] {row['content']}" for _, row in student_df.iterrows())
-        if has_speeches else "(토론 발언 기록 없음)"
-    )
+
+def _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic):
+    """피드백 카드만 단독 생성 (이미 생각 변화를 제출한 학생용)."""
+    if not ai_feedback_available():
+        return
+    debate_history = _get_debate_history(supabase, room_name, student_name)
+    if not debate_history:
+        st.warning("토론 발언 기록이 없어 피드백을 생성할 수 없습니다.")
+        return
+    api_key = get_secret("GEMINI_API_KEY", "")
+    with st.spinner("🤖 AI가 피드백을 작성하고 있습니다..."):
+        feedback_text = generate_ai_response(
+            build_feedback_prompt(act_type, current_topic, student_name, debate_history),
+            model_name=AI_MODEL_NAME,
+            api_key=api_key,
+            log_message="AI 피드백 카드 생성 실패",
+            room_name=room_name,
+            student=student_name,
+        )
+    if feedback_text and _FEEDBACK_FALLBACK not in feedback_text:
+        save_opinion_feedback(supabase, room_name, student_name, feedback_text)
+        st.toast("✅ 피드백 카드 생성 완료!", icon="🌟")
+    else:
+        st.warning("발언 기록이 부족하여 피드백을 생성할 수 없습니다.")
+
+
+def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_opinion):
+    debate_history = _get_debate_history(supabase, room_name, student_name)
+    has_speeches = debate_history is not None
+    if not has_speeches:
+        debate_history = "(토론 발언 기록 없음)"
 
     api_key = get_secret("GEMINI_API_KEY", "")
 
