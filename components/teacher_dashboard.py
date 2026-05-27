@@ -103,6 +103,7 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
             selected, current_topic, pre, post, ai,
             session_key=f"img_teacher_{room_name}_{selected}",
             btn_key="dl_analysis_teacher",
+            ai_feedback=ai_feedback,
         )
     else:
         st.caption("AI 분석이 아직 없습니다.")

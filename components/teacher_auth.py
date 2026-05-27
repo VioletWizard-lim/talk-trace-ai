@@ -29,10 +29,10 @@ def _handle_login(supabase, teacher_id_input, teacher_pw_input):
         teacher_pw_input, field_name="교사 PW", max_len=60
     )
     if not id_ok:
-        st.error(f"❌ {id_error_message} ({id_error_code})")
+        st.error(f"❌ {id_error_message}")
         st.stop()
     if not pw_ok:
-        st.error(f"❌ {pw_error_message} ({pw_error_code})")
+        st.error(f"❌ {pw_error_message}")
         st.stop()
 
     account = fetch_teacher_account(supabase, safe_teacher_id)
@@ -79,9 +79,9 @@ def _render_signup(supabase):
             req_teacher_pw, field_name="교사 PW", max_len=60
         )
         if not id_ok:
-            st.error(f"❌ {id_error_message} ({id_error_code})")
+            st.error(f"❌ {id_error_message}")
         elif not pw_ok:
-            st.error(f"❌ {pw_error_message} ({pw_error_code})")
+            st.error(f"❌ {pw_error_message}")
         elif fetch_teacher_account(supabase, safe_id):
             st.warning("이미 존재하는 ID입니다. 다른 ID를 사용해 주세요.")
         else:

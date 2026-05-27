@@ -231,7 +231,7 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
                 st.error(f"저장 실패: {e}")
         else:
             st.session_state['is_working'] = False
-            st.warning(f"{input_error_message} ({input_error_code})")
+            st.warning(f"{input_error_message}")
     if _submit_cooldown:
         st.caption("⏳ 제출 성공 후 3초간 의견을 제출할 수 없습니다.")
         time.sleep(0.5)

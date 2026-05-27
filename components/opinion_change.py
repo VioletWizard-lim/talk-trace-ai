@@ -27,17 +27,25 @@ def render_feedback_card(ai_feedback: str) -> None:
     if not ai_feedback:
         return
 
-    # 유연한 파싱: 이모지·마크다운 무관하게 섹션 분리
+    # 유연한 파싱: 콜론 이후 같은 줄 내용 + 이후 줄 모두 포함
     well_text = ""
     grow_text = ""
 
-    well_match = re.search(r'잘한\s*점[^\n]*\n?(.*?)(?=발전할\s*점|$)', ai_feedback, re.DOTALL)
-    grow_match = re.search(r'발전할\s*점[^\n]*\n?(.*?)$', ai_feedback, re.DOTALL)
+    # "잘한 점:" 이후 내용 ~ "발전할 점" 직전까지
+    well_match = re.search(
+        r'잘한\s*점\s*[^\n:：]*[:：]?\s*(.*?)(?=\n\s*\n?\s*[✅🌱]?\s*발전할\s*점|$)',
+        ai_feedback, re.DOTALL
+    )
+    # "발전할 점:" 이후 내용 ~ 끝까지
+    grow_match = re.search(
+        r'발전할\s*점\s*[^\n:：]*[:：]?\s*(.*?)$',
+        ai_feedback, re.DOTALL
+    )
 
     if well_match:
-        well_text = re.sub(r'^[\s:：✅*#]+', '', well_match.group(1)).strip()
+        well_text = well_match.group(1).strip()
     if grow_match:
-        grow_text = re.sub(r'^[\s:：🌱*#]+', '', grow_match.group(1)).strip()
+        grow_text = grow_match.group(1).strip()
 
     col_well, col_grow = st.columns(2)
     if well_text or grow_text:
@@ -168,8 +176,8 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
             st.divider()
         elif ai_feedback_available():
             if st.button("🌟 AI 피드백 카드 받기", use_container_width=True):
-                _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic)
-                st.rerun()
+                if _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic):
+                    st.rerun()
 
         if ai_analysis:
             st.info("🤖 **AI 배움 분석**")
@@ -178,6 +186,7 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
                 student_name, current_topic, pre_opinion, post_opinion, ai_analysis,
                 session_key=f"img_{room_name}_{student_name}",
                 btn_key="dl_analysis_student",
+                ai_feedback=ai_feedback,
             )
         else:
             if st.button("🤖 AI 배움 분석 받기", use_container_width=True):
@@ -186,14 +195,14 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
 
 
 def _render_image_download(student_name, topic, pre_opinion, post_opinion, ai_analysis,
-                           session_key, btn_key):
+                           session_key, btn_key, ai_feedback=""):
     """이미지를 base64 데이터 URI 링크로 렌더링 — rerun 없이 즉시 다운로드."""
     import base64
-    cache_key = f"{session_key}_{len(ai_analysis)}_b64"
+    cache_key = f"{session_key}_{len(ai_analysis)}_{len(ai_feedback)}_b64"
     if cache_key not in st.session_state:
         try:
             img_bytes = create_analysis_image(
-                student_name, topic, pre_opinion, post_opinion, ai_analysis
+                student_name, topic, pre_opinion, post_opinion, ai_analysis, ai_feedback
             )
             st.session_state[cache_key] = base64.b64encode(img_bytes).decode()
         except Exception:
@@ -226,14 +235,14 @@ def _get_debate_history(supabase, room_name, student_name):
     return "\n".join(f"- [{row['sentiment']}] {row['content']}" for _, row in student_df.iterrows())
 
 
-def _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic):
-    """피드백 카드만 단독 생성 (이미 생각 변화를 제출한 학생용)."""
+def _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic) -> bool:
+    """피드백 카드만 단독 생성. 성공 시 True, 실패 시 False 반환."""
     if not ai_feedback_available():
-        return
+        return False
     debate_history = _get_debate_history(supabase, room_name, student_name)
     if not debate_history:
-        st.warning("토론 발언 기록이 없어 피드백을 생성할 수 없습니다.")
-        return
+        st.warning("⚠️ 토론 발언 기록이 없어 피드백을 생성할 수 없습니다. 토론에서 의견을 먼저 제출해 주세요.")
+        return False
     api_key = get_secret("GEMINI_API_KEY", "")
     with st.spinner("🤖 AI가 피드백을 작성하고 있습니다..."):
         feedback_text = generate_ai_response(
@@ -247,8 +256,10 @@ def _trigger_feedback_only(supabase, room_name, student_name, act_type, current_
     if feedback_text and _FEEDBACK_FALLBACK not in feedback_text:
         save_opinion_feedback(supabase, room_name, student_name, feedback_text)
         st.toast("✅ 피드백 카드 생성 완료!", icon="🌟")
+        return True
     else:
-        st.warning("발언 기록이 부족하여 피드백을 생성할 수 없습니다.")
+        st.warning("⚠️ 발언 기록이 부족하여 피드백을 생성할 수 없습니다.")
+        return False
 
 
 def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_opinion):
