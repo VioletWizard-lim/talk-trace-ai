@@ -135,7 +135,7 @@ def _poll_debate_status(room_name):
     current = fetch_debate_status(supabase, room_name)
     if current != st.session_state.get("_last_debate_status"):
         st.session_state["_last_debate_status"] = current
-        st.rerun()
+        st.rerun(scope="app")
 
 
 @st.fragment
