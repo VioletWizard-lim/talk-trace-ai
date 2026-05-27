@@ -121,6 +121,7 @@ def check_schema_columns() -> dict:
         ("opinion_changes.initial_stance", lambda: supabase.table("opinion_changes").select("initial_stance").limit(1).execute()),
         ("session_control.status",         lambda: supabase.table("session_control").select("status").limit(1).execute()),
         ("likes.opinion_id",               lambda: supabase.table("likes").select("opinion_id").limit(1).execute()),
+        ("debate.depth_level",             lambda: supabase.table("debate").select("depth_level").limit(1).execute()),
     ]
 
     results = {}
@@ -166,6 +167,9 @@ def teacher_is_admin_column_available() -> bool:
 
 def likes_available() -> bool:
     return check_schema_columns().get("likes.opinion_id", False)
+
+def depth_level_available() -> bool:
+    return check_schema_columns().get("debate.depth_level", False)
 
 
 # ==========================================
@@ -622,6 +626,40 @@ def fetch_room_likes(_supabase: Client, room_name: str):
         fail_message="공감 데이터 조회 실패",
     )
     return res.data if res and res.data else []
+
+
+# ==========================================
+# [발언 깊이 분석(depth_level)] 관련 쿼리
+# ==========================================
+
+def fetch_opinions_for_depth(supabase: Client, room_name: str) -> list:
+    """깊이 분석용 발언 전체 조회 (학생 발언만, id/content/depth_level/timestamp/student_name)."""
+    if not depth_level_available():
+        return []
+    res = execute_query(
+        supabase.table("debate")
+        .select("id, content, depth_level, timestamp, student_name, sentiment")
+        .eq("room_name", room_name)
+        .not_.ilike("student_name", "%선생님%")
+        .order("id", desc=False),
+        fail_message="발언 깊이 데이터 조회 실패",
+    )
+    return res.data if res and res.data else []
+
+
+def bulk_update_depth_levels(supabase: Client, updates: list) -> bool:
+    """updates: list of {"id": int, "depth_level": int}. True if all succeeded."""
+    success = True
+    for item in updates:
+        res = execute_query(
+            supabase.table("debate")
+            .update({"depth_level": item["depth_level"]})
+            .eq("id", item["id"]),
+            fail_message=f"발언 깊이 업데이트 실패 (id={item['id']})",
+        )
+        if res is None:
+            success = False
+    return success
 
 
 def toggle_like(supabase: Client, opinion_id: int, room_name: str, student_name: str) -> bool:

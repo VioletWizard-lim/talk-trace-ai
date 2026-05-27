@@ -14,6 +14,7 @@ from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
 from components.teacher_hint import render_hint_section
 from components.teacher_summary import render_summary_section
 from components.teacher_records import render_records_section
+from components.depth_analysis import render_depth_analysis_section
 
 logger = logging.getLogger("talk_trace_ai")
 
@@ -205,6 +206,8 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
                 if set_debate_status(supabase, room_name, "ended") is not None:
                     st.toast("⏹️ 토론이 종료되었습니다. 학생들에게 생각 변화 입력창이 표시됩니다.", icon="✅")
                     st.rerun()
+
+    render_depth_analysis_section(supabase, room_name, act_type)
 
     st.divider()
     render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
