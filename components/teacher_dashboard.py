@@ -161,25 +161,6 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
                     st.info("아직 제출된 결론이 없습니다.")
 
 
-def _render_ip_debug():
-    """임시 IP/헤더 디버그 패널 (확인 후 삭제 예정)."""
-    import streamlit as _st
-    with _st.expander("🔧 IP 디버그 (임시)", expanded=False):
-        _st.write(f"Streamlit 버전: `{_st.__version__}`")
-        try:
-            headers = _st.context.headers
-            _st.write(f"헤더 수신 여부: `{bool(headers)}`")
-            if headers:
-                _st.write("수신된 헤더 목록:")
-                _st.json({k: v for k, v in headers.items()})
-        except Exception as e:
-            _st.error(f"st.context.headers 오류: {e}")
-
-        from utils import get_client_ip
-        detected_ip = get_client_ip()
-        _st.write(f"감지된 IP: `{detected_ip or '(없음)'}`")
-
-
 def render_teacher_dashboard(supabase, room_name, user_role, student_name, current_topic, current_mode, act_type):
     st.divider()
     col_dash_title, col_dash_refresh = st.columns([8, 2])
@@ -188,8 +169,6 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     with col_dash_refresh:
         if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
             st.rerun()
-
-    _render_ip_debug()
 
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
     student_only_df = (
