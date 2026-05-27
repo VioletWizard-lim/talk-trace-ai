@@ -168,8 +168,8 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
             st.divider()
         elif ai_feedback_available():
             if st.button("🌟 AI 피드백 카드 받기", use_container_width=True):
-                _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic)
-                st.rerun()
+                if _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic):
+                    st.rerun()
 
         if ai_analysis:
             st.info("🤖 **AI 배움 분석**")
@@ -226,14 +226,14 @@ def _get_debate_history(supabase, room_name, student_name):
     return "\n".join(f"- [{row['sentiment']}] {row['content']}" for _, row in student_df.iterrows())
 
 
-def _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic):
-    """피드백 카드만 단독 생성 (이미 생각 변화를 제출한 학생용)."""
+def _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic) -> bool:
+    """피드백 카드만 단독 생성. 성공 시 True, 실패 시 False 반환."""
     if not ai_feedback_available():
-        return
+        return False
     debate_history = _get_debate_history(supabase, room_name, student_name)
     if not debate_history:
-        st.warning("토론 발언 기록이 없어 피드백을 생성할 수 없습니다.")
-        return
+        st.warning("⚠️ 토론 발언 기록이 없어 피드백을 생성할 수 없습니다. 토론에서 의견을 먼저 제출해 주세요.")
+        return False
     api_key = get_secret("GEMINI_API_KEY", "")
     with st.spinner("🤖 AI가 피드백을 작성하고 있습니다..."):
         feedback_text = generate_ai_response(
@@ -247,8 +247,10 @@ def _trigger_feedback_only(supabase, room_name, student_name, act_type, current_
     if feedback_text and _FEEDBACK_FALLBACK not in feedback_text:
         save_opinion_feedback(supabase, room_name, student_name, feedback_text)
         st.toast("✅ 피드백 카드 생성 완료!", icon="🌟")
+        return True
     else:
-        st.warning("발언 기록이 부족하여 피드백을 생성할 수 없습니다.")
+        st.warning("⚠️ 발언 기록이 부족하여 피드백을 생성할 수 없습니다.")
+        return False
 
 
 def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_opinion):
