@@ -103,6 +103,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             like_type = "primary" if is_liked else "secondary"
 
             name_badge = f"{badge} " if badge else ""
+            row_ip = str(row.get("ip_address") or "").strip() if hasattr(row, "get") else ""
 
             if user_role == "교사" and teacher_auth:
                 c_name, c_like, c_del = st.columns([5, 1, 1])
