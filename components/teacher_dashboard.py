@@ -145,6 +145,16 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
                                 legend=dict(orientation="h"),
                             )
                             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"stance_chart_{col_name}_{room_name}")
+                            # 입장별 학생 이름 목록
+                            c_pro, c_con = st.columns(2)
+                            with c_pro:
+                                pros = df_oc[df_oc[col_name] == "🔵 찬성"]["student_name"].tolist()
+                                st.markdown(f"**🔵 찬성 ({len(pros)}명)**")
+                                st.write(", ".join(pros) if pros else "없음")
+                            with c_con:
+                                cons = df_oc[df_oc[col_name] == "🔴 반대"]["student_name"].tolist()
+                                st.markdown(f"**🔴 반대 ({len(cons)}명)**")
+                                st.write(", ".join(cons) if cons else "없음")
                         else:
                             st.info("아직 입력된 입장이 없습니다.")
         elif act_type == "토의":
