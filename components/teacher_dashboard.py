@@ -157,6 +157,36 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
                                 st.write(", ".join(cons) if cons else "없음")
                         else:
                             st.info("아직 입력된 입장이 없습니다.")
+
+            # 입장 변화 학생 목록
+            if "initial_stance" in df_oc.columns and "final_stance" in df_oc.columns:
+                both_df = df_oc[df_oc["initial_stance"].notna() & df_oc["final_stance"].notna()]
+                changed_df   = both_df[both_df["initial_stance"] != both_df["final_stance"]]
+                pro_keep_df  = both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔵 찬성")]
+                con_keep_df  = both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔴 반대")]
+                st.markdown("**🔄 입장 변화 요약**")
+                col_changed, col_pro, col_con = st.columns(3)
+                with col_changed:
+                    st.markdown(f"**입장 바뀐 학생 ({len(changed_df)}명)**")
+                    if not changed_df.empty:
+                        for _, r in changed_df.iterrows():
+                            arrow = "🔵→🔴" if r["initial_stance"] == "🔵 찬성" else "🔴→🔵"
+                            st.write(f"• {r['student_name']} ({arrow})")
+                    else:
+                        st.write("없음")
+                with col_pro:
+                    st.markdown(f"**🔵 찬성 유지 ({len(pro_keep_df)}명)**")
+                    if not pro_keep_df.empty:
+                        st.write(", ".join(pro_keep_df["student_name"].tolist()))
+                    else:
+                        st.write("없음")
+                with col_con:
+                    st.markdown(f"**🔴 반대 유지 ({len(con_keep_df)}명)**")
+                    if not con_keep_df.empty:
+                        st.write(", ".join(con_keep_df["student_name"].tolist()))
+                    else:
+                        st.write("없음")
+
         elif act_type == "토의":
             if "discussion_conclusion" in df_oc.columns:
                 conclusions = df_oc["discussion_conclusion"].dropna()
