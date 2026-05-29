@@ -157,6 +157,37 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
                                 st.write(", ".join(cons) if cons else "없음")
                         else:
                             st.info("아직 입력된 입장이 없습니다.")
+
+            # 입장 변화 학생 목록
+            if "initial_stance" in df_oc.columns and "final_stance" in df_oc.columns:
+                changed_df = df_oc[
+                    df_oc["initial_stance"].notna() &
+                    df_oc["final_stance"].notna() &
+                    (df_oc["initial_stance"] != df_oc["final_stance"])
+                ]
+                unchanged_df = df_oc[
+                    df_oc["initial_stance"].notna() &
+                    df_oc["final_stance"].notna() &
+                    (df_oc["initial_stance"] == df_oc["final_stance"])
+                ]
+                st.markdown("**🔄 입장 변화 요약**")
+                col_changed, col_unchanged = st.columns(2)
+                with col_changed:
+                    st.markdown(f"**입장 바뀐 학생 ({len(changed_df)}명)**")
+                    if not changed_df.empty:
+                        for _, r in changed_df.iterrows():
+                            arrow = "🔵→🔴" if r["initial_stance"] == "🔵 찬성" else "🔴→🔵"
+                            st.write(f"• {r['student_name']} ({arrow})")
+                    else:
+                        st.write("없음")
+                with col_unchanged:
+                    st.markdown(f"**입장 유지한 학생 ({len(unchanged_df)}명)**")
+                    if not unchanged_df.empty:
+                        names = unchanged_df["student_name"].tolist()
+                        st.write(", ".join(names))
+                    else:
+                        st.write("없음")
+
         elif act_type == "토의":
             if "discussion_conclusion" in df_oc.columns:
                 conclusions = df_oc["discussion_conclusion"].dropna()
