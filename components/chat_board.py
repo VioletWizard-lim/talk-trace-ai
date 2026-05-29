@@ -4,18 +4,13 @@ import plotly.express as px
 from collections import Counter
 from db import fetch_live_messages, delete_opinion_message, fetch_room_likes, toggle_like, likes_available
 from validators import with_fallback_author_role, mask_ip_for_teacher
-from utils import format_kst_datetime, get_client_ip, log_audit
+from utils import format_kst_datetime, log_audit
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, LIVE_REFRESH_INTERVAL, UI_FONT_FAMILY
 
 
 _RANK_BADGES = {1: "🥇", 2: "🥈", 3: "🥉"}
 _LIKE_COOLDOWN = 3
-
-
-def _anon_ip(raw_ip: str) -> str:
-    from utils import anonymize_ip
-    return anonymize_ip(raw_ip) or ""
 
 
 def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
@@ -63,15 +58,11 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
         likes_count = {}
         my_likes = set()
         badge_map = {}
-        my_anon_ip = ""
         on_like_cooldown = False
         if use_likes:
             likes_data = fetch_room_likes(supabase, room_name)
             likes_count = Counter(item['opinion_id'] for item in likes_data)
             my_likes = {item['opinion_id'] for item in likes_data if item['student_name'] == student_name}
-            raw_client_ip = get_client_ip()
-            if raw_client_ip:
-                my_anon_ip = _anon_ip(raw_client_ip)
             # 동점 처리: 같은 공감 수 = 같은 등수 (dense rank)
             distinct_counts = sorted({c for c in likes_count.values() if c > 0}, reverse=True)[:3]
             count_to_rank = {c: rank for rank, c in enumerate(distinct_counts, 1)}
@@ -105,9 +96,8 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             is_liked = msg_id in my_likes
             badge = badge_map.get(msg_id, "")
 
-            # 셀프 공감 차단: 의견 작성자 IP와 현재 사용자 IP 비교
-            row_ip = str(row.get("ip_address") or "").strip() if hasattr(row, "get") else ""
-            is_self = bool(my_anon_ip and row_ip and my_anon_ip == row_ip)
+            # 셀프 공감 차단: 의견 작성자 이름과 현재 사용자 이름 비교
+            is_self = bool(student_name and row.get('student_name') == student_name)
             like_disabled = is_self or not use_likes or (on_like_cooldown and not is_liked)
             like_label = f"👍 {count}" if count > 0 else "👍"
             like_type = "primary" if is_liked else "secondary"
