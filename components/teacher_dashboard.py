@@ -201,6 +201,32 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
                     st.info("아직 제출된 결론이 없습니다.")
 
 
+@st.fragment(run_every=10)
+def _render_participation_section(supabase, room_name, act_type):
+    df = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
+    student_df = (
+        df[
+            (df['author_role'] == '학생') &
+            ~df['student_name'].str.contains('익명|AI', na=False, regex=True)
+        ].copy()
+        if not df.empty else df
+    )
+    st.subheader("📊 학생 참여도 현황")
+    if not df.empty:
+        if not student_df.empty:
+            counts = student_df['student_name'].astype(str).value_counts().reset_index()
+            counts.columns = ['학생 이름', '참여 횟수']
+            counts['학생 이름'] = counts['학생 이름'] + " "
+            fig = px.bar(counts, x='학생 이름', y='참여 횟수', text='참여 횟수', color='학생 이름')
+            fig.update_xaxes(type='category', title="")
+            fig.update_layout(yaxis_title="의견 수", dragmode=False, showlegend=False, font={"family": UI_FONT_FAMILY})
+            st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': False, 'displayModeBar': False})
+        else:
+            st.info("실명 참여 데이터가 없습니다.")
+    else:
+        st.info(f"{act_type} 데이터가 없습니다.")
+
+
 def render_teacher_dashboard(supabase, room_name, user_role, student_name, current_topic, current_mode, act_type):
     st.divider()
     col_dash_title, col_dash_refresh = st.columns([8, 2])
@@ -211,13 +237,6 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             st.rerun()
 
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
-    student_only_df = (
-        df_all[
-            (df_all['author_role'] == '학생') &
-            ~df_all['student_name'].str.contains('익명|AI', na=False, regex=True)
-        ].copy()
-        if not df_all.empty else df_all
-    )
 
     # ── 1. AI 토의 촉진 ──
     render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
@@ -244,22 +263,9 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     st.divider()
     render_summary_section(room_name, act_type, current_topic, df_all)
 
-    # ── 4. 학생 참여도 현황 ──
+    # ── 4. 학생 참여도 현황 (10초마다 자동 갱신) ──
     st.divider()
-    st.subheader("📊 학생 참여도 현황")
-    if not df_all.empty:
-        if not student_only_df.empty:
-            counts = student_only_df['student_name'].astype(str).value_counts().reset_index()
-            counts.columns = ['학생 이름', '참여 횟수']
-            counts['학생 이름'] = counts['학생 이름'] + " "
-            fig = px.bar(counts, x='학생 이름', y='참여 횟수', text='참여 횟수', color='학생 이름')
-            fig.update_xaxes(type='category', title="")
-            fig.update_layout(yaxis_title="의견 수", dragmode=False, showlegend=False, font={"family": UI_FONT_FAMILY})
-            st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': False, 'displayModeBar': False})
-        else:
-            st.info("실명 참여 데이터가 없습니다.")
-    else:
-        st.info(f"{act_type} 데이터가 없습니다.")
+    _render_participation_section(supabase, room_name, act_type)
 
     _render_oc_section(supabase, room_name, act_type, current_topic, df_all)
     render_depth_analysis_section(supabase, room_name, act_type)
