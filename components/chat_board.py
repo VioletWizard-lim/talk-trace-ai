@@ -13,6 +13,26 @@ _RANK_BADGES = {1: "🥇", 2: "🥈", 3: "🥉"}
 _LIKE_COOLDOWN = 3
 
 
+def _escape_md(text: str) -> str:
+    """st.info() 마크다운 해석 방지 — ~, *, _, ` 등 이스케이프."""
+    s = str(text or "")
+    for ch in ('\\', '`', '*', '_', '~'):
+        s = s.replace(ch, '\\' + ch)
+    return s
+
+
+@st.cache_data(ttl=5)
+def _cached_wordcloud(content_tuple: tuple):
+    """같은 데이터면 워드클라우드를 재생성하지 않고 캐시 반환."""
+    import pandas as pd
+    frequencies = build_word_frequencies(pd.Series(list(content_tuple)))
+    if not frequencies:
+        return None, None
+    wc_html = build_circular_wordcloud_html(frequencies)
+    top_words = ", ".join([f"{w}({c})" for w, c in frequencies.most_common(8)])
+    return wc_html, top_words
+
+
 def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
     opinion_df = with_fallback_author_role(
         fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
@@ -29,10 +49,11 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                 st.plotly_chart(live_pie_fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': False})
             with right_col:
                 st.caption("누적 토의/토론 워드클라우드")
-                frequencies = build_word_frequencies(stats_opinion_df["content"])
-                if frequencies:
-                    st.markdown(build_circular_wordcloud_html(frequencies), unsafe_allow_html=True)
-                    top_words = ", ".join([f"{word}({count})" for word, count in frequencies.most_common(8)])
+                wc_html, top_words = _cached_wordcloud(
+                    tuple(stats_opinion_df["content"].fillna("").tolist())
+                )
+                if wc_html:
+                    st.markdown(wc_html, unsafe_allow_html=True)
                     st.caption(f"상위 키워드: {top_words}")
                 else:
                     st.info("워드클라우드를 만들 단어가 아직 부족합니다.")
@@ -74,16 +95,6 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             # 쿨다운 확인
             on_like_cooldown = (time.time() - st.session_state.get('_last_like_ts', 0)) < _LIKE_COOLDOWN
 
-        def delete_chat_msg(msg_id):
-            try:
-                if delete_opinion_message(supabase, msg_id) is None:
-                    return
-                fetch_live_messages.clear()
-                log_audit("chat_deleted", room_name=room_name, actor_name=student_name, role=user_role, message_id=msg_id)
-                st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
-            except Exception as e:
-                st.error(f"삭제 실패: {e}")
-
         def do_toggle_like(msg_id):
             toggle_like(supabase, msg_id, room_name, student_name)
             fetch_room_likes.clear()
@@ -120,8 +131,17 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                               type=like_type, use_container_width=True,
                               on_click=do_toggle_like, args=(msg_id,))
                 with c_del:
-                    st.button("❌", key=f"del_{msg_id}", help="강제 삭제",
-                              on_click=delete_chat_msg, args=(msg_id,))
+                    if st.button("❌", key=f"del_{msg_id}", help="강제 삭제"):
+                        try:
+                            if delete_opinion_message(supabase, msg_id) is not None:
+                                fetch_live_messages.clear()
+                                _cached_wordcloud.clear()
+                                log_audit("chat_deleted", room_name=room_name, actor_name=student_name,
+                                          role=user_role, message_id=msg_id)
+                                st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
+                                st.rerun(scope="app")
+                        except Exception as e:
+                            st.error(f"삭제 실패: {e}")
             else:
                 c_name, c_like = st.columns([5, 1])
                 with c_name:
@@ -134,7 +154,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                     st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
                               type=like_type, use_container_width=True,
                               on_click=do_toggle_like, args=(msg_id,))
-            st.info(row['content'])
+            st.info(_escape_md(row['content']))
             st.write("")
 
         if current_mode == "⚔️ 찬반 토론":

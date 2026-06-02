@@ -129,9 +129,9 @@ if user_role == "교사" and teacher_auth:
                     st.toast("✅ 주제가 수정되었습니다.", icon="✏️")
                     st.rerun()
 
-@st.fragment(run_every=3)
+@st.fragment(run_every=5)
 def _poll_debate_status(room_name):
-    """학생 화면에서 3초마다 토론 상태를 확인하고 변경 시 전체 rerun."""
+    """학생 화면에서 5초마다 토론 상태를 확인하고 변경 시 전체 rerun."""
     current = fetch_debate_status(supabase, room_name)
     if current != st.session_state.get("_last_debate_status"):
         st.session_state["_last_debate_status"] = current
