@@ -201,6 +201,26 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
                     st.info("아직 제출된 결론이 없습니다.")
 
 
+@st.fragment
+def _render_debate_control(supabase, room_name):
+    """토론 진행 제어 — fragment로 분리해 무거운 대시보드 렌더링과 독립적으로 즉시 반응."""
+    debate_status = fetch_debate_status(supabase, room_name)
+    if debate_status == "ended":
+        st.warning("🔴 **토론이 종료된 상태입니다.** 학생들은 '토론 후 생각 변화'를 작성 중입니다.")
+        if st.button("▶️ 토론 재개", use_container_width=True):
+            if set_debate_status(supabase, room_name, "active") is not None:
+                fetch_debate_status.clear()
+                st.toast("✅ 토론이 재개되었습니다.", icon="▶️")
+                st.rerun(scope="app")
+    else:
+        st.success("🟢 **토론 진행 중입니다.**")
+        if st.button("⏹️ 토론 종료 (학생 입력 마감)", use_container_width=True, type="primary"):
+            if set_debate_status(supabase, room_name, "ended") is not None:
+                fetch_debate_status.clear()
+                st.toast("⏹️ 토론이 종료되었습니다. 학생들에게 생각 변화 입력창이 표시됩니다.", icon="✅")
+                st.rerun(scope="app")
+
+
 @st.fragment(run_every=10)
 def _render_participation_section(supabase, room_name, act_type):
     df = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
@@ -245,19 +265,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     if session_control_available():
         st.divider()
         st.subheader("🎛️ 토론 진행 제어")
-        debate_status = fetch_debate_status(supabase, room_name)
-        if debate_status == "ended":
-            st.warning("🔴 **토론이 종료된 상태입니다.** 학생들은 '토론 후 생각 변화'를 작성 중입니다.")
-            if st.button("▶️ 토론 재개", use_container_width=True):
-                if set_debate_status(supabase, room_name, "active") is not None:
-                    st.toast("✅ 토론이 재개되었습니다.", icon="▶️")
-                    st.rerun()
-        else:
-            st.success("🟢 **토론 진행 중입니다.**")
-            if st.button("⏹️ 토론 종료 (학생 입력 마감)", use_container_width=True, type="primary"):
-                if set_debate_status(supabase, room_name, "ended") is not None:
-                    st.toast("⏹️ 토론이 종료되었습니다. 학생들에게 생각 변화 입력창이 표시됩니다.", icon="✅")
-                    st.rerun()
+        _render_debate_control(supabase, room_name)
 
     # ── 3. 수업 종료 및 전체 토의 요약 리포트 ──
     st.divider()
