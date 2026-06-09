@@ -27,16 +27,14 @@ def render_feedback_card(ai_feedback: str) -> None:
     if not ai_feedback:
         return
 
-    # 유연한 파싱: 콜론 이후 같은 줄 내용 + 이후 줄 모두 포함
     well_text = ""
     grow_text = ""
 
-    # "잘한 점:" 이후 내용 ~ "발전할 점" 직전까지
+    # 1차: 정규식으로 섹션 파싱
     well_match = re.search(
         r'잘한\s*점\s*[^\n:：]*[:：]?\s*(.*?)(?=\n\s*\n?\s*[✅🌱]?\s*발전할\s*점|$)',
         ai_feedback, re.DOTALL
     )
-    # "발전할 점:" 이후 내용 ~ 끝까지
     grow_match = re.search(
         r'발전할\s*점\s*[^\n:：]*[:：]?\s*(.*?)$',
         ai_feedback, re.DOTALL
@@ -47,6 +45,14 @@ def render_feedback_card(ai_feedback: str) -> None:
     if grow_match:
         grow_text = grow_match.group(1).strip()
 
+    # 2차: 정규식 실패 시 줄 수 기준으로 절반씩 분할 시도
+    if not well_text and not grow_text:
+        lines = [l for l in ai_feedback.strip().splitlines() if l.strip()]
+        if len(lines) >= 2:
+            mid = len(lines) // 2
+            well_text = "\n".join(lines[:mid])
+            grow_text = "\n".join(lines[mid:])
+
     col_well, col_grow = st.columns(2)
     if well_text or grow_text:
         with col_well:
@@ -54,8 +60,9 @@ def render_feedback_card(ai_feedback: str) -> None:
         with col_grow:
             st.warning(f"**🌱 발전할 점**\n\n{grow_text}" if grow_text else "**🌱 발전할 점**\n\n(내용 없음)")
     else:
-        # 파싱 완전 실패 시 원문 표시
-        st.info(ai_feedback)
+        # 최종 fallback: 레이블과 함께 전체 내용 표시
+        st.markdown("**🌟 AI 피드백**")
+        st.markdown(ai_feedback)
 
 
 def render_pre_opinion_form(supabase, room_name, student_name, current_topic, act_type="토론"):
@@ -77,7 +84,14 @@ def render_pre_opinion_form(supabase, room_name, student_name, current_topic, ac
         max_chars=500,
         placeholder="주제에 대한 나의 현재 생각, 입장, 이유를 자유롭게 써보세요.",
     )
-    confirmed = st.checkbox("⚠️ 제출 후에는 수정이 불가능합니다. 확인했습니다.")
+    st.caption('⚠️ 제출 후에는 수정이 불가능합니다. 확인하려면 아래에 **"제출"** 을 입력하세요.')
+    confirm_text = st.text_input(
+        "확인 입력",
+        placeholder='제출',
+        label_visibility="collapsed",
+        key="pre_opinion_confirm_text",
+    )
+    confirmed = confirm_text.strip() == "제출"
     if st.button("✅ 생각 제출 후 토론 참여", use_container_width=True, type="primary", disabled=not confirmed):
         if not pre_input.strip():
             st.warning("생각을 입력해 주세요.")
@@ -142,7 +156,14 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
             placeholder="생각이 바뀌었다면 어떻게, 왜 바뀌었는지 — 바뀌지 않았다면 그 이유를 써보세요.",
             label_visibility="collapsed",
         )
-        post_confirmed = st.checkbox("⚠️ 제출 후에는 수정이 불가능합니다. 확인했습니다.", key="post_confirm")
+        st.caption('⚠️ 제출 후에는 수정이 불가능합니다. 확인하려면 아래에 **"제출"** 을 입력하세요.')
+        post_confirm_text = st.text_input(
+            "확인 입력",
+            placeholder='제출',
+            label_visibility="collapsed",
+            key="post_opinion_confirm_text",
+        )
+        post_confirmed = post_confirm_text.strip() == "제출"
         if st.button("✅ 생각 변화 제출", use_container_width=True, type="primary", disabled=not post_confirmed):
             if not post_input.strip():
                 st.warning("생각을 입력해 주세요.")

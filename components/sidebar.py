@@ -58,24 +58,31 @@ def render_sidebar(supabase) -> dict:
                     st.warning("교사별 방 조회를 위해 topic.created_by_teacher_id(권장) 또는 topic.created_by 컬럼이 필요합니다.")
 
                 room_opt = st.radio("방 관리", ["기존 방 선택", "새 방 만들기"])
-                if room_opt == "기존 방 선택" and existing_rooms:
-                    room_name = st.selectbox("토론/토의방 목록", existing_rooms)
+
+                if room_opt == "기존 방 선택":
+                    if existing_rooms:
+                        current = st.session_state.get('current_room', '')
+                        default_idx = existing_rooms.index(current) if current in existing_rooms else 0
+                        room_name = st.selectbox("토론/토의방 목록", existing_rooms, index=default_idx)
+                    else:
+                        st.info("아직 개설된 방이 없습니다. '새 방 만들기'를 선택해 첫 번째 방을 만들어보세요.")
+                        room_name = ""
                 else:
                     new_room = st.text_input("새로 만들 방 이름 (예: 1학년 3반)")
                     new_title = st.text_input("주제 직접 입력 (예: 인공지능 윤리)")
                     new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"], horizontal=True)
                     new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
                     if st.button("새 방 개설하기", type="primary"):
-                        room_ok, safe_new_room, room_error_code, room_error_message = validate_room_name(new_room, max_len=MAX_ROOM_NAME_LEN)
-                        title_ok, safe_new_title, title_error_code, title_error_message = validate_opinion_content(new_title, max_len=MAX_TOPIC_LEN)
-                        entry_ok, safe_new_pw, entry_error_code, entry_error_message = validate_entry_code(new_pw, max_len=MAX_ENTRY_CODE_LEN)
+                        room_ok, safe_new_room, _, room_error_message = validate_room_name(new_room, max_len=MAX_ROOM_NAME_LEN)
+                        title_ok, safe_new_title, _, title_error_message = validate_opinion_content(new_title, max_len=MAX_TOPIC_LEN)
+                        entry_ok, safe_new_pw, _, entry_error_message = validate_entry_code(new_pw, max_len=MAX_ENTRY_CODE_LEN)
                         can_store_room_pw = topic_entry_code_column_available()
                         if not room_ok:
-                            st.error(f"❌ {room_error_message} ({room_error_code})")
+                            st.error(f"❌ {room_error_message}")
                         elif not title_ok:
-                            st.error(f"❌ {title_error_message} ({title_error_code})")
+                            st.error(f"❌ {title_error_message}")
                         elif not entry_ok:
-                            st.error(f"❌ {entry_error_message} ({entry_error_code})")
+                            st.error(f"❌ {entry_error_message}")
                         elif safe_new_pw and not can_store_room_pw:
                             st.error("현재 DB 구조에서는 방 비밀번호 저장을 지원하지 않습니다.")
                         elif safe_new_room and safe_new_title:
@@ -84,8 +91,12 @@ def render_sidebar(supabase) -> dict:
                                 mode=new_mode, entry_code=safe_new_pw, created_by=teacher_id_for_scope,
                             )
                             if res is not None:
-                                st.success(f"'{safe_new_room}' 방이 개설되었습니다! '기존 방 선택'을 눌러 입장하세요.")
-                        room_name = ""
+                                fetch_room_names.clear()
+                                fetch_room_names_by_owner.clear()
+                                st.session_state['current_room'] = safe_new_room
+                                st.toast(f"'{safe_new_room}' 방이 개설되었습니다!", icon="🎉")
+                                st.rerun()
+                    room_name = ""
         else:
             st.session_state['teacher_auth'] = False
             st.session_state['admin_auth'] = False

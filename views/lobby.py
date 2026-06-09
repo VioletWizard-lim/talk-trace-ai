@@ -7,16 +7,12 @@ from config import AUTO_JOIN_ON_REFRESH
 def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_number):
     admin_auth = st.session_state.get('admin_auth', False)
     if admin_auth and teacher_auth:
-        col_title, col_btn1, col_btn2 = st.columns([4, 1, 1])
+        col_title, col_btn1 = st.columns([6, 2])
         with col_title:
             st.title("🚪 말자취(Talk-Trace) AI 대기실")
         with col_btn1:
             if st.button("📝 ID 요청 수락", use_container_width=True):
                 st.session_state['page'] = "admin_approval"
-                st.rerun()
-        with col_btn2:
-            if st.button("🚪 말자취 AI 대기실", use_container_width=True):
-                st.session_state['page'] = "lobby"
                 st.rerun()
     else:
         st.title("🚪 말자취(Talk-Trace) AI 대기실")

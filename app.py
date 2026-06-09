@@ -239,6 +239,11 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
 if user_role == "학생" and opinion_changes_available():
     _poll_debate_status(room_name)
     debate_status = fetch_debate_status(supabase, room_name)
+    # 학생에게 토론 진행 상태를 항상 명시적으로 표시
+    if debate_status == "ended":
+        st.warning(f"🔴 **{act_type} 종료** — 아래에서 {act_type} 후 생각 변화를 기록해주세요.")
+    else:
+        st.success(f"🟢 **{act_type} 진행 중** — 자유롭게 의견을 나눠보세요.")
     row = fetch_opinion_change(supabase, room_name, student_name)
     has_pre_opinion = bool((row or {}).get("pre_opinion"))
     if debate_status == "ended":

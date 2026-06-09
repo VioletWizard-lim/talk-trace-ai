@@ -256,16 +256,16 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
         if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
             st.rerun()
 
-    df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
-
-    # ── 1. AI 토의 촉진 ──
-    render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
-
-    # ── 2. 토론 진행 제어 ──
+    # ── 1. 토론 진행 제어 (스크롤 없이 즉시 접근) ──
     if session_control_available():
-        st.divider()
         st.subheader("🎛️ 토론 진행 제어")
         _render_debate_control(supabase, room_name)
+        st.divider()
+
+    df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
+
+    # ── 2. AI 토의 촉진 ──
+    render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
 
     # ── 3. 수업 종료 및 전체 토의 요약 리포트 ──
     st.divider()
