@@ -15,4 +15,4 @@ def _verify_password(plain: str, stored: str) -> bool:
             return bcrypt.checkpw(plain.encode(), stored.encode())
         except Exception:
             return False
-    return plain == stored
+    return False
