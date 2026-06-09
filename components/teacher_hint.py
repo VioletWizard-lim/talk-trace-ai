@@ -36,17 +36,22 @@ def render_hint_section(supabase, room_name, user_role, student_name, current_to
             with st.spinner("✍️ 예리한 질문을 작성하고 있습니다..."):
                 context = "\n".join(df_all['content'].tail(5).tolist()) if not df_all.empty else "대화 없음"
                 prompt = build_hint_prompt(act_type, current_topic, context)
-                res_text = generate_ai_response(
-                    prompt, model_name=AI_MODEL_NAME, api_key=get_secret("GEMINI_API_KEY", ""),
-                    log_message="AI 힌트 생성 실패", room_name=room_name,
-                )
+                try:
+                    res_text = generate_ai_response(
+                        prompt, model_name=AI_MODEL_NAME, api_key=get_secret("GEMINI_API_KEY", ""),
+                        log_message="AI 힌트 생성 실패", room_name=room_name,
+                    )
+                except Exception as e:
+                    st.error(f"🚨 AI 호출 중 오류가 발생했습니다: {e}")
+                    res_text = None
                 if res_text:
                     st.session_state['hint_input_widget'] = res_text.strip().split('\n')[0]
                     st.session_state['ai_hint_manual_mode'] = False
                     st.toast("✅ 힌트 작성 완료!", icon="🎉")
                 else:
                     st.session_state['ai_hint_manual_mode'] = True
-                    st.toast("🚨 AI 호출 오류: 수동 모드로 전환되었습니다.", icon="❌")
+                    if res_text is not None:
+                        st.toast("🚨 AI 호출 오류: 수동 모드로 전환되었습니다.", icon="❌")
     else:
         st.session_state['ai_hint_manual_mode'] = True
 
