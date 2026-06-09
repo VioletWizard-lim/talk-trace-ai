@@ -84,7 +84,14 @@ def render_pre_opinion_form(supabase, room_name, student_name, current_topic, ac
         max_chars=500,
         placeholder="주제에 대한 나의 현재 생각, 입장, 이유를 자유롭게 써보세요.",
     )
-    confirmed = st.checkbox("⚠️ 제출 후에는 수정이 불가능합니다. 확인했습니다.")
+    st.caption('⚠️ 제출 후에는 수정이 불가능합니다. 확인하려면 아래에 **"제출"** 을 입력하세요.')
+    confirm_text = st.text_input(
+        "확인 입력",
+        placeholder='제출',
+        label_visibility="collapsed",
+        key="pre_opinion_confirm_text",
+    )
+    confirmed = confirm_text.strip() == "제출"
     if st.button("✅ 생각 제출 후 토론 참여", use_container_width=True, type="primary", disabled=not confirmed):
         if not pre_input.strip():
             st.warning("생각을 입력해 주세요.")
@@ -149,7 +156,14 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
             placeholder="생각이 바뀌었다면 어떻게, 왜 바뀌었는지 — 바뀌지 않았다면 그 이유를 써보세요.",
             label_visibility="collapsed",
         )
-        post_confirmed = st.checkbox("⚠️ 제출 후에는 수정이 불가능합니다. 확인했습니다.", key="post_confirm")
+        st.caption('⚠️ 제출 후에는 수정이 불가능합니다. 확인하려면 아래에 **"제출"** 을 입력하세요.')
+        post_confirm_text = st.text_input(
+            "확인 입력",
+            placeholder='제출',
+            label_visibility="collapsed",
+            key="post_opinion_confirm_text",
+        )
+        post_confirmed = post_confirm_text.strip() == "제출"
         if st.button("✅ 생각 변화 제출", use_container_width=True, type="primary", disabled=not post_confirmed):
             if not post_input.strip():
                 st.warning("생각을 입력해 주세요.")
