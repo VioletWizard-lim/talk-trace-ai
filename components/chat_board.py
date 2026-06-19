@@ -168,7 +168,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
     else:
         st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
-    with st.expander("📊 실시간 의견 통계", expanded=False):
+    with st.expander("📊 실시간 의견 통계", expanded=True):
         if not stats_opinion_df.empty:
             left_col, right_col = st.columns(2)
             with left_col:
