@@ -86,11 +86,30 @@ def _is_rls_permission_error(error: Exception) -> bool:
     )
 
 
+_CONNECTION_ERROR_KEYWORDS = (
+    "connection", "network", "timeout", "ssl", "eof",
+    "reset", "unreachable", "refused", "broken pipe", "remote end closed",
+)
+
+
+def _is_connection_error(error: Exception) -> bool:
+    msg = str(error).lower()
+    return any(k in msg for k in _CONNECTION_ERROR_KEYWORDS)
+
+
 def execute_query(query, fail_message="DB 작업 실패"):
     try:
         return query.execute()
     except Exception as e:
-        if _is_rls_permission_error(e):
+        if _is_connection_error(e):
+            logger.error("CONNECTION_ERROR %s: %s", fail_message, e)
+            init_db.clear()
+            check_schema_columns.clear()
+            st.warning(
+                "🌐 Supabase 연결이 일시적으로 끊어졌습니다. "
+                "**페이지를 새로고침(F5)하면 자동으로 재연결됩니다.**"
+            )
+        elif _is_rls_permission_error(e):
             logger.error("RLS_PERMISSION_ERROR %s: %s", fail_message, e)
             st.error(
                 f"🔒 {fail_message}: 권한 오류가 발생했습니다. "
@@ -107,7 +126,7 @@ def execute_query(query, fail_message="DB 작업 실패"):
 # [3] 컬럼 존재 확인 — 통합 함수
 # ==========================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def check_schema_columns() -> dict:
     supabase = init_db()
 
@@ -131,6 +150,9 @@ def check_schema_columns() -> dict:
             query_fn()
             results[key] = True
         except Exception as e:
+            if _is_connection_error(e):
+                # 연결 오류 시 결과를 캐시하지 않고 재시도 가능하게 예외를 전파
+                raise RuntimeError(f"Supabase 연결 오류로 스키마 체크 실패: {e}") from e
             logger.info("컬럼 미존재 확인 [%s]: %s", key, e)
             results[key] = False
 
@@ -138,42 +160,50 @@ def check_schema_columns() -> dict:
     return results
 
 
+def _schema() -> dict:
+    """check_schema_columns를 안전하게 호출 — 연결 오류 시 빈 dict 반환."""
+    try:
+        return check_schema_columns()
+    except Exception:
+        return {}
+
+
 def debate_ip_column_available() -> bool:
-    return check_schema_columns().get("debate.ip_address", False)
+    return _schema().get("debate.ip_address", False)
 
 def topic_entry_code_column_available() -> bool:
-    return check_schema_columns().get("topic.entry_code", False)
+    return _schema().get("topic.entry_code", False)
 
 def topic_created_by_teacher_id_column_available() -> bool:
-    return check_schema_columns().get("topic.created_by_teacher_id", False)
+    return _schema().get("topic.created_by_teacher_id", False)
 
 def topic_created_by_column_available() -> bool:
-    return check_schema_columns().get("topic.created_by", False)
+    return _schema().get("topic.created_by", False)
 
 def topic_owner_column_available() -> bool:
-    schema = check_schema_columns()
+    schema = _schema()
     return schema.get("topic.created_by_teacher_id", False) or schema.get("topic.created_by", False)
 
 def opinion_changes_available() -> bool:
-    return check_schema_columns().get("opinion_changes.pre_opinion", False)
+    return _schema().get("opinion_changes.pre_opinion", False)
 
 def stance_available() -> bool:
-    return check_schema_columns().get("opinion_changes.initial_stance", False)
+    return _schema().get("opinion_changes.initial_stance", False)
 
 def session_control_available() -> bool:
-    return check_schema_columns().get("session_control.status", False)
+    return _schema().get("session_control.status", False)
 
 def teacher_is_admin_column_available() -> bool:
-    return check_schema_columns().get("teacher_accounts.is_admin", False)
+    return _schema().get("teacher_accounts.is_admin", False)
 
 def likes_available() -> bool:
-    return check_schema_columns().get("likes.opinion_id", False)
+    return _schema().get("likes.opinion_id", False)
 
 def depth_level_available() -> bool:
-    return check_schema_columns().get("debate.depth_level", False)
+    return _schema().get("debate.depth_level", False)
 
 def ai_feedback_available() -> bool:
-    return check_schema_columns().get("opinion_changes.ai_feedback", False)
+    return _schema().get("opinion_changes.ai_feedback", False)
 
 
 # ==========================================
