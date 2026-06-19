@@ -299,6 +299,13 @@ def update_topic(supabase: Client, room_name, title, mode):
     )
 
 
+def update_room_entry_code(supabase: Client, room_name: str, entry_code: str):
+    return execute_query(
+        supabase.table("topic").update({"entry_code": entry_code}).eq("room_name", room_name),
+        fail_message="방 암호 변경 실패",
+    )
+
+
 def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code, created_by=None):
     payload = {
         "room_name": room_name,
