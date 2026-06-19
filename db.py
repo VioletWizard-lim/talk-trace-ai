@@ -87,12 +87,25 @@ def _is_rls_permission_error(error: Exception) -> bool:
 
 
 _CONNECTION_ERROR_KEYWORDS = (
-    "connection", "network", "timeout", "ssl", "eof",
-    "reset", "unreachable", "refused", "broken pipe", "remote end closed",
+    "network", "eof",
+    "unreachable", "broken pipe", "remote end closed",
+    "connection refused", "connection reset", "connection timed out", "connection closed",
+    "ssl", "timed out", "read timeout", "connect timeout",
 )
 
 
 def _is_connection_error(error: Exception) -> bool:
+    # 예외 타입으로 먼저 확인 (키워드보다 신뢰성 높음)
+    try:
+        import httpx
+        if isinstance(error, (httpx.ConnectError, httpx.TimeoutException,
+                               httpx.RemoteProtocolError, httpx.ReadError)):
+            return True
+    except ImportError:
+        pass
+    import ssl as _ssl
+    if isinstance(error, _ssl.SSLError):
+        return True
     msg = str(error).lower()
     return any(k in msg for k in _CONNECTION_ERROR_KEYWORDS)
 
@@ -145,16 +158,22 @@ def check_schema_columns() -> dict:
     ]
 
     results = {}
+    connection_error: Exception | None = None
     for key, query_fn in checks:
         try:
             query_fn()
             results[key] = True
         except Exception as e:
             if _is_connection_error(e):
-                # 연결 오류 시 결과를 캐시하지 않고 재시도 가능하게 예외를 전파
-                raise RuntimeError(f"Supabase 연결 오류로 스키마 체크 실패: {e}") from e
-            logger.info("컬럼 미존재 확인 [%s]: %s", key, e)
-            results[key] = False
+                connection_error = e
+                results[key] = False
+            else:
+                logger.info("컬럼 미존재 확인 [%s]: %s", key, e)
+                results[key] = False
+
+    if connection_error is not None:
+        # 연결 오류 발생 시 결과를 캐시하지 않고 예외 전파 → 다음 호출 시 재시도
+        raise RuntimeError(f"Supabase 연결 오류로 스키마 체크 실패: {connection_error}") from connection_error
 
     logger.info("schema_columns 체크 완료: %s", results)
     return results
@@ -164,7 +183,8 @@ def _schema() -> dict:
     """check_schema_columns를 안전하게 호출 — 연결 오류 시 빈 dict 반환."""
     try:
         return check_schema_columns()
-    except Exception:
+    except Exception as e:
+        logger.warning("스키마 체크 실패, 기능 플래그를 기본값(False)으로 처리합니다: %s", e)
         return {}
 
 
