@@ -145,10 +145,10 @@ def _make_stance_matrix_chart(both_df: pd.DataFrame) -> io.BytesIO:
     import matplotlib.patches as mpatches
     _setup_korean_font()
     cats = {
-        "🔵→🔵\n찬성 유지": len(both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔵 찬성")]),
-        "🔵→🔴\n반대 전환": len(both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔴 반대")]),
-        "🔴→🔵\n찬성 전환": len(both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔵 찬성")]),
-        "🔴→🔴\n반대 유지": len(both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔴 반대")]),
+        "찬성\n유지": len(both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔵 찬성")]),
+        "찬성\n→반대": len(both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔴 반대")]),
+        "반대\n→찬성": len(both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔵 찬성")]),
+        "반대\n유지": len(both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔴 반대")]),
     }
     colors = ["#1558a0", "#d97706", "#16a34a", "#d62728"]
     fig, axes = plt.subplots(1, 4, figsize=(7, 2.5))
