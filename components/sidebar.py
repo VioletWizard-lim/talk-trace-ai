@@ -58,6 +58,8 @@ def render_sidebar(supabase) -> dict:
                     st.warning("교사별 방 조회를 위해 topic.created_by_teacher_id(권장) 또는 topic.created_by 컬럼이 필요합니다.")
 
                 room_opt = st.radio("방 관리", ["기존 방 선택", "새 방 만들기"])
+                if '_bulk_create_msg' in st.session_state:
+                    st.success(st.session_state.pop('_bulk_create_msg'))
 
                 if room_opt == "기존 방 선택":
                     if existing_rooms:
@@ -135,7 +137,7 @@ def render_sidebar(supabase) -> dict:
                                 st.error(f"❌ 개설 실패: {', '.join(_failed)}")
                             if _created:
                                 st.session_state['current_room'] = _created[-1]
-                                st.toast(f"✅ {len(_created)}개 방 생성 완료!", icon="🎉")
+                                st.session_state['_bulk_create_msg'] = f"✅ {len(_created)}개 방 생성 완료: {', '.join(_created)}"
                                 st.rerun()
                         else:
                             room_ok, safe_new_room, _, room_error_message = validate_room_name(new_room, max_len=MAX_ROOM_NAME_LEN)
