@@ -305,6 +305,8 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     _debate_status = fetch_debate_status(supabase, room_name) if session_control_available() else "ended"
     if _debate_status == "ended":
         render_summary_section(supabase, room_name, act_type, current_topic, df_all)
+    elif session_control_available():
+        st.info(f"💡 위의 **{act_type} 종료** 버튼을 누르면 수업 종료 및 전체 {act_type} 요약 리포트가 활성화됩니다.")
 
     # ── 3. AI 토의 촉진 ──
     st.divider()
