@@ -526,11 +526,12 @@ def render_summary_section(supabase, room_name, act_type, current_topic, df_all)
             depth_opinions = fetch_opinions_for_depth(supabase, room_name) if depth_level_available() else []
             pdf_bytes = _build_pdf(room_name, act_type, current_topic, report_text, df_oc, depth_opinions)
             st.download_button(
-                "📄 리포트 PDF 다운로드 (입장변화 · 발언깊이 포함)",
+                "📄 리포트 PDF 다운로드",
                 data=pdf_bytes,
                 file_name=f"{room_name}_{act_type}_리포트_{get_kst_now().strftime('%Y%m%d_%H%M')}.pdf",
                 mime="application/pdf",
                 use_container_width=True,
             )
+            st.caption("📊 PDF에는 AI 요약 외에 **입장 변화 매트릭스 차트**와 **발언 깊이 분포/시간 흐름 차트**가 함께 포함됩니다.")
         except Exception as e:
             st.caption(f"PDF 생성 실패: {e}")
