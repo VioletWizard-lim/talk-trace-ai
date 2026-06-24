@@ -392,7 +392,7 @@ def _parse_report(text: str) -> list:
 # ── Excel 다운로드 ─────────────────────────────────────────────────────────────
 
 def _excel_bytes(df_all: pd.DataFrame) -> bytes:
-    EXCLUDE_COLS = {'user_id', 'ip_address', 'created_at'}
+    EXCLUDE_COLS = {'id', 'user_id', 'ip_address', 'created_at'}
     export_df = df_all.drop(columns=[c for c in EXCLUDE_COLS if c in df_all.columns])
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine='openpyxl') as writer:
