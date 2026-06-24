@@ -93,11 +93,8 @@ def render_sidebar(supabase) -> dict:
                                 st.rerun()
                         else:
                             new_title = _preset["title"]
-                            col_cap, col_edit = st.columns([4, 1])
-                            with col_cap:
-                                st.caption(f"📌 {new_title}")
-                            with col_edit:
-                                if st.button("✏️ 수정", key=f"edit_{_topic_choice}"):
+                            st.caption(f"📌 {new_title}")
+                            if st.button("✏️ 주제 수정", key=f"edit_{_topic_choice}", use_container_width=True):
                                     st.session_state[f"editing_{_topic_choice}"] = True
                                     st.rerun()
 
