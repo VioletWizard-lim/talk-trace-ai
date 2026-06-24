@@ -72,7 +72,7 @@ def render_sidebar(supabase) -> dict:
                     _bulk_mode = st.checkbox("📋 여러 반 한번에 만들기")
                     if _bulk_mode:
                         _class_prefix = st.text_input("반 이름 공통 앞부분 (예: 1학년)", value="1학년")
-                        _class_nums = st.text_input("반 번호 (쉼표로 구분, 예: 1,2,3,4,5)", value="1,2,3")
+                        _class_nums = st.text_input("반 번호/구분 문구 (쉼표로 구분, 예: 1,2,3 또는 가,나,다)", value="1,2,3")
                     else:
                         new_room = st.text_input("새로 만들 방 이름 (예: 1학년 3반)")
 
