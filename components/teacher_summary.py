@@ -1,7 +1,6 @@
 import io
 import os
 import re
-import textwrap
 
 import pandas as pd
 import streamlit as st
@@ -10,34 +9,74 @@ from env import get_secret
 from services.ai import generate_ai_response, build_summary_prompt
 from utils import compact_ai_report_output, get_kst_now
 from config import AI_MODEL_NAME, DASHBOARD_FETCH_LIMIT
+from db import (
+    fetch_all_opinion_changes, fetch_opinions_for_depth,
+    opinion_changes_available, stance_available, depth_level_available,
+)
 
 _NANUM_FONT_PATH = "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"
 _NANUM_BOLD_FONT_PATH = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
 
 
+# ── 데이터 수집 헬퍼 ──────────────────────────────────────────────────────────
+
+def _build_stance_summary(df_oc: pd.DataFrame) -> str:
+    """입장 변화 데이터를 텍스트 요약으로 변환합니다."""
+    if df_oc.empty:
+        return ""
+    if "initial_stance" not in df_oc.columns or "final_stance" not in df_oc.columns:
+        return ""
+    both = df_oc[df_oc["initial_stance"].notna() & df_oc["final_stance"].notna()]
+    if both.empty:
+        return ""
+    lines = []
+    for _, r in both.iterrows():
+        lines.append(f"- {r['student_name']}: {r['initial_stance']} → {r['final_stance']}")
+    return "\n".join(lines)
+
+
+def _build_depth_summary(depth_opinions: list) -> str:
+    """발언 깊이 분석 결과를 텍스트 요약으로 변환합니다."""
+    if not depth_opinions:
+        return ""
+    df = pd.DataFrame(depth_opinions)
+    classified = df[df["depth_level"].notna()].copy()
+    if classified.empty:
+        return ""
+    classified["depth_level"] = classified["depth_level"].astype(int)
+    label_map = {1: "단순의견", 2: "근거제시", 3: "반박/심화질문", 4: "통합/종합"}
+    student_avg = (
+        classified.groupby("student_name")["depth_level"]
+        .mean().round(2).sort_values(ascending=False)
+    )
+    dist = classified["depth_level"].map(label_map).value_counts().to_dict()
+    dist_str = ", ".join(f"{k} {v}개" for k, v in dist.items())
+    student_str = ", ".join(f"{name}({avg}점)" for name, avg in student_avg.items())
+    return f"전체 분포: {dist_str}\n학생별 평균: {student_str}"
+
+
 # ── PDF 생성 ──────────────────────────────────────────────────────────────────
 
 def _get_pdf_font():
-    """reportlab에 Nanum 한글 폰트를 등록하고 폰트명을 반환합니다."""
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     if os.path.exists(_NANUM_FONT_PATH):
         try:
             pdfmetrics.registerFont(TTFont("Nanum", _NANUM_FONT_PATH))
-            if os.path.exists(_NANUM_BOLD_FONT_PATH):
-                pdfmetrics.registerFont(TTFont("NanumBold", _NANUM_BOLD_FONT_PATH))
-            else:
-                pdfmetrics.registerFont(TTFont("NanumBold", _NANUM_FONT_PATH))
+            bold_path = _NANUM_BOLD_FONT_PATH if os.path.exists(_NANUM_BOLD_FONT_PATH) else _NANUM_FONT_PATH
+            pdfmetrics.registerFont(TTFont("NanumBold", bold_path))
             return "Nanum", "NanumBold"
         except Exception:
             pass
     return "Helvetica", "Helvetica-Bold"
 
 
-def _build_pdf(room_name: str, act_type: str, current_topic: str, report_text: str) -> bytes:
+def _build_pdf(
+    room_name: str, act_type: str, current_topic: str, report_text: str,
+    df_oc: pd.DataFrame, depth_opinions: list,
+) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
-    from reportlab.lib import colors
     from reportlab.pdfgen import canvas as rl_canvas
 
     font_name, font_bold = _get_pdf_font()
@@ -49,29 +88,43 @@ def _build_pdf(room_name: str, act_type: str, current_topic: str, report_text: s
     c = rl_canvas.Canvas(buf, pagesize=A4)
     c.setTitle(f"{room_name} {act_type} 요약 리포트")
 
-    def draw_wrapped(text, x, y, font, size, max_w, line_h, color=(0.15, 0.15, 0.15)):
+    def new_page_if_needed(y, need=30 * mm):
+        if y < need:
+            c.showPage()
+            return H - PAD
+        return y
+
+    def draw_section_header(y, title, bg_rgb, fg_rgb=(1, 1, 1)):
+        c.setFillColorRGB(*bg_rgb)
+        c.roundRect(PAD, y - 6 * mm, CONTENT_W, 8 * mm, 3, fill=1, stroke=0)
+        c.setFont(font_bold, 11)
+        c.setFillColorRGB(*fg_rgb)
+        c.drawString(PAD + 3 * mm, y - 3.5 * mm, title)
+        return y - 10 * mm
+
+    def draw_wrapped(text, x, y, font, size, max_w, line_h=6 * mm, color=(0.15, 0.15, 0.15)):
         c.setFont(font, size)
         c.setFillColorRGB(*color)
-        for line in text.splitlines():
-            words = line.split()
-            cur_line = ""
+        for para in text.splitlines():
+            words = para.split()
+            cur = ""
             for word in words:
-                test = (cur_line + " " + word).strip()
+                test = (cur + " " + word).strip()
                 if c.stringWidth(test, font, size) <= max_w:
-                    cur_line = test
+                    cur = test
                 else:
-                    if cur_line:
-                        c.drawString(x, y, cur_line)
+                    if cur:
+                        c.drawString(x, y, cur)
                         y -= line_h
-                    cur_line = word
-            if cur_line:
-                c.drawString(x, y, cur_line)
+                    cur = word
+            if cur:
+                c.drawString(x, y, cur)
                 y -= line_h
         return y
 
     y = H - PAD
 
-    # Header bar
+    # ── 헤더 바 ──
     c.setFillColorRGB(0.082, 0.314, 0.627)
     c.rect(0, H - 22 * mm, W, 22 * mm, fill=1, stroke=0)
     c.setFont(font_bold, 15)
@@ -79,43 +132,87 @@ def _build_pdf(room_name: str, act_type: str, current_topic: str, report_text: s
     c.drawString(PAD, H - 13 * mm, f"말자취 Talk-Trace AI  |  {act_type} 요약 리포트")
     y = H - 28 * mm
 
-    # 방 정보
     c.setFont(font_name, 10)
     c.setFillColorRGB(0.4, 0.4, 0.4)
-    now_str = get_kst_now().strftime("%Y-%m-%d %H:%M")
-    c.drawString(PAD, y, f"방: {room_name}    |    주제: {current_topic}    |    생성: {now_str}")
+    c.drawString(PAD, y, f"방: {room_name}    |    주제: {current_topic}    |    생성: {get_kst_now().strftime('%Y-%m-%d %H:%M')}")
     y -= 6 * mm
-
-    # 구분선
     c.setStrokeColorRGB(0.82, 0.82, 0.82)
     c.line(PAD, y, W - PAD, y)
     y -= 7 * mm
 
-    # 섹션별 파싱 및 렌더링
+    # ── AI 요약 섹션 ──
     sections = _parse_report(report_text)
     section_styles = {
-        "핵심요약": ("#1558a0", (0.082, 0.314, 0.627)),
-        "베스트 학생": ("#166534", (0.086, 0.396, 0.204)),
-        "선정 이유": ("#92400e", (0.573, 0.251, 0.055)),
+        "핵심요약": (0.082, 0.314, 0.627),
+        "베스트 학생": (0.086, 0.396, 0.204),
+        "선정 이유": (0.573, 0.251, 0.055),
     }
-
+    summary_idx = 0
     for label, content in sections:
-        if y < 40 * mm:
-            c.showPage()
-            y = H - PAD
+        y = new_page_if_needed(y)
+        if label == "핵심요약":
+            summary_idx += 1
+            display_label = f"핵심요약 {summary_idx}"
+        else:
+            display_label = label or "기타"
+        bg = section_styles.get(label, (0.216, 0.255, 0.318))
+        y = draw_section_header(y, display_label, bg)
+        y = draw_wrapped(content, PAD + 3 * mm, y, font_name, 11, CONTENT_W - 6 * mm)
+        y -= 4 * mm
 
-        # 섹션 라벨 배경
-        bg_rgb = section_styles.get(label, ("#374151", (0.216, 0.255, 0.318)))[1]
-        c.setFillColorRGB(*bg_rgb)
-        c.roundRect(PAD, y - 6.5 * mm, CONTENT_W, 8 * mm, 3, fill=1, stroke=0)
-        c.setFont(font_bold, 11)
-        c.setFillColorRGB(1, 1, 1)
-        c.drawString(PAD + 3 * mm, y - 4 * mm, label)
-        y -= 10 * mm
+    # ── 입장 변화 섹션 ──
+    if not df_oc.empty and "initial_stance" in df_oc.columns and "final_stance" in df_oc.columns:
+        both = df_oc[df_oc["initial_stance"].notna() & df_oc["final_stance"].notna()]
+        if not both.empty:
+            y = new_page_if_needed(y)
+            c.setStrokeColorRGB(0.82, 0.82, 0.82)
+            c.line(PAD, y, W - PAD, y)
+            y -= 6 * mm
+            y = draw_section_header(y, "입장 변화 현황", (0.36, 0.25, 0.58))
 
-        # 본문
-        y = draw_wrapped(content, PAD + 3 * mm, y, font_name, 11, CONTENT_W - 6 * mm, 6 * mm)
-        y -= 5 * mm
+            # 매트릭스 요약
+            cats = {
+                "🔵 찬성 → 🔵 유지": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔵 찬성")],
+                "🔵 찬성 → 🔴 반대": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔴 반대")],
+                "🔴 반대 → 🔵 찬성": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔵 찬성")],
+                "🔴 반대 → 🔴 유지": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔴 반대")],
+            }
+            for cat_label, cat_df in cats.items():
+                y = new_page_if_needed(y)
+                names = ", ".join(cat_df["student_name"].tolist()) if not cat_df.empty else "없음"
+                line = f"{cat_label}  {len(cat_df)}명  ({names})"
+                y = draw_wrapped(line, PAD + 3 * mm, y, font_name, 10, CONTENT_W - 6 * mm, 5.5 * mm)
+            y -= 4 * mm
+
+    # ── 발언 깊이 섹션 ──
+    if depth_opinions:
+        df_d = pd.DataFrame(depth_opinions)
+        classified = df_d[df_d["depth_level"].notna()].copy()
+        if not classified.empty:
+            classified["depth_level"] = classified["depth_level"].astype(int)
+            label_map = {1: "단순의견", 2: "근거제시", 3: "반박/심화질문", 4: "통합/종합"}
+            y = new_page_if_needed(y)
+            c.setStrokeColorRGB(0.82, 0.82, 0.82)
+            c.line(PAD, y, W - PAD, y)
+            y -= 6 * mm
+            y = draw_section_header(y, "발언 깊이 분석", (0.153, 0.392, 0.255))
+
+            # 분포
+            dist = classified["depth_level"].map(label_map).value_counts()
+            dist_line = "  /  ".join(f"{k}: {v}개" for k, v in dist.items())
+            y = draw_wrapped(f"전체 분포  {dist_line}", PAD + 3 * mm, y, font_name, 10, CONTENT_W - 6 * mm, 5.5 * mm)
+            y -= 3 * mm
+
+            # 학생별 평균
+            student_avg = (
+                classified.groupby("student_name")["depth_level"]
+                .mean().round(2).sort_values(ascending=False)
+            )
+            for name, avg in student_avg.items():
+                y = new_page_if_needed(y)
+                line = f"  {name}: 평균 {avg}단계"
+                y = draw_wrapped(line, PAD + 3 * mm, y, font_name, 10, CONTENT_W - 6 * mm, 5.5 * mm)
+            y -= 4 * mm
 
     c.save()
     return buf.getvalue()
@@ -123,33 +220,25 @@ def _build_pdf(room_name: str, act_type: str, current_topic: str, report_text: s
 
 # ── 리포트 파싱 ────────────────────────────────────────────────────────────────
 
-def _parse_report(text: str) -> list[tuple[str, str]]:
-    """compact_ai_report_output 결과를 (라벨, 내용) 튜플 리스트로 파싱합니다."""
+def _parse_report(text: str) -> list:
     patterns = [
         (r"핵심요약\s*[123]", "핵심요약"),
         (r"베스트\s*학생", "베스트 학생"),
         (r"선정\s*이유", "선정 이유"),
     ]
-    sections = []
+    result = []
     for line in text.strip().splitlines():
         line = line.strip()
         if not line:
             continue
-        matched_label = None
-        content = line
+        matched_label, content = None, line
         for pattern, label in patterns:
             m = re.match(rf"^({pattern})\s*[:\-：]?\s*(.+)", line, re.IGNORECASE)
             if m:
-                matched_label = label
-                content = m.group(2).strip()
+                matched_label, content = label, m.group(2).strip()
                 break
-        sections.append((matched_label or "", content))
-
-    # 같은 라벨끼리 합치지 않고 순서대로 반환 (각 줄을 카드 하나로)
-    result = []
-    for label, content in sections:
-        if label:
-            result.append((label, content))
+        if matched_label:
+            result.append((matched_label, content))
         elif result:
             result[-1] = (result[-1][0], result[-1][1] + "\n" + content)
         else:
@@ -168,7 +257,7 @@ def _excel_bytes(df_all: pd.DataFrame) -> bytes:
     return buf.getvalue()
 
 
-# ── 메인 섹션 렌더링 ───────────────────────────────────────────────────────────
+# ── 카드 UI ───────────────────────────────────────────────────────────────────
 
 _CARD_CSS = """
 <style>
@@ -212,8 +301,10 @@ def _render_report_cards(report_text: str):
         )
 
 
+# ── 메인 섹션 렌더링 ───────────────────────────────────────────────────────────
+
 @st.fragment
-def render_summary_section(room_name, act_type, current_topic, df_all):
+def render_summary_section(supabase, room_name, act_type, current_topic, df_all):
     st.subheader(f"📝 수업 종료 및 전체 {act_type} 요약 리포트")
 
     col_gen, col_excel = st.columns([3, 1])
@@ -226,7 +317,24 @@ def render_summary_section(room_name, act_type, current_topic, df_all):
                         f"[{row['student_name']} - {row['sentiment']}] {row['content']}"
                         for _, row in df_all.iterrows()
                     ])
-                    prompt = build_summary_prompt(act_type, current_topic, full_history)
+
+                    # 입장 변화 데이터
+                    stance_summary = ""
+                    if act_type == "토론" and opinion_changes_available() and stance_available():
+                        df_oc = fetch_all_opinion_changes(supabase, room_name)
+                        stance_summary = _build_stance_summary(df_oc)
+
+                    # 발언 깊이 데이터
+                    depth_summary = ""
+                    if depth_level_available():
+                        depth_opinions = fetch_opinions_for_depth(supabase, room_name)
+                        depth_summary = _build_depth_summary(depth_opinions)
+
+                    prompt = build_summary_prompt(
+                        act_type, current_topic, full_history,
+                        stance_summary=stance_summary,
+                        depth_summary=depth_summary,
+                    )
                     try:
                         res_text = generate_ai_response(
                             prompt, model_name=AI_MODEL_NAME, api_key=get_secret("GEMINI_API_KEY", ""),
@@ -259,11 +367,13 @@ def render_summary_section(room_name, act_type, current_topic, df_all):
         st.markdown("---")
         _render_report_cards(report_text)
 
-        # PDF 다운로드
+        # PDF (입장변화 + 깊이 포함)
         try:
-            pdf_bytes = _build_pdf(room_name, act_type, current_topic, report_text)
+            df_oc = fetch_all_opinion_changes(supabase, room_name) if opinion_changes_available() else pd.DataFrame()
+            depth_opinions = fetch_opinions_for_depth(supabase, room_name) if depth_level_available() else []
+            pdf_bytes = _build_pdf(room_name, act_type, current_topic, report_text, df_oc, depth_opinions)
             st.download_button(
-                "📄 리포트 PDF 다운로드",
+                "📄 리포트 PDF 다운로드 (입장변화 · 발언깊이 포함)",
                 data=pdf_bytes,
                 file_name=f"{room_name}_{act_type}_리포트_{get_kst_now().strftime('%Y%m%d_%H%M')}.pdf",
                 mime="application/pdf",

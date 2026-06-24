@@ -19,16 +19,24 @@ def build_hint_prompt(act_type, current_topic, context):
     )
 
 
-def build_summary_prompt(act_type, current_topic, full_history):
+def build_summary_prompt(act_type, current_topic, full_history,
+                         stance_summary: str = "", depth_summary: str = ""):
+    extra = ""
+    if stance_summary:
+        extra += f"\n[입장 변화 데이터]\n{stance_summary}\n"
+    if depth_summary:
+        extra += f"\n[발언 깊이 분석 데이터]\n{depth_summary}\n"
     return (
         f"'{current_topic}' 주제의 고등학교 {act_type} 기록입니다.\n\n"
         "[출력 형식 - 반드시 그대로]\n"
         "핵심요약 1: ...\n핵심요약 2: ...\n핵심요약 3: ...\n베스트 학생: ...\n선정 이유: ...\n\n"
         "[엄격한 규칙]\n"
         "- 핵심요약 1,2,3과 베스트 학생, 선정이유를 줄바꿈을 하여 보기 편하게 합니다.\n"
+        "- 입장 변화 및 발언 깊이 데이터가 있으면 핵심요약에 자연스럽게 반영하세요.\n"
         "- 5~10줄로 출력합니다.\n- 제목/헤더(#,##,###), 소제목을 절대 쓰지 않습니다.\n"
         "- 불필요한 서론/결론 없이 바로 결과만 출력합니다.\n\n"
         f"기록:\n{full_history}"
+        f"{extra}"
     )
 
 

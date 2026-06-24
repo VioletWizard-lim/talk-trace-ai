@@ -302,7 +302,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
 
     # ── 2. 수업 종료 및 전체 요약 리포트 (토론 제어 바로 아래) ──
-    render_summary_section(room_name, act_type, current_topic, df_all)
+    render_summary_section(supabase, room_name, act_type, current_topic, df_all)
 
     # ── 3. AI 토의 촉진 ──
     st.divider()
