@@ -125,8 +125,6 @@ def render_sidebar(supabase) -> dict:
                                     mode=new_mode, entry_code=safe_new_pw, created_by=teacher_id_for_scope,
                                 )
                                 (_created if res is not None else _failed).append(safe_r)
-                            fetch_room_names.clear()
-                            fetch_room_names_by_owner.clear()
                             if _created:
                                 st.session_state['current_room'] = _created[-1]
                                 st.toast(f"✅ {len(_created)}개 방 개설 완료: {', '.join(_created)}", icon="🎉")
@@ -143,8 +141,6 @@ def render_sidebar(supabase) -> dict:
                                     mode=new_mode, entry_code=safe_new_pw, created_by=teacher_id_for_scope,
                                 )
                                 if res is not None:
-                                    fetch_room_names.clear()
-                                    fetch_room_names_by_owner.clear()
                                     st.session_state['current_room'] = safe_new_room
                                     st.toast(f"'{safe_new_room}' 방이 개설되었습니다!", icon="🎉")
                                     st.rerun()
