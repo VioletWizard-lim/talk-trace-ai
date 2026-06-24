@@ -326,7 +326,8 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             st.warning("운영 안전 모드로 방 폭파 기능이 비활성화되어 있습니다.")
         else:
             st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록이 완전히 삭제됩니다.")
-            if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True):
+            _confirm_text = st.text_input("삭제를 진행하려면 아래에 **확인했습니다** 를 입력하세요", key=f"destroy_confirm_{room_name}")
+            if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True, disabled=_confirm_text != "확인했습니다"):
                 try:
                     if destroy_room_data(supabase, room_name) is None:
                         st.stop()

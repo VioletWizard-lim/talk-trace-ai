@@ -113,12 +113,16 @@ def render_sidebar(supabase) -> dict:
                             st.error("현재 DB 구조에서는 방 비밀번호 저장을 지원하지 않습니다.")
                         elif _bulk_mode:
                             _nums = [n.strip() for n in _class_nums.split(",") if n.strip()]
-                            _created, _failed = [], []
+                            _existing_rooms = set(fetch_room_names(supabase))
+                            _created, _failed, _skipped = [], [], []
                             for _num in _nums:
                                 _room = f"{_class_prefix} {_num}반"
                                 room_ok, safe_r, _, _ = validate_room_name(_room, max_len=MAX_ROOM_NAME_LEN)
                                 if not room_ok:
                                     _failed.append(_room)
+                                    continue
+                                if safe_r in _existing_rooms:
+                                    _skipped.append(safe_r)
                                     continue
                                 res = upsert_topic_room(
                                     supabase=supabase, room_name=safe_r, title=safe_new_title,
@@ -127,7 +131,9 @@ def render_sidebar(supabase) -> dict:
                                 (_created if res is not None else _failed).append(safe_r)
                             if _created:
                                 st.session_state['current_room'] = _created[-1]
-                                st.toast(f"✅ {len(_created)}개 방 개설 완료: {', '.join(_created)}", icon="🎉")
+                                st.toast(f"✅ {len(_created)}개 방 생성 완료!", icon="🎉")
+                            if _skipped:
+                                st.warning(f"이미 생성된 방 (건너뜀): {', '.join(_skipped)}")
                             if _failed:
                                 st.error(f"❌ 개설 실패: {', '.join(_failed)}")
                             st.rerun()
