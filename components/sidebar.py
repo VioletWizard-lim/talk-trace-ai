@@ -14,7 +14,7 @@ from validators import (
     validate_room_name,
 )
 from utils import log_audit
-from config import MAX_ROOM_NAME_LEN, MAX_TOPIC_LEN, MAX_ENTRY_CODE_LEN
+from config import MAX_ROOM_NAME_LEN, MAX_TOPIC_LEN, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS
 from components.teacher_auth import render_teacher_auth
 
 
@@ -69,7 +69,12 @@ def render_sidebar(supabase) -> dict:
                         room_name = ""
                 else:
                     new_room = st.text_input("새로 만들 방 이름 (예: 1학년 3반)")
-                    new_title = st.text_input("주제 직접 입력 (예: 인공지능 윤리)")
+                    _topic_options = ["직접 입력"] + DIGITAL_ETHICS_TOPICS
+                    _topic_choice = st.selectbox("정보윤리 추천 주제 선택 또는 직접 입력", _topic_options, index=0)
+                    if _topic_choice == "직접 입력":
+                        new_title = st.text_input("주제 직접 입력 (예: 인공지능 윤리)")
+                    else:
+                        new_title = _topic_choice
                     new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"], horizontal=True)
                     new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
                     if st.button("새 방 개설하기", type="primary"):
