@@ -69,15 +69,16 @@ def render_sidebar(supabase) -> dict:
                         room_name = ""
                 else:
                     new_room = st.text_input("새로 만들 방 이름 (예: 1학년 3반)")
-                    _preset_labels = ["직접 입력"] + [t["title"] for t in DIGITAL_ETHICS_TOPICS]
-                    _topic_choice = st.radio("📚 정보윤리 추천 주제 선택", _preset_labels, index=0)
+                    _preset_labels = ["직접 입력"] + [t["label"] for t in DIGITAL_ETHICS_TOPICS]
+                    _topic_choice = st.selectbox("📚 정보윤리 추천 주제", _preset_labels, index=0)
                     if _topic_choice == "직접 입력":
                         new_title = st.text_input("주제 직접 입력 (예: 인공지능 윤리)")
                         _preset_mode_idx = 0
                     else:
-                        _preset = next(t for t in DIGITAL_ETHICS_TOPICS if t["title"] == _topic_choice)
+                        _preset = next(t for t in DIGITAL_ETHICS_TOPICS if t["label"] == _topic_choice)
                         new_title = _preset["title"]
                         _preset_mode_idx = 0 if _preset["mode"] == "⚔️ 찬반 토론" else 1
+                        st.caption(f"📌 {new_title}  ({_preset['mode']})")
                     new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"],
                                         index=_preset_mode_idx, horizontal=True)
                     new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
