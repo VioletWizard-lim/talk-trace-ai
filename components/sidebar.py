@@ -129,14 +129,14 @@ def render_sidebar(supabase) -> dict:
                                     mode=new_mode, entry_code=safe_new_pw, created_by=teacher_id_for_scope,
                                 )
                                 (_created if res is not None else _failed).append(safe_r)
-                            if _created:
-                                st.session_state['current_room'] = _created[-1]
-                                st.toast(f"✅ {len(_created)}개 방 생성 완료!", icon="🎉")
                             if _skipped:
                                 st.warning(f"이미 생성된 방 (건너뜀): {', '.join(_skipped)}")
                             if _failed:
                                 st.error(f"❌ 개설 실패: {', '.join(_failed)}")
-                            st.rerun()
+                            if _created:
+                                st.session_state['current_room'] = _created[-1]
+                                st.toast(f"✅ {len(_created)}개 방 생성 완료!", icon="🎉")
+                                st.rerun()
                         else:
                             room_ok, safe_new_room, _, room_error_message = validate_room_name(new_room, max_len=MAX_ROOM_NAME_LEN)
                             if not room_ok:
