@@ -306,10 +306,10 @@ def _build_pdf(
 
             # 학생 명단 텍스트
             cats = {
-                "찬성→유지": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔵 찬성")],
-                "찬성→반대": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔴 반대")],
-                "반대→찬성": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔵 찬성")],
-                "반대→유지": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔴 반대")],
+                "찬성 -> 유지": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔵 찬성")],
+                "찬성 -> 반대": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔴 반대")],
+                "반대 -> 찬성": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔵 찬성")],
+                "반대 -> 유지": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔴 반대")],
             }
             for cat_label, cat_df in cats.items():
                 names = ", ".join(cat_df["student_name"].tolist()) if not cat_df.empty else "없음"
