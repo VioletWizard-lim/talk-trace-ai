@@ -155,6 +155,7 @@ def check_schema_columns() -> dict:
         ("likes.opinion_id",               lambda: supabase.table("likes").select("opinion_id").limit(1).execute()),
         ("debate.depth_level",             lambda: supabase.table("debate").select("depth_level").limit(1).execute()),
         ("opinion_changes.ai_feedback",    lambda: supabase.table("opinion_changes").select("ai_feedback").limit(1).execute()),
+        ("topic.ai_report",                lambda: supabase.table("topic").select("ai_report").limit(1).execute()),
     ]
 
     results = {}
@@ -290,6 +291,27 @@ def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
     if not res or not res.data:
         return []
     return [item.get("room_name", "") for item in res.data if str(item.get("room_name", "")).strip()]
+
+
+def topic_ai_report_available() -> bool:
+    return _schema().get("topic.ai_report", False)
+
+
+def save_ai_report(supabase: Client, room_name: str, report_text: str):
+    return execute_query(
+        supabase.table("topic").update({"ai_report": report_text}).eq("room_name", room_name),
+        fail_message="AI 리포트 저장 실패",
+    )
+
+
+def fetch_ai_report(supabase: Client, room_name: str) -> str:
+    try:
+        res = supabase.table("topic").select("ai_report").eq("room_name", room_name).limit(1).execute()
+        if res and res.data:
+            return str(res.data[0].get("ai_report") or "")
+    except Exception as e:
+        logger.warning("AI 리포트 불러오기 실패: %s", e)
+    return ""
 
 
 def update_topic(supabase: Client, room_name, title, mode):

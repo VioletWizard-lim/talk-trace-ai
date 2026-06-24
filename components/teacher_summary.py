@@ -12,6 +12,7 @@ from config import AI_MODEL_NAME, DASHBOARD_FETCH_LIMIT
 from db import (
     fetch_all_opinion_changes, fetch_opinions_for_depth,
     opinion_changes_available, stance_available, depth_level_available,
+    topic_ai_report_available, save_ai_report, fetch_ai_report,
 )
 
 _NANUM_FONT_PATH = "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"
@@ -307,6 +308,13 @@ def _render_report_cards(report_text: str):
 def render_summary_section(supabase, room_name, act_type, current_topic, df_all):
     st.subheader(f"📝 수업 종료 및 전체 {act_type} 요약 리포트")
 
+    # 새로고침 시 Supabase에서 리포트 불러오기
+    _cache_key = f'ai_report_text_{room_name}'
+    if not st.session_state.get(_cache_key) and topic_ai_report_available():
+        saved = fetch_ai_report(supabase, room_name)
+        if saved:
+            st.session_state[_cache_key] = saved
+
     col_gen, col_excel = st.columns([3, 1])
     with col_gen:
         if st.button(f"✨ {act_type} 요약 및 베스트 발언 추출", use_container_width=True, type="primary"):
@@ -344,7 +352,10 @@ def render_summary_section(supabase, room_name, act_type, current_topic, df_all)
                         st.error(f"🚨 AI 호출 중 오류가 발생했습니다: {e}")
                         res_text = None
                     if res_text:
-                        st.session_state['ai_report_text'] = compact_ai_report_output(res_text)
+                        report_text = compact_ai_report_output(res_text)
+                        st.session_state[_cache_key] = report_text
+                        if topic_ai_report_available():
+                            save_ai_report(supabase, room_name, report_text)
                         st.toast("✅ 리포트 작성 완료!", icon="🎉")
                     elif res_text is not None:
                         st.toast("🚨 AI 호출 오류가 발생했습니다.", icon="❌")
@@ -362,7 +373,7 @@ def render_summary_section(supabase, room_name, act_type, current_topic, df_all)
                 use_container_width=True,
             )
 
-    report_text = st.session_state.get('ai_report_text', '')
+    report_text = st.session_state.get(_cache_key, '')
     if report_text:
         st.markdown("---")
         _render_report_cards(report_text)
