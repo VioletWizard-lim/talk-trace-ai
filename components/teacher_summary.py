@@ -272,6 +272,8 @@ def _build_pdf(
         y = draw_wrapped(content, PAD + 3 * mm, y, font_name, 11, CONTENT_W - 6 * mm)
         y -= 4 * mm
 
+    from reportlab.lib.utils import ImageReader
+
     # ── 입장 변화 섹션 ──
     if not df_oc.empty and "initial_stance" in df_oc.columns and "final_stance" in df_oc.columns:
         both = df_oc[df_oc["initial_stance"].notna() & df_oc["final_stance"].notna()]
@@ -282,17 +284,30 @@ def _build_pdf(
             y -= 6 * mm
             y = draw_section_header(y, "입장 변화 현황", (0.36, 0.25, 0.58))
 
-            # 매트릭스 요약
+            # 매트릭스 차트 이미지
+            try:
+                stance_png = _make_stance_matrix_chart(both)
+                img = ImageReader(stance_png)
+                iw, ih = img.getSize()
+                chart_h = 55 * mm
+                scale = min(CONTENT_W / iw, chart_h / ih, 1.0)
+                dw, dh = iw * scale, ih * scale
+                y = new_page_if_needed(y, dh + 10 * mm)
+                c.drawImage(img, PAD + (CONTENT_W - dw) / 2, y - dh, width=dw, height=dh, preserveAspectRatio=True)
+                y -= dh + 4 * mm
+            except Exception:
+                pass
+
+            # 학생 명단 텍스트
             cats = {
-                "🔵 찬성 → 🔵 유지": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔵 찬성")],
-                "🔵 찬성 → 🔴 반대": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔴 반대")],
-                "🔴 반대 → 🔵 찬성": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔵 찬성")],
-                "🔴 반대 → 🔴 유지": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔴 반대")],
+                "찬성→유지": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔵 찬성")],
+                "찬성→반대": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔴 반대")],
+                "반대→찬성": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔵 찬성")],
+                "반대→유지": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔴 반대")],
             }
             for cat_label, cat_df in cats.items():
-                y = new_page_if_needed(y)
                 names = ", ".join(cat_df["student_name"].tolist()) if not cat_df.empty else "없음"
-                line = f"{cat_label}  {len(cat_df)}명  ({names})"
+                line = f"  {cat_label}  {len(cat_df)}명  ({names})"
                 y = draw_wrapped(line, PAD + 3 * mm, y, font_name, 10, CONTENT_W - 6 * mm, 5.5 * mm)
             y -= 4 * mm
 
@@ -302,20 +317,30 @@ def _build_pdf(
         classified = df_d[df_d["depth_level"].notna()].copy()
         if not classified.empty:
             classified["depth_level"] = classified["depth_level"].astype(int)
-            label_map = {1: "단순의견", 2: "근거제시", 3: "반박/심화질문", 4: "통합/종합"}
             y = new_page_if_needed(y)
             c.setStrokeColorRGB(0.82, 0.82, 0.82)
             c.line(PAD, y, W - PAD, y)
             y -= 6 * mm
             y = draw_section_header(y, "발언 깊이 분석", (0.153, 0.392, 0.255))
 
-            # 분포
-            dist = classified["depth_level"].map(label_map).value_counts()
-            dist_line = "  /  ".join(f"{k}: {v}개" for k, v in dist.items())
-            y = draw_wrapped(f"전체 분포  {dist_line}", PAD + 3 * mm, y, font_name, 10, CONTENT_W - 6 * mm, 5.5 * mm)
-            y -= 3 * mm
+            # 차트 두 개 나란히
+            try:
+                bar_png = _make_depth_bar_chart(classified)
+                scatter_png = _make_depth_scatter_chart(classified)
+                half_w = (CONTENT_W - 4 * mm) / 2
+                chart_h = 55 * mm
+                y = new_page_if_needed(y, chart_h + 10 * mm)
+                for png_buf, x_off in [(bar_png, PAD), (scatter_png, PAD + half_w + 4 * mm)]:
+                    img = ImageReader(png_buf)
+                    iw, ih = img.getSize()
+                    scale = min(half_w / iw, chart_h / ih, 1.0)
+                    dw, dh = iw * scale, ih * scale
+                    c.drawImage(img, x_off, y - dh, width=dw, height=dh, preserveAspectRatio=True)
+                y -= chart_h + 4 * mm
+            except Exception:
+                pass
 
-            # 학생별 평균
+            # 학생별 평균 텍스트
             student_avg = (
                 classified.groupby("student_name")["depth_level"]
                 .mean().round(2).sort_values(ascending=False)
