@@ -142,24 +142,30 @@ def _make_depth_scatter_chart(classified_df: pd.DataFrame) -> io.BytesIO:
 
 def _make_stance_matrix_chart(both_df: pd.DataFrame) -> io.BytesIO:
     import matplotlib.pyplot as plt
-    import matplotlib.patches as mpatches
     _setup_korean_font()
-    cats = {
-        "🔵→🔵\n찬성 유지": len(both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔵 찬성")]),
-        "🔵→🔴\n반대 전환": len(both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔴 반대")]),
-        "🔴→🔵\n찬성 전환": len(both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔵 찬성")]),
-        "🔴→🔴\n반대 유지": len(both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔴 반대")]),
-    }
-    colors = ["#1558a0", "#d97706", "#16a34a", "#d62728"]
-    fig, axes = plt.subplots(1, 4, figsize=(7, 2.5))
-    for ax, (label, count), color in zip(axes, cats.items(), colors):
-        ax.set_facecolor(color + "22")
-        ax.spines[:].set_color(color)
+    items = [
+        ("찬성\n유지",  "🔵 찬성", "🔵 찬성", "#1558a0", "#1558a0", "#dbeafe", "#1558a0"),
+        ("찬성→반대",   "🔵 찬성", "🔴 반대", "#1558a0", "#d62728", "#fef3c7", "#d97706"),
+        ("반대→찬성",   "🔴 반대", "🔵 찬성", "#d62728", "#1558a0", "#dcfce7", "#16a34a"),
+        ("반대\n유지",  "🔴 반대", "🔴 반대", "#d62728", "#d62728", "#fee2e2", "#d62728"),
+    ]
+    fig, axes = plt.subplots(1, 4, figsize=(7, 2.8))
+    for ax, (label, init_s, final_s, ic, fc, bg, border) in zip(axes, items):
+        count = len(both_df[(both_df["initial_stance"] == init_s) & (both_df["final_stance"] == final_s)])
+        ax.set_facecolor(bg)
+        ax.spines[:].set_color(border)
         ax.spines[:].set_linewidth(2)
-        ax.text(0.5, 0.62, str(count), ha="center", va="center",
-                fontsize=28, fontweight="bold", color=color, transform=ax.transAxes)
-        ax.text(0.5, 0.2, label, ha="center", va="center",
-                fontsize=9, color="#333", transform=ax.transAxes, linespacing=1.4)
+        # 큰 숫자
+        ax.text(0.5, 0.68, str(count), ha="center", va="center",
+                fontsize=28, fontweight="bold", color=border, transform=ax.transAxes)
+        # 컬러 원 ●→● 마커
+        ax.plot(0.22, 0.36, "o", color=ic, markersize=12, transform=ax.transAxes, zorder=5, clip_on=False)
+        ax.text(0.5, 0.36, "→", ha="center", va="center", fontsize=13,
+                color="#555", fontweight="bold", transform=ax.transAxes)
+        ax.plot(0.78, 0.36, "o", color=fc, markersize=12, transform=ax.transAxes, zorder=5, clip_on=False)
+        # 레이블
+        ax.text(0.5, 0.11, label, ha="center", va="center",
+                fontsize=8.5, color="#333", transform=ax.transAxes, linespacing=1.3)
         ax.set_xticks([])
         ax.set_yticks([])
     fig.suptitle("입장 변화 매트릭스", fontsize=12, fontweight="bold", y=1.02)
