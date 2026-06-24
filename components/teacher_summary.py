@@ -306,10 +306,10 @@ def _build_pdf(
 
             # 학생 명단 텍스트
             cats = {
-                "찬성→유지": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔵 찬성")],
-                "찬성→반대": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔴 반대")],
-                "반대→찬성": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔵 찬성")],
-                "반대→유지": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔴 반대")],
+                "찬성 ▶ 유지": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔵 찬성")],
+                "찬성 ▶ 반대": both[(both["initial_stance"] == "🔵 찬성") & (both["final_stance"] == "🔴 반대")],
+                "반대 ▶ 찬성": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔵 찬성")],
+                "반대 ▶ 유지": both[(both["initial_stance"] == "🔴 반대") & (both["final_stance"] == "🔴 반대")],
             }
             for cat_label, cat_df in cats.items():
                 names = ", ".join(cat_df["student_name"].tolist()) if not cat_df.empty else "없음"
@@ -392,7 +392,7 @@ def _parse_report(text: str) -> list:
 # ── Excel 다운로드 ─────────────────────────────────────────────────────────────
 
 def _excel_bytes(df_all: pd.DataFrame) -> bytes:
-    EXCLUDE_COLS = {'user_id', 'ip_address', 'created_at'}
+    EXCLUDE_COLS = {'id', 'user_id', 'ip_address', 'created_at'}
     export_df = df_all.drop(columns=[c for c in EXCLUDE_COLS if c in df_all.columns])
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine='openpyxl') as writer:
