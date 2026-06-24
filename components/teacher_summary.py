@@ -532,6 +532,6 @@ def render_summary_section(supabase, room_name, act_type, current_topic, df_all)
                 mime="application/pdf",
                 use_container_width=True,
             )
-            st.caption("📊 PDF에는 AI 요약 외에 **입장 변화 매트릭스 차트**와 **발언 깊이 분포/시간 흐름 차트**가 함께 포함됩니다.")
+            st.caption("📊 PDF에는 AI 요약 외에 **입장 변화 매트릭스 차트**가 포함됩니다. 발언 깊이 분석이 실행된 경우 **발언 깊이 분포/시간 흐름 차트**도 함께 포함됩니다.")
         except Exception as e:
             st.caption(f"PDF 생성 실패: {e}")

@@ -72,7 +72,7 @@ def render_sidebar(supabase) -> dict:
                     _bulk_mode = st.checkbox("📋 여러 반 한번에 만들기")
                     if _bulk_mode:
                         _class_prefix = st.text_input("반 이름 공통 앞부분 (예: 1학년)", value="1학년")
-                        _class_nums = st.text_input("반 번호 (쉼표로 구분, 예: 1,2,3,4,5)", value="1,2,3")
+                        _class_nums = st.text_input("반 번호/구분 문구 (쉼표로 구분, 예: 1,2,3 또는 가,나,다)", value="1,2,3")
                     else:
                         new_room = st.text_input("새로 만들 방 이름 (예: 1학년 3반)")
 
@@ -93,11 +93,8 @@ def render_sidebar(supabase) -> dict:
                                 st.rerun()
                         else:
                             new_title = _preset["title"]
-                            col_cap, col_edit = st.columns([4, 1])
-                            with col_cap:
-                                st.caption(f"📌 {new_title}")
-                            with col_edit:
-                                if st.button("✏️ 수정", key=f"edit_{_topic_choice}"):
+                            st.caption(f"📌 {new_title}")
+                            if st.button("✏️ 주제 수정", key=f"edit_{_topic_choice}", use_container_width=True):
                                     st.session_state[f"editing_{_topic_choice}"] = True
                                     st.rerun()
 
@@ -128,8 +125,6 @@ def render_sidebar(supabase) -> dict:
                                     mode=new_mode, entry_code=safe_new_pw, created_by=teacher_id_for_scope,
                                 )
                                 (_created if res is not None else _failed).append(safe_r)
-                            fetch_room_names.clear()
-                            fetch_room_names_by_owner.clear()
                             if _created:
                                 st.session_state['current_room'] = _created[-1]
                                 st.toast(f"✅ {len(_created)}개 방 개설 완료: {', '.join(_created)}", icon="🎉")
@@ -146,8 +141,6 @@ def render_sidebar(supabase) -> dict:
                                     mode=new_mode, entry_code=safe_new_pw, created_by=teacher_id_for_scope,
                                 )
                                 if res is not None:
-                                    fetch_room_names.clear()
-                                    fetch_room_names_by_owner.clear()
                                     st.session_state['current_room'] = safe_new_room
                                     st.toast(f"'{safe_new_room}' 방이 개설되었습니다!", icon="🎉")
                                     st.rerun()
