@@ -13,7 +13,6 @@ from utils import log_audit
 from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
 from components.teacher_hint import render_hint_section
 from components.teacher_summary import render_summary_section
-from components.teacher_records import render_records_section
 from components.depth_analysis import render_depth_analysis_section
 
 logger = logging.getLogger("talk_trace_ai")
@@ -158,34 +157,72 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
                         else:
                             st.info("아직 입력된 입장이 없습니다.")
 
-            # 입장 변화 학생 목록
+            # 입장 변화 매트릭스 카드
             if "initial_stance" in df_oc.columns and "final_stance" in df_oc.columns:
                 both_df = df_oc[df_oc["initial_stance"].notna() & df_oc["final_stance"].notna()]
-                changed_df   = both_df[both_df["initial_stance"] != both_df["final_stance"]]
                 pro_keep_df  = both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔵 찬성")]
+                pro_to_con_df = both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔴 반대")]
+                con_to_pro_df = both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔵 찬성")]
                 con_keep_df  = both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔴 반대")]
-                st.markdown("**🔄 입장 변화 요약**")
-                col_changed, col_pro, col_con = st.columns(3)
-                with col_changed:
-                    st.markdown(f"**입장 바뀐 학생 ({len(changed_df)}명)**")
-                    if not changed_df.empty:
-                        for _, r in changed_df.iterrows():
-                            arrow = "🔵→🔴" if r["initial_stance"] == "🔵 찬성" else "🔴→🔵"
-                            st.write(f"• {r['student_name']} ({arrow})")
-                    else:
-                        st.write("없음")
-                with col_pro:
-                    st.markdown(f"**🔵 찬성 유지 ({len(pro_keep_df)}명)**")
-                    if not pro_keep_df.empty:
-                        st.write(", ".join(pro_keep_df["student_name"].tolist()))
-                    else:
-                        st.write("없음")
-                with col_con:
-                    st.markdown(f"**🔴 반대 유지 ({len(con_keep_df)}명)**")
-                    if not con_keep_df.empty:
-                        st.write(", ".join(con_keep_df["student_name"].tolist()))
-                    else:
-                        st.write("없음")
+
+                st.markdown("**🔄 입장 변화 매트릭스**")
+                st.caption("행: 토론 전 입장 / 열: 토론 후 입장")
+
+                card_css = """
+                <style>
+                .matrix-card {
+                    border-radius: 12px; padding: 14px 16px; margin: 4px 0;
+                    font-size: 15px; line-height: 1.7;
+                }
+                .card-keep-pro  { background: #dbeafe; border-left: 5px solid #1558a0; }
+                .card-keep-con  { background: #fee2e2; border-left: 5px solid #d62728; }
+                .card-pro-to-con { background: #fef9c3; border-left: 5px solid #d97706; }
+                .card-con-to-pro { background: #dcfce7; border-left: 5px solid #16a34a; }
+                .card-count { font-size: 28px; font-weight: 800; }
+                .card-names { color: #555; font-size: 13px; margin-top: 4px; }
+                </style>
+                """
+                st.markdown(card_css, unsafe_allow_html=True)
+
+                col_tl, col_tr = st.columns(2)
+                col_bl, col_br = st.columns(2)
+
+                def _names(df):
+                    names = df["student_name"].tolist()
+                    return ", ".join(names) if names else "없음"
+
+                with col_tl:
+                    st.markdown(
+                        f'<div class="matrix-card card-keep-pro">'
+                        f'🔵 찬성 → 🔵 찬성 유지<br>'
+                        f'<span class="card-count">{len(pro_keep_df)}명</span><br>'
+                        f'<span class="card-names">{_names(pro_keep_df)}</span>'
+                        f'</div>', unsafe_allow_html=True
+                    )
+                with col_tr:
+                    st.markdown(
+                        f'<div class="matrix-card card-pro-to-con">'
+                        f'🔵 찬성 → 🔴 반대 전환<br>'
+                        f'<span class="card-count">{len(pro_to_con_df)}명</span><br>'
+                        f'<span class="card-names">{_names(pro_to_con_df)}</span>'
+                        f'</div>', unsafe_allow_html=True
+                    )
+                with col_bl:
+                    st.markdown(
+                        f'<div class="matrix-card card-con-to-pro">'
+                        f'🔴 반대 → 🔵 찬성 전환<br>'
+                        f'<span class="card-count">{len(con_to_pro_df)}명</span><br>'
+                        f'<span class="card-names">{_names(con_to_pro_df)}</span>'
+                        f'</div>', unsafe_allow_html=True
+                    )
+                with col_br:
+                    st.markdown(
+                        f'<div class="matrix-card card-keep-con">'
+                        f'🔴 반대 → 🔴 반대 유지<br>'
+                        f'<span class="card-count">{len(con_keep_df)}명</span><br>'
+                        f'<span class="card-names">{_names(con_keep_df)}</span>'
+                        f'</div>', unsafe_allow_html=True
+                    )
 
         elif act_type == "토의":
             if "discussion_conclusion" in df_oc.columns:
@@ -264,12 +301,12 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
 
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
 
-    # ── 2. AI 토의 촉진 ──
-    render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
+    # ── 2. 수업 종료 및 전체 요약 리포트 (토론 제어 바로 아래) ──
+    render_summary_section(supabase, room_name, act_type, current_topic, df_all)
 
-    # ── 3. 수업 종료 및 전체 토의 요약 리포트 ──
+    # ── 3. AI 토의 촉진 ──
     st.divider()
-    render_summary_section(room_name, act_type, current_topic, df_all)
+    render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
 
     # ── 4. 학생 참여도 현황 (10초마다 자동 갱신) ──
     st.divider()
@@ -277,10 +314,6 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
 
     _render_oc_section(supabase, room_name, act_type, current_topic, df_all)
     render_depth_analysis_section(supabase, room_name, act_type)
-
-    # ── 5. 활동 데이터 다운로드 ──
-    st.divider()
-    render_records_section(room_name, act_type, df_all)
 
     st.divider()
     st.subheader("🚨 위험 구역 (방 폭파)")
