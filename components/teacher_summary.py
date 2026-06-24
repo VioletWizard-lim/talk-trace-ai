@@ -58,6 +58,117 @@ def _build_depth_summary(depth_opinions: list) -> str:
 
 # ── PDF 생성 ──────────────────────────────────────────────────────────────────
 
+# ── 차트 이미지 생성 (matplotlib) ─────────────────────────────────────────────
+
+_DEPTH_LABELS = {1: "단순의견", 2: "근거제시", 3: "반박/심화질문", 4: "통합/종합"}
+_DEPTH_COLORS = ["#aec6e8", "#4a90d9", "#f5a623", "#27ae60"]
+_STANCE_COLORS = {
+    "🔵→🔵 유지": "#1558a0",
+    "🔵→🔴 전환": "#d97706",
+    "🔴→🔵 전환": "#16a34a",
+    "🔴→🔴 유지": "#d62728",
+}
+
+
+def _setup_korean_font():
+    """matplotlib 한글 폰트 설정."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.font_manager as fm
+    for path in [_NANUM_FONT_PATH, "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"]:
+        if os.path.exists(path):
+            fm.fontManager.addfont(path)
+            prop = fm.FontProperties(fname=path)
+            plt.rcParams["font.family"] = prop.get_name()
+            break
+    plt.rcParams["axes.unicode_minus"] = False
+
+
+def _chart_to_png(fig) -> io.BytesIO:
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
+    buf.seek(0)
+    return buf
+
+
+def _make_depth_bar_chart(classified_df: pd.DataFrame) -> io.BytesIO:
+    import matplotlib.pyplot as plt
+    _setup_korean_font()
+    counts = [len(classified_df[classified_df["depth_level"] == lvl]) for lvl in [1, 2, 3, 4]]
+    labels = [_DEPTH_LABELS[i] for i in [1, 2, 3, 4]]
+    fig, ax = plt.subplots(figsize=(5, 3))
+    bars = ax.bar(labels, counts, color=_DEPTH_COLORS, edgecolor="white", linewidth=0.8)
+    for bar, cnt in zip(bars, counts):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
+                str(cnt), ha="center", va="bottom", fontsize=10, fontweight="bold")
+    ax.set_title("발언 깊이 분포", fontsize=12, fontweight="bold", pad=10)
+    ax.set_ylabel("발언 수")
+    ax.set_ylim(0, max(counts) * 1.25 + 1)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    png = _chart_to_png(fig)
+    plt.close(fig)
+    return png
+
+
+def _make_depth_scatter_chart(classified_df: pd.DataFrame) -> io.BytesIO:
+    import matplotlib.pyplot as plt
+    _setup_korean_font()
+    df = classified_df.sort_values("id").reset_index(drop=True)
+    df["순서"] = range(1, len(df) + 1)
+    students = df["student_name"].unique()
+    cmap = plt.cm.get_cmap("tab10", len(students))
+    color_map = {s: cmap(i) for i, s in enumerate(students)}
+    fig, ax = plt.subplots(figsize=(5, 3))
+    for student in students:
+        sub = df[df["student_name"] == student]
+        ax.scatter(sub["순서"], sub["depth_level"], label=student,
+                   color=color_map[student], s=60, zorder=3)
+    ax.set_yticks([1, 2, 3, 4])
+    ax.set_yticklabels([_DEPTH_LABELS[i] for i in [1, 2, 3, 4]], fontsize=8)
+    ax.set_xlabel("발언 순서")
+    ax.set_title("시간 흐름에 따른 발언 깊이", fontsize=12, fontweight="bold", pad=10)
+    ax.set_ylim(0.5, 4.5)
+    ax.grid(axis="y", linestyle="--", alpha=0.4)
+    ax.spines[["top", "right"]].set_visible(False)
+    if len(students) <= 10:
+        ax.legend(fontsize=7, loc="upper left", bbox_to_anchor=(1, 1))
+    fig.tight_layout()
+    png = _chart_to_png(fig)
+    plt.close(fig)
+    return png
+
+
+def _make_stance_matrix_chart(both_df: pd.DataFrame) -> io.BytesIO:
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    _setup_korean_font()
+    cats = {
+        "🔵→🔵\n찬성 유지": len(both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔵 찬성")]),
+        "🔵→🔴\n반대 전환": len(both_df[(both_df["initial_stance"] == "🔵 찬성") & (both_df["final_stance"] == "🔴 반대")]),
+        "🔴→🔵\n찬성 전환": len(both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔵 찬성")]),
+        "🔴→🔴\n반대 유지": len(both_df[(both_df["initial_stance"] == "🔴 반대") & (both_df["final_stance"] == "🔴 반대")]),
+    }
+    colors = ["#1558a0", "#d97706", "#16a34a", "#d62728"]
+    fig, axes = plt.subplots(1, 4, figsize=(7, 2.5))
+    for ax, (label, count), color in zip(axes, cats.items(), colors):
+        ax.set_facecolor(color + "22")
+        ax.spines[:].set_color(color)
+        ax.spines[:].set_linewidth(2)
+        ax.text(0.5, 0.62, str(count), ha="center", va="center",
+                fontsize=28, fontweight="bold", color=color, transform=ax.transAxes)
+        ax.text(0.5, 0.2, label, ha="center", va="center",
+                fontsize=9, color="#333", transform=ax.transAxes, linespacing=1.4)
+        ax.set_xticks([])
+        ax.set_yticks([])
+    fig.suptitle("입장 변화 매트릭스", fontsize=12, fontweight="bold", y=1.02)
+    fig.tight_layout()
+    png = _chart_to_png(fig)
+    plt.close(fig)
+    return png
+
+
 def _get_pdf_font():
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont

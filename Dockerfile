@@ -6,7 +6,7 @@ COPY . .
 RUN apt-get update && apt-get install -y --no-install-recommends fonts-nanum \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir reportlab>=4.0.0
+RUN pip install --no-cache-dir "reportlab>=4.0.0" "matplotlib>=3.7.0"
 
 EXPOSE 7860
 
