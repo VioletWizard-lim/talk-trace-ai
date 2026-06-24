@@ -6,3 +6,4 @@ plotly>=5.22.0
 openpyxl>=3.1.0
 wordcloud>=1.9.0
 bcrypt>=4.0.0
+reportlab>=4.0.0

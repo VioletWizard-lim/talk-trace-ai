@@ -13,7 +13,6 @@ from utils import log_audit
 from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
 from components.teacher_hint import render_hint_section
 from components.teacher_summary import render_summary_section
-from components.teacher_records import render_records_section
 from components.depth_analysis import render_depth_analysis_section
 
 logger = logging.getLogger("talk_trace_ai")
@@ -302,12 +301,12 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
 
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
 
-    # ── 2. AI 토의 촉진 ──
-    render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
-
-    # ── 3. 수업 종료 및 전체 토의 요약 리포트 ──
-    st.divider()
+    # ── 2. 수업 종료 및 전체 요약 리포트 (토론 제어 바로 아래) ──
     render_summary_section(room_name, act_type, current_topic, df_all)
+
+    # ── 3. AI 토의 촉진 ──
+    st.divider()
+    render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
 
     # ── 4. 학생 참여도 현황 (10초마다 자동 갱신) ──
     st.divider()
@@ -315,10 +314,6 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
 
     _render_oc_section(supabase, room_name, act_type, current_topic, df_all)
     render_depth_analysis_section(supabase, room_name, act_type)
-
-    # ── 5. 활동 데이터 다운로드 ──
-    st.divider()
-    render_records_section(room_name, act_type, df_all)
 
     st.divider()
     st.subheader("🚨 위험 구역 (방 폭파)")
