@@ -156,6 +156,7 @@ def check_schema_columns() -> dict:
         ("debate.depth_level",             lambda: supabase.table("debate").select("depth_level").limit(1).execute()),
         ("opinion_changes.ai_feedback",    lambda: supabase.table("opinion_changes").select("ai_feedback").limit(1).execute()),
         ("topic.ai_report",                lambda: supabase.table("topic").select("ai_report").limit(1).execute()),
+        ("topic.is_hidden",                lambda: supabase.table("topic").select("is_hidden").limit(1).execute()),
     ]
 
     results = {}
@@ -231,15 +232,19 @@ def ai_feedback_available() -> bool:
 # [4] 방(topic) 관련 쿼리
 # ==========================================
 
-def fetch_room_names(supabase: Client):
+def fetch_room_names(supabase: Client, include_hidden: bool = False):
+    hide_filter = topic_is_hidden_available() and not include_hidden
+
     if topic_created_by_teacher_id_column_available():
-        res = execute_query(
+        q = (
             supabase.table("topic")
             .select("room_name, created_by_teacher_id")
             .not_.is_("created_by_teacher_id", "null")
-            .order("room_name", desc=False),
-            fail_message="🚨 방 목록 조회 에러",
+            .order("room_name", desc=False)
         )
+        if hide_filter:
+            q = q.eq("is_hidden", False)
+        res = execute_query(q, fail_message="🚨 방 목록 조회 에러")
         if not res or not res.data:
             return []
         return [
@@ -248,13 +253,15 @@ def fetch_room_names(supabase: Client):
             if str(item.get("room_name", "")).strip() and str(item.get("created_by_teacher_id", "")).strip()
         ]
 
-    res = execute_query(
+    q = (
         supabase.table("topic")
         .select("room_name, created_by")
         .not_.is_("created_by", "null")
-        .order("room_name", desc=False),
-        fail_message="🚨 방 목록 조회 에러",
+        .order("room_name", desc=False)
     )
+    if hide_filter:
+        q = q.eq("is_hidden", False)
+    res = execute_query(q, fail_message="🚨 방 목록 조회 에러")
     if not res or not res.data:
         return []
     return [
@@ -295,6 +302,26 @@ def fetch_room_names_by_owner(supabase: Client, owner_teacher_id: str):
 
 def topic_ai_report_available() -> bool:
     return _schema().get("topic.ai_report", False)
+
+def topic_is_hidden_available() -> bool:
+    return _schema().get("topic.is_hidden", False)
+
+def toggle_room_visibility(supabase: Client, room_name: str, hidden: bool):
+    return execute_query(
+        supabase.table("topic").update({"is_hidden": hidden}).eq("room_name", room_name),
+        fail_message="방 숨기기 설정 실패",
+    )
+
+def fetch_room_is_hidden(supabase: Client, room_name: str) -> bool:
+    if not topic_is_hidden_available():
+        return False
+    res = execute_query(
+        supabase.table("topic").select("is_hidden").eq("room_name", room_name).limit(1),
+        fail_message="방 숨김 상태 조회 실패",
+    )
+    if not res or not res.data:
+        return False
+    return bool(res.data[0].get("is_hidden", False))
 
 
 def save_ai_report(supabase: Client, room_name: str, report_text: str):

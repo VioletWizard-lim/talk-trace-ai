@@ -5,6 +5,9 @@ from db import (
     fetch_room_names_by_owner,
     topic_owner_column_available,
     topic_entry_code_column_available,
+    topic_is_hidden_available,
+    fetch_room_is_hidden,
+    toggle_room_visibility,
     upsert_topic_room,
 )
 from validators import (
@@ -34,7 +37,7 @@ def render_sidebar(supabase) -> dict:
         st.divider()
 
         try:
-            all_rooms = fetch_room_names(supabase)
+            all_rooms = fetch_room_names(supabase, include_hidden=False)
         except Exception:
             all_rooms = []
 
@@ -50,10 +53,12 @@ def render_sidebar(supabase) -> dict:
             teacher_id_for_scope = st.session_state.get("teacher_id", "")
 
             if teacher_auth:
-                existing_rooms = all_rooms if admin_auth else (
-                    fetch_room_names_by_owner(supabase, teacher_id_for_scope)
-                    if topic_owner_column_available()
-                    else []
+                existing_rooms = (
+                    fetch_room_names(supabase, include_hidden=True) if admin_auth else (
+                        fetch_room_names_by_owner(supabase, teacher_id_for_scope)
+                        if topic_owner_column_available()
+                        else []
+                    )
                 )
                 if not admin_auth and not topic_owner_column_available():
                     st.warning("교사별 방 조회를 위해 topic.created_by_teacher_id(권장) 또는 topic.created_by 컬럼이 필요합니다.")
@@ -67,6 +72,13 @@ def render_sidebar(supabase) -> dict:
                         current = st.session_state.get('current_room', '')
                         default_idx = existing_rooms.index(current) if current in existing_rooms else 0
                         room_name = st.selectbox("토론/토의방 목록", existing_rooms, index=default_idx)
+                        if room_name and topic_is_hidden_available():
+                            _is_hidden = fetch_room_is_hidden(supabase, room_name)
+                            _label = "👁️ 학생에게 보이기" if _is_hidden else "🙈 학생에게 숨기기"
+                            if st.button(_label, use_container_width=True, key=f"toggle_hidden_{room_name}"):
+                                toggle_room_visibility(supabase, room_name, not _is_hidden)
+                                st.toast(f"{'숨김 해제' if _is_hidden else '숨김'} 처리되었습니다.", icon="👁️" if _is_hidden else "🙈")
+                                st.rerun()
                     else:
                         st.info("아직 개설된 방이 없습니다. '새 방 만들기'를 선택해 첫 번째 방을 만들어보세요.")
                         room_name = ""
