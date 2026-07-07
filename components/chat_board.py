@@ -199,26 +199,19 @@ def _render_stats_section(supabase, room_name, current_mode):
     student_df = df[~df['student_name'].str.contains('선생님', na=False)]
 
     with st.expander("📊 실시간 의견 통계", expanded=True):
-        # 파이차트
-        pie_col, _ = st.columns([1, 3])
-        with pie_col:
-            st.caption("의견 유형 분포")
-            _pie_json = _cached_pie_chart_json(
-                tuple(df["sentiment"].fillna("").tolist())
-            )
-            st.plotly_chart(pio.from_json(_pie_json), use_container_width=True,
-                            config={'displayModeBar': False, 'scrollZoom': False})
+        _pie_json = _cached_pie_chart_json(
+            tuple(df["sentiment"].fillna("").tolist())
+        )
 
-        # 워드클라우드 — 찬반 토론이면 찬성/반대 분리
         if current_mode == "⚔️ 찬반 토론":
-            st.markdown("##### 💬 워드클라우드")
-            wc_col_pro, wc_col_con = st.columns(2)
+            # 찬성 워드클라우드 | 파이차트 | 반대 워드클라우드
             pro_contents = tuple(
                 student_df[student_df['sentiment'] == '🔵 찬성']['content'].fillna("").tolist()
             )
             con_contents = tuple(
                 student_df[student_df['sentiment'] == '🔴 반대']['content'].fillna("").tolist()
             )
+            wc_col_pro, pie_col, wc_col_con = st.columns(3)
             with wc_col_pro:
                 st.caption("🔵 찬성 측 키워드")
                 if pro_contents:
@@ -230,6 +223,10 @@ def _render_stats_section(supabase, room_name, current_mode):
                         st.info("단어가 아직 부족합니다.")
                 else:
                     st.info("찬성 의견 없음")
+            with pie_col:
+                st.caption("의견 유형 분포")
+                st.plotly_chart(pio.from_json(_pie_json), use_container_width=True,
+                                config={'displayModeBar': False, 'scrollZoom': False})
             with wc_col_con:
                 st.caption("🔴 반대 측 키워드")
                 if con_contents:
@@ -242,15 +239,21 @@ def _render_stats_section(supabase, room_name, current_mode):
                 else:
                     st.info("반대 의견 없음")
         else:
-            st.caption("누적 워드클라우드")
-            all_contents = tuple(student_df["content"].fillna("").tolist())
-            if all_contents:
-                wc_html, top_words = _cached_wordcloud(all_contents, palette_key="free")
-                if wc_html:
-                    st.markdown(wc_html, unsafe_allow_html=True)
-                    st.caption(f"상위 키워드: {top_words}")
-                else:
-                    st.info("워드클라우드를 만들 단어가 아직 부족합니다.")
+            pie_col, wc_col = st.columns([1, 2])
+            with pie_col:
+                st.caption("의견 유형 분포")
+                st.plotly_chart(pio.from_json(_pie_json), use_container_width=True,
+                                config={'displayModeBar': False, 'scrollZoom': False})
+            with wc_col:
+                st.caption("누적 워드클라우드")
+                all_contents = tuple(student_df["content"].fillna("").tolist())
+                if all_contents:
+                    wc_html, top_words = _cached_wordcloud(all_contents, palette_key="free")
+                    if wc_html:
+                        st.markdown(wc_html, unsafe_allow_html=True)
+                        st.caption(f"상위 키워드: {top_words}")
+                    else:
+                        st.info("워드클라우드를 만들 단어가 아직 부족합니다.")
 
 
 @st.fragment(run_every=LIVE_REFRESH_INTERVAL)
