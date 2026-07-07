@@ -22,7 +22,7 @@ def _s(val, default=""):
     return default if (val is None or (isinstance(val, float) and pd.isna(val))) else str(val)
 
 
-@st.fragment(run_every=10)
+@st.fragment(run_every=20)
 def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
     if not opinion_changes_available():
         return
@@ -258,7 +258,7 @@ def _render_debate_control(supabase, room_name):
                 st.rerun(scope="app")
 
 
-@st.fragment(run_every=10)
+@st.fragment(run_every=20)
 def _render_participation_section(supabase, room_name, act_type):
     df = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
     student_df = (

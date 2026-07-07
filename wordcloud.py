@@ -29,6 +29,8 @@ def build_word_frequencies(text_series):
         "서로", "수도", "바로", "함께", "계속", "오히려", "빠르게", "쉽게", "단순히",
         # 동사 어간 단독 노출 방지
         "공유하", "막는", "배우고", "나타나", "이루어",
+        # 기능어·조사 단독
+        "들어", "그렇기", "둘째", "셋째", "넷째", "떠난", "일으킬",
     }
     particle_suffixes = [
         "에게서", "으로는", "이라고", "라면", "처럼", "까지는", "으로도", "에서", "에게", "으로", "로써",
@@ -40,12 +42,16 @@ def build_word_frequencies(text_series):
         "할", "한", "된", "들",
         # 동사 어간 어미 (공유하→공유, 개발하→개발)
         "하",
+        # 서술격 조사 (규제다→규제)
+        "다",
     ]
     # 동사 활용형 어미 — 이 어미로 끝나는 토큰은 제거
     verb_endings = (
         "하고", "하면", "하며", "하여", "하기", "한다", "하는", "하게", "하지",
+        "해서", "해야", "해도", "해도", "하여서", "하여도",
         "되고", "되며", "되어", "되기", "된다", "되는", "되게",
         "이고", "이며", "이기", "인다", "이는",
+        "한다고", "해야한다고", "해야한다",
         "발견하고", "공유하면", "배우고", "생각하기", "부여한다",
     )
 
@@ -63,6 +69,8 @@ def build_word_frequencies(text_series):
             if normalized.endswith(ending) and len(normalized) > len(ending) + 1:
                 normalized = normalized[: -len(ending)]
                 break
+        # 특수문자 잔재 제거 (예: AI) → AI)
+        normalized = re.sub(r"[^\w가-힣]", "", normalized)
         return normalized
 
     for content in text_series.fillna("").astype(str):

@@ -29,7 +29,8 @@ def _reset_joined_state():
 def render_sidebar(supabase) -> dict:
     with st.sidebar:
         st.header("👤 접속 권한")
-        user_role = st.radio("모드 선택", ["학생", "교사"], on_change=_reset_joined_state)
+        _is_joined = st.session_state.get('joined', False)
+        user_role = st.radio("모드 선택", ["학생", "교사"], on_change=_reset_joined_state, disabled=_is_joined)
         st.divider()
 
         try:
