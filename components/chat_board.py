@@ -33,13 +33,26 @@ def _cached_wordcloud(content_tuple: tuple):
     return wc_html, top_words
 
 
+_SENTIMENT_COLORS = {
+    "🔵 찬성": "#1565C0",
+    "🔴 반대": "#C62828",
+    "💡 아이디어": "#F9A825",
+    "➕ 보충": "#2E7D32",
+    "❓ 질문": "#6A1B9A",
+}
+
+
 @st.cache_data(ttl=20)
 def _cached_pie_chart_json(sentiment_tuple: tuple) -> str:
     """파이 차트를 JSON으로 캐시 — 같은 데이터면 plotly 재계산 생략."""
-    import plotly.express as px, json
+    import plotly.express as px
     import pandas as pd
     df = pd.DataFrame({"sentiment": list(sentiment_tuple)})
-    fig = px.pie(df, names="sentiment", hole=0.4, height=460)
+    categories = df["sentiment"].unique().tolist()
+    colors = [_SENTIMENT_COLORS.get(c, "#888888") for c in categories]
+    fig = px.pie(df, names="sentiment", hole=0.4, height=460,
+                 color="sentiment",
+                 color_discrete_map=_SENTIMENT_COLORS)
     fig.update_layout(font={"family": UI_FONT_FAMILY})
     return fig.to_json()
 
