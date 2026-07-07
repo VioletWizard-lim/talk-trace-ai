@@ -401,7 +401,7 @@ def fetch_topic_data(supabase: Client, room_name):
 # [5] 토론(debate) 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=10)
 def fetch_live_messages(_supabase: Client, room_name, limit):
     res = execute_query(
         _supabase.table("debate").select("*").eq("room_name", room_name).order("id", desc=True).limit(limit),
@@ -594,7 +594,7 @@ def delete_opinion_change(supabase: Client, room_name: str, student_name: str):
 # [7] 토론 제어(session_control) 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=10)
 def fetch_debate_status(_supabase: Client, room_name: str) -> str:
     if not session_control_available():
         return "active"
@@ -713,7 +713,7 @@ def reject_teacher_account(supabase: Client, account_id: int):
 # [공감(likes)] 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=3)
+@st.cache_data(ttl=10)
 def fetch_room_likes(_supabase: Client, room_name: str):
     """방의 모든 공감 데이터를 반환한다: [{"opinion_id": ..., "student_name": ...}, ...]"""
     res = execute_query(
