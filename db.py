@@ -232,12 +232,13 @@ def ai_feedback_available() -> bool:
 # [4] 방(topic) 관련 쿼리
 # ==========================================
 
-def fetch_room_names(supabase: Client, include_hidden: bool = False):
+@st.cache_data(ttl=20)
+def fetch_room_names(_supabase: Client, include_hidden: bool = False):
     hide_filter = topic_is_hidden_available() and not include_hidden
 
     if topic_created_by_teacher_id_column_available():
         q = (
-            supabase.table("topic")
+            _supabase.table("topic")
             .select("room_name, created_by_teacher_id")
             .not_.is_("created_by_teacher_id", "null")
             .order("room_name", desc=False)
@@ -254,7 +255,7 @@ def fetch_room_names(supabase: Client, include_hidden: bool = False):
         ]
 
     q = (
-        supabase.table("topic")
+        _supabase.table("topic")
         .select("room_name, created_by")
         .not_.is_("created_by", "null")
         .order("room_name", desc=False)
@@ -307,21 +308,30 @@ def topic_is_hidden_available() -> bool:
     return _schema().get("topic.is_hidden", False)
 
 def toggle_room_visibility(supabase: Client, room_name: str, hidden: bool):
-    return execute_query(
+    res = execute_query(
         supabase.table("topic").update({"is_hidden": hidden}).eq("room_name", room_name),
         fail_message="방 숨기기 설정 실패",
     )
+    if res is not None:
+        fetch_room_names.clear()
+        fetch_all_rooms_hidden_status.clear()
+    return res
 
-def fetch_room_is_hidden(supabase: Client, room_name: str) -> bool:
+@st.cache_data(ttl=10)
+def fetch_all_rooms_hidden_status(_supabase: Client) -> dict:
+    """모든 방의 숨김 상태를 한 번에 조회해 {room_name: is_hidden} dict 반환."""
     if not topic_is_hidden_available():
-        return False
+        return {}
     res = execute_query(
-        supabase.table("topic").select("is_hidden").eq("room_name", room_name).limit(1),
-        fail_message="방 숨김 상태 조회 실패",
+        _supabase.table("topic").select("room_name, is_hidden").order("room_name"),
+        fail_message="방 숨김 상태 일괄 조회 실패",
     )
     if not res or not res.data:
-        return False
-    return bool(res.data[0].get("is_hidden", False))
+        return {}
+    return {item["room_name"]: bool(item.get("is_hidden", False)) for item in res.data}
+
+def fetch_room_is_hidden(supabase: Client, room_name: str) -> bool:
+    return fetch_all_rooms_hidden_status(supabase).get(room_name, False)
 
 
 def save_ai_report(supabase: Client, room_name: str, report_text: str):
@@ -342,10 +352,13 @@ def fetch_ai_report(supabase: Client, room_name: str) -> str:
 
 
 def update_topic(supabase: Client, room_name, title, mode):
-    return execute_query(
+    res = execute_query(
         supabase.table("topic").update({"title": title, "mode": mode}).eq("room_name", room_name),
         fail_message="주제 수정 실패",
     )
+    if res is not None:
+        fetch_topic_data.clear()
+    return res
 
 
 def update_room_entry_code(supabase: Client, room_name: str, entry_code: str):
@@ -367,7 +380,10 @@ def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code, crea
     elif created_by is not None:
         payload["created_by"] = str(created_by).strip()
 
-    return execute_query(supabase.table("topic").upsert(payload), fail_message="방 개설 실패")
+    res = execute_query(supabase.table("topic").upsert(payload), fail_message="방 개설 실패")
+    if res is not None:
+        fetch_room_names.clear()
+    return res
 
 
 def fetch_room_entry_code(supabase: Client, room_name):
@@ -405,11 +421,12 @@ def fetch_room_entry_code(supabase: Client, room_name):
     return None
 
 
-def fetch_topic_data(supabase: Client, room_name):
+@st.cache_data(ttl=30)
+def fetch_topic_data(_supabase: Client, room_name):
     order_candidates = ["id", "created_at", None]
     for order_col in order_candidates:
         try:
-            query = supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
+            query = _supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
             if order_col:
                 query = query.order(order_col, desc=True)
             res = query.execute()
@@ -487,6 +504,7 @@ def destroy_room_data(supabase: Client, room_name: str):
     )
     if topic_res is None or debate_res is None:
         return None
+    fetch_room_names.clear()
     if opinion_changes_available():
         execute_query(
             supabase.table("opinion_changes").delete().eq("room_name", room_name),
@@ -504,11 +522,12 @@ def destroy_room_data(supabase: Client, room_name: str):
 # [6] 생각 변화 기록(opinion_changes) 관련 쿼리
 # ==========================================
 
-def fetch_opinion_change(supabase: Client, room_name: str, student_name: str):
+@st.cache_data(ttl=10)
+def fetch_opinion_change(_supabase: Client, room_name: str, student_name: str):
     if not opinion_changes_available():
         return None
     res = execute_query(
-        supabase.table("opinion_changes")
+        _supabase.table("opinion_changes")
         .select("*")
         .eq("room_name", room_name)
         .eq("student_name", student_name)
@@ -537,6 +556,8 @@ def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_
             supabase.table("opinion_changes").insert({"room_name": room_name, "student_name": student_name, **payload}),
             fail_message="토론 전 생각 저장 실패",
         )
+    if res is not None:
+        fetch_opinion_change.clear()
     # IP는 별도 업데이트 — 컬럼 미존재 시 실패해도 메인 저장에 영향 없음
     if ip_address and res is not None:
         try:
@@ -556,14 +577,18 @@ def upsert_post_opinion(supabase: Client, room_name: str, student_name: str, pos
         payload["discussion_conclusion"] = discussion_conclusion
     existing = fetch_opinion_change(supabase, room_name, student_name)
     if existing is not None:
-        return execute_query(
+        res = execute_query(
             supabase.table("opinion_changes").update(payload).eq("room_name", room_name).eq("student_name", student_name),
             fail_message="토론 후 생각 저장 실패",
         )
-    return execute_query(
-        supabase.table("opinion_changes").insert({"room_name": room_name, "student_name": student_name, **payload}),
-        fail_message="토론 후 생각 저장 실패",
-    )
+    else:
+        res = execute_query(
+            supabase.table("opinion_changes").insert({"room_name": room_name, "student_name": student_name, **payload}),
+            fail_message="토론 후 생각 저장 실패",
+        )
+    if res is not None:
+        fetch_opinion_change.clear()
+    return res
 
 
 @st.cache_data(ttl=15)
