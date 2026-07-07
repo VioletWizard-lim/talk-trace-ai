@@ -69,6 +69,7 @@ def render_feedback_card(ai_feedback: str) -> None:
 def render_pre_opinion_form(supabase, room_name, student_name, current_topic, act_type="토론"):
     """토론 전 생각 입력 폼. 제출 완료 시 전체 앱 재실행."""
     st.info(f"💬 **{'토론' if act_type == '토론' else '토의'} 전 내 생각 먼저 기록하기**\n\n'{current_topic}' 주제에 대한 나의 생각을 적어주세요. 제출 후 {'토론' if act_type == '토론' else '토의'}에 참여할 수 있습니다.")
+    st.caption("📝 이 영역은 토론 전 본인의 생각을 적는 공간입니다. 솔직하게 현재 생각을 기록해 주세요.")
 
     initial_stance = None
     if act_type == "토론" and stance_available():
