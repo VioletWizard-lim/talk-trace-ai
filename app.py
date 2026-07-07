@@ -19,7 +19,7 @@ from db import (
     update_topic,
     using_service_role_key,
 )
-from config import APP_CSS, MAX_ENTRY_CODE_LEN, MAX_STUDENT_NAME_LEN
+from config import APP_CSS, MAX_ENTRY_CODE_LEN, MAX_STUDENT_NAME_LEN, DIGITAL_ETHICS_TOPICS
 from utils import anonymize_ip, get_client_ip, get_kst_now_str, log_audit
 from validators import validate_entry_code, validate_opinion_content, validate_student_name
 from views.home import render_home_page
@@ -115,6 +115,17 @@ else:
     st.title("🎙️ 말자취(Talk-Trace) AI 토론/토의방")
     st.caption(f"📌 {room_name}")
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
+_ethics_hint = next(
+    (t for t in DIGITAL_ETHICS_TOPICS if t["title"] == current_topic and t.get("pro") and t.get("con")),
+    None,
+)
+if _ethics_hint:
+    with st.expander("💡 찬성/반대 핵심 논점 보기", expanded=False):
+        col_pro, col_con = st.columns(2)
+        with col_pro:
+            st.markdown(f"**🔵 찬성 측 논점**\n\n{_ethics_hint['pro']}")
+        with col_con:
+            st.markdown(f"**🔴 반대 측 논점**\n\n{_ethics_hint['con']}")
 
 if user_role == "교사" and teacher_auth:
     with st.expander("✏️ 주제 수정", expanded=False):
