@@ -53,19 +53,25 @@ def render_sidebar(supabase) -> dict:
             teacher_id_for_scope = st.session_state.get("teacher_id", "")
 
             if teacher_auth:
+                # 교사 방 목록: 숨김 방 제외 (일괄 관리 expander에서는 전체 표시)
                 existing_rooms = (
-                    fetch_room_names(supabase, include_hidden=True) if admin_auth else (
+                    fetch_room_names(supabase, include_hidden=False) if admin_auth else (
                         fetch_room_names_by_owner(supabase, teacher_id_for_scope)
                         if topic_owner_column_available()
                         else []
                     )
                 )
+                all_rooms_for_manage = fetch_room_names(supabase, include_hidden=True) if topic_is_hidden_available() else existing_rooms
                 if not admin_auth and not topic_owner_column_available():
                     st.warning("교사별 방 조회를 위해 topic.created_by_teacher_id(권장) 또는 topic.created_by 컬럼이 필요합니다.")
 
                 room_opt = st.radio("방 관리", ["기존 방 선택", "새 방 만들기"])
                 if '_bulk_create_msg' in st.session_state:
-                    st.success(st.session_state.pop('_bulk_create_msg'))
+                    st.success(st.session_state['_bulk_create_msg'])
+                    st.session_state['_bulk_create_msg_ttl'] = st.session_state.get('_bulk_create_msg_ttl', 0) + 1
+                    if st.session_state['_bulk_create_msg_ttl'] >= 8:
+                        del st.session_state['_bulk_create_msg']
+                        del st.session_state['_bulk_create_msg_ttl']
 
                 if room_opt == "기존 방 선택":
                     if existing_rooms:
@@ -74,14 +80,14 @@ def render_sidebar(supabase) -> dict:
                         room_name = st.selectbox("토론/토의방 목록", existing_rooms, index=default_idx)
                         if topic_is_hidden_available():
                             with st.expander("👁️ 방 공개/숨김 일괄 관리", expanded=False):
+                                st.caption("✅ 체크 = 학생에게 보임 / ☐ 해제 = 숨김 (변경 즉시 자동 저장)")
                                 _hidden_changed = False
-                                for _r in existing_rooms:
+                                for _r in all_rooms_for_manage:
                                     _cur_hidden = fetch_room_is_hidden(supabase, _r)
                                     _checked = st.checkbox(
                                         _r,
                                         value=not _cur_hidden,
                                         key=f"vis_{_r}",
-                                        help="체크 해제 시 학생 목록에서 숨겨집니다.",
                                     )
                                     _want_hidden = not _checked
                                     if _want_hidden != _cur_hidden:
