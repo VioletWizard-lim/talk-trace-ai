@@ -126,6 +126,10 @@ def render_sidebar(supabase) -> dict:
                         else:
                             new_title = _preset["title"]
                             st.caption(f"📌 {new_title}")
+                            if _preset.get("pro") and _preset.get("con"):
+                                with st.expander("💡 찬성/반대 핵심 논점 보기", expanded=False):
+                                    st.markdown(f"**🔵 찬성:** {_preset['pro']}")
+                                    st.markdown(f"**🔴 반대:** {_preset['con']}")
                             if st.button("✏️ 주제 수정", key=f"edit_{_topic_choice}", use_container_width=True):
                                     st.session_state[f"editing_{_topic_choice}"] = True
                                     st.rerun()
@@ -133,6 +137,7 @@ def render_sidebar(supabase) -> dict:
                     new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"],
                                         index=_preset_mode_idx, horizontal=True)
                     new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
+                    st.warning("⚠️ 방 이름은 개설 후 변경할 수 없습니다. 신중하게 입력해 주세요.")
                     if st.button("새 방 개설하기", type="primary"):
                         entry_ok, safe_new_pw, _, entry_error_message = validate_entry_code(new_pw, max_len=MAX_ENTRY_CODE_LEN)
                         title_ok, safe_new_title, _, title_error_message = validate_opinion_content(new_title, max_len=MAX_TOPIC_LEN)
