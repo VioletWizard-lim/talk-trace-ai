@@ -33,29 +33,36 @@ def build_word_frequencies(text_series):
         "들어", "그렇기", "둘째", "셋째", "넷째", "떠난", "일으킬",
         # 동사 활용형 잔재
         "있습니", "없습니", "보여줄", "무너뜨리고", "금지해야",
+        # 추가 불용어 (워드클라우드 스크린샷 기반)
+        "굳이", "한다고", "없다고", "있다고", "생각한", "달라질까", "그러기",
+        "하지", "해야", "해서", "하는", "하는데", "하는지", "제한하",
+        "경우", "정도", "방식", "측면", "부분", "상황", "문제", "필요",
     }
     particle_suffixes = [
         "에게서", "으로는", "이라고", "라면", "처럼", "까지는", "으로도", "에서", "에게", "으로", "로써",
         "로서", "보다", "까지", "부터", "만큼", "이나", "라도", "이며", "이고", "에서", "으로", "이라",
         "라고", "의", "와", "과", "을", "를", "이", "가", "은", "는", "에", "도", "만", "로", "랑", "나",
-        # 목적격·주격 추가 (사람을 → 사람)
+        # 목적격·주격 추가
         "에게도", "에서도", "로도",
-        # 관형형 어미·복수 접미사 (중요한→중요, 개발할→개발, 관련된→관련, 사람들→사람)
+        # 관형형 어미·복수 접미사
         "할", "한", "된", "들",
         # 동사 어간 어미 (공유하→공유, 개발하→개발)
         "하",
         # 서술격 조사 (규제다→규제)
         "다",
     ]
-    # 동사 활용형 어미 — 이 어미로 끝나는 토큰은 제거
+    # 동사 활용형 어미
     verb_endings = (
         "하고", "하면", "하며", "하여", "하기", "한다", "하는", "하게", "하지",
-        "해서", "해야", "해도", "하여서", "하여도",
-        "되고", "되며", "되어", "되기", "된다", "되는", "되게",
+        "해서", "해야", "해도", "하여서", "하여도", "하는데", "하는지",
+        "되고", "되며", "되어", "되기", "된다", "되는", "되게", "되어서",
         "이고", "이며", "이기", "인다", "이는",
         "한다고", "해야한다고", "해야한다",
         "습니다", "습니까", "ㅂ니다", "ㅂ니까",
         "발견하고", "공유하면", "배우고", "생각하기", "부여한다",
+        # 추가 동사 활용 패턴
+        "없다고", "있다고", "한다면", "된다면", "되는데", "하는것",
+        "해야만", "해야지", "해야할",
     )
 
     def normalize_token(token):
@@ -63,17 +70,23 @@ def build_word_frequencies(text_series):
         if len(cleaned) < 2:
             return ""
         normalized = cleaned
-        for suffix in particle_suffixes:
-            if normalized.endswith(suffix) and len(normalized) > len(suffix) + 1:
-                normalized = normalized[: -len(suffix)]
+        # 최대 3회 반복 strip — "제한하는" → "제한하" → "제한"
+        for _ in range(3):
+            prev = normalized
+            for suffix in particle_suffixes:
+                if normalized.endswith(suffix) and len(normalized) > len(suffix) + 1:
+                    normalized = normalized[: -len(suffix)]
+                    break
+            for ending in verb_endings:
+                if normalized.endswith(ending) and len(normalized) > len(ending) + 1:
+                    normalized = normalized[: -len(ending)]
+                    break
+            if normalized == prev:
                 break
-        # 동사 활용형 어미로 끝나면 제거
-        for ending in verb_endings:
-            if normalized.endswith(ending) and len(normalized) > len(ending) + 1:
-                normalized = normalized[: -len(ending)]
-                break
-        # 특수문자 잔재 제거 (예: AI) → AI)
+        # 특수문자 잔재 제거
         normalized = re.sub(r"[^\w가-힣]", "", normalized)
+        if len(normalized) < 2:
+            return ""
         return normalized
 
     for content in text_series.fillna("").astype(str):
@@ -87,13 +100,14 @@ def build_word_frequencies(text_series):
     return Counter(tokens)
 
 
-def build_circular_wordcloud_html(frequencies, max_words=40, width=760, height=520):
+def build_circular_wordcloud_html(frequencies, max_words=40, width=760, height=520, palette=None):
     if not frequencies:
         return ""
     sorted_words = sorted(frequencies.items(), key=lambda item: (-item[1], item[0]))[:max_words]
     max_count = sorted_words[0][1]
     min_count = sorted_words[-1][1]
-    palette = ["#00695C", "#0077B6", "#0B3D91", "#1F8EFA", "#A3CFE2"]
+    if palette is None:
+        palette = ["#00695C", "#0077B6", "#0B3D91", "#1F8EFA", "#A3CFE2"]
     cx, cy = width / 2, height / 2
     placed_rects = []
     svg_text_nodes = []
