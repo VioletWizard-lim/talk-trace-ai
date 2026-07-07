@@ -539,11 +539,12 @@ def upsert_post_opinion(supabase: Client, room_name: str, student_name: str, pos
     )
 
 
-def fetch_all_opinion_changes(supabase: Client, room_name: str):
+@st.cache_data(ttl=15)
+def fetch_all_opinion_changes(_supabase: Client, room_name: str):
     if not opinion_changes_available():
         return pd.DataFrame()
     res = execute_query(
-        supabase.table("opinion_changes")
+        _supabase.table("opinion_changes")
         .select("*")
         .eq("room_name", room_name)
         .order("student_name"),

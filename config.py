@@ -2,7 +2,7 @@ from env import get_secret
 
 AI_MODEL_NAME = "gemini-2.5-flash"
 LIVE_BOARD_FETCH_LIMIT = 150
-DASHBOARD_FETCH_LIMIT = 2000
+DASHBOARD_FETCH_LIMIT = 500
 LIVE_REFRESH_INTERVAL = "10s"
 AI_HINT_ENABLED = str(get_secret("AI_HINT_ENABLED", "true")).lower() not in ("false", "0", "no")
 ROOM_DESTROY_ENABLED = str(get_secret("ROOM_DESTROY_ENABLED", "true")).lower() not in ("false", "0", "no")
