@@ -258,8 +258,15 @@ def _render_debate_control(supabase, room_name):
                 st.rerun(scope="app")
 
 
-@st.fragment(run_every=20)
+@st.fragment(run_every=10)
 def _render_participation_section(supabase, room_name, act_type):
+    col_ptitle, col_pref = st.columns([7, 2])
+    with col_ptitle:
+        st.subheader("📊 학생 참여도 현황")
+    with col_pref:
+        if st.button("🔄 새로고침", key="refresh_participation", use_container_width=True):
+            fetch_live_messages.clear()
+            st.rerun()
     df = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
     student_df = (
         df[
@@ -268,7 +275,6 @@ def _render_participation_section(supabase, room_name, act_type):
         ].copy()
         if not df.empty else df
     )
-    st.subheader("📊 학생 참여도 현황")
     if not df.empty:
         if not student_df.empty:
             counts = student_df['student_name'].astype(str).value_counts().reset_index()
@@ -291,6 +297,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
         st.header("👨‍🏫 교사 관리 대시보드")
     with col_dash_refresh:
         if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
+            fetch_live_messages.clear()
             st.rerun()
 
     # ── 1. 토론 진행 제어 (스크롤 없이 즉시 접근) ──
