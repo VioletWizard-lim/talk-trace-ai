@@ -101,7 +101,8 @@ act_type = "토론" if "토론" in current_mode else "토의"
 if admin_auth:
     col_title, col_btn1, col_btn2 = st.columns([4, 1, 1])
     with col_title:
-        st.title(f"🎙️ 말자취(Talk-Trace) AI 토론/토의방 [{room_name}]")
+        st.title("🎙️ 말자취(Talk-Trace) AI 토론/토의방")
+        st.caption(f"📌 {room_name}")
     with col_btn1:
         if st.button("📝 ID 요청 수락", use_container_width=True):
             st.session_state['page'] = "admin_approval"
@@ -111,7 +112,8 @@ if admin_auth:
             st.session_state['page'] = "lobby"
             st.rerun()
 else:
-    st.title(f"🎙️ 말자취(Talk-Trace) AI 토론/토의방 [{room_name}]")
+    st.title("🎙️ 말자취(Talk-Trace) AI 토론/토의방")
+    st.caption(f"📌 {room_name}")
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
 
 if user_role == "교사" and teacher_auth:

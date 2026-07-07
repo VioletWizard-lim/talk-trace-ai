@@ -72,13 +72,23 @@ def render_sidebar(supabase) -> dict:
                         current = st.session_state.get('current_room', '')
                         default_idx = existing_rooms.index(current) if current in existing_rooms else 0
                         room_name = st.selectbox("토론/토의방 목록", existing_rooms, index=default_idx)
-                        if room_name and topic_is_hidden_available():
-                            _is_hidden = fetch_room_is_hidden(supabase, room_name)
-                            _label = "👁️ 학생에게 보이기" if _is_hidden else "🙈 학생에게 숨기기"
-                            if st.button(_label, use_container_width=True, key=f"toggle_hidden_{room_name}"):
-                                toggle_room_visibility(supabase, room_name, not _is_hidden)
-                                st.toast(f"{'숨김 해제' if _is_hidden else '숨김'} 처리되었습니다.", icon="👁️" if _is_hidden else "🙈")
-                                st.rerun()
+                        if topic_is_hidden_available():
+                            with st.expander("👁️ 방 공개/숨김 일괄 관리", expanded=False):
+                                _hidden_changed = False
+                                for _r in existing_rooms:
+                                    _cur_hidden = fetch_room_is_hidden(supabase, _r)
+                                    _checked = st.checkbox(
+                                        _r,
+                                        value=not _cur_hidden,
+                                        key=f"vis_{_r}",
+                                        help="체크 해제 시 학생 목록에서 숨겨집니다.",
+                                    )
+                                    _want_hidden = not _checked
+                                    if _want_hidden != _cur_hidden:
+                                        toggle_room_visibility(supabase, _r, _want_hidden)
+                                        _hidden_changed = True
+                                if _hidden_changed:
+                                    st.rerun()
                     else:
                         st.info("아직 개설된 방이 없습니다. '새 방 만들기'를 선택해 첫 번째 방을 만들어보세요.")
                         room_name = ""
