@@ -65,6 +65,7 @@ def render_feedback_card(ai_feedback: str) -> None:
         st.markdown(ai_feedback)
 
 
+@st.fragment
 def render_pre_opinion_form(supabase, room_name, student_name, current_topic, act_type="토론"):
     """토론 전 생각 입력 폼. 제출 완료 시 전체 앱 재실행."""
     st.info(f"💬 **{'토론' if act_type == '토론' else '토의'} 전 내 생각 먼저 기록하기**\n\n'{current_topic}' 주제에 대한 나의 생각을 적어주세요. 제출 후 {'토론' if act_type == '토론' else '토의'}에 참여할 수 있습니다.")
@@ -101,11 +102,12 @@ def render_pre_opinion_form(supabase, room_name, student_name, current_topic, ac
         res = upsert_pre_opinion(supabase, room_name, student_name, pre_input.strip(), initial_stance=initial_stance, ip_address=anon_ip)
         if res is not None:
             st.toast("✅ 내 생각이 기록되었습니다. 이제 토론에 참여할 수 있습니다!", icon="🎉")
-            st.rerun()
+            st.rerun(scope="app")
         else:
             st.error("저장에 실패했습니다. 다시 시도해 주세요.")
 
 
+@st.fragment
 def render_post_opinion_section(supabase, room_name, student_name, act_type, current_topic):
     """토론 종료 후 생각 변화 입력 및 AI 분석 섹션."""
     if not opinion_changes_available():
@@ -174,11 +176,18 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
                 discussion_conclusion=discussion_conclusion.strip() if discussion_conclusion else None,
             )
             if res is not None:
-                _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_input.strip())
-                st.rerun()
+                # 제출 즉시 저장 확인 후 rerun — AI 분석은 다음 렌더에서 실행
+                st.session_state['_run_analysis_now'] = True
+                st.toast("✅ 제출 완료! AI가 분석 중입니다...", icon="🎉")
+                st.rerun(scope="app")
             else:
                 st.error("저장에 실패했습니다. 다시 시도해 주세요.")
     else:
+        # 직전 제출로 인한 AI 분석 자동 실행 (제출과 분리하여 UX 지연 제거)
+        if st.session_state.pop('_run_analysis_now', False) and not (row or {}).get("ai_analysis"):
+            _trigger_analysis(supabase, room_name, student_name, act_type, current_topic, pre_opinion, post_opinion)
+            st.rerun()
+
         final_stance_val = (row or {}).get("final_stance") or ""
         discussion_conclusion_val = (row or {}).get("discussion_conclusion") or ""
         ai_feedback = (row or {}).get("ai_feedback") or ""

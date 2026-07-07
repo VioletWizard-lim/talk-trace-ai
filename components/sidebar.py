@@ -6,7 +6,7 @@ from db import (
     topic_owner_column_available,
     topic_entry_code_column_available,
     topic_is_hidden_available,
-    fetch_room_is_hidden,
+    fetch_all_rooms_hidden_status,
     toggle_room_visibility,
     upsert_topic_room,
 )
@@ -81,9 +81,10 @@ def render_sidebar(supabase) -> dict:
                         if topic_is_hidden_available():
                             with st.expander("👁️ 방 공개/숨김 일괄 관리", expanded=False):
                                 st.caption("✅ 체크 = 학생에게 보임 / ☐ 해제 = 숨김 (변경 즉시 자동 저장)")
+                                _hidden_status = fetch_all_rooms_hidden_status(supabase)
                                 _hidden_changed = False
                                 for _r in all_rooms_for_manage:
-                                    _cur_hidden = fetch_room_is_hidden(supabase, _r)
+                                    _cur_hidden = _hidden_status.get(_r, False)
                                     _checked = st.checkbox(
                                         _r,
                                         value=not _cur_hidden,
