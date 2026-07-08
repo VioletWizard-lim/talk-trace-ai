@@ -115,7 +115,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             sentiment_tag = f"`{row.get('sentiment', '')}` " if show_sentiment_tag else ""
 
             if user_role == "교사" and teacher_auth:
-                c_name, c_like, c_del = st.columns([5, 1, 1])
+                c_name, c_actions = st.columns([7, 2])
                 with c_name:
                     st.markdown(
                         f"{sentiment_tag}**{name_badge}{row['student_name']}** "
@@ -124,34 +124,38 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                     )
                     if row_ip:
                         st.caption(f"IP: {mask_ip_for_teacher(row_ip)}")
-                with c_like:
-                    st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
-                              type=like_type, use_container_width=True,
-                              on_click=do_toggle_like, args=(msg_id,))
-                with c_del:
-                    if st.button("❌", key=f"del_{msg_id}", help="강제 삭제"):
-                        try:
-                            if delete_opinion_message(supabase, msg_id) is not None:
-                                fetch_live_messages.clear()
-                                _cached_wordcloud.clear()
-                                log_audit("chat_deleted", room_name=room_name, actor_name=student_name,
-                                          role=user_role, message_id=msg_id)
-                                st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
-                                st.rerun(scope="app")
-                        except Exception as e:
-                            st.error(f"삭제 실패: {e}")
+                with c_actions:
+                    _, c_like, c_del = st.columns([0.1, 1, 1])
+                    with c_like:
+                        st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
+                                  type=like_type, use_container_width=True,
+                                  on_click=do_toggle_like, args=(msg_id,))
+                    with c_del:
+                        if st.button("❌", key=f"del_{msg_id}", help="강제 삭제", use_container_width=True):
+                            try:
+                                if delete_opinion_message(supabase, msg_id) is not None:
+                                    fetch_live_messages.clear()
+                                    _cached_wordcloud.clear()
+                                    log_audit("chat_deleted", room_name=room_name, actor_name=student_name,
+                                              role=user_role, message_id=msg_id)
+                                    st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
+                                    st.rerun(scope="app")
+                            except Exception as e:
+                                st.error(f"삭제 실패: {e}")
             else:
-                c_name, c_like = st.columns([5, 1])
+                c_name, c_actions = st.columns([7, 2])
                 with c_name:
                     st.markdown(
                         f"{sentiment_tag}**{name_badge}{row['student_name']}** "
                         f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
                         unsafe_allow_html=True,
                     )
-                with c_like:
-                    st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
-                              type=like_type, use_container_width=True,
-                              on_click=do_toggle_like, args=(msg_id,))
+                with c_actions:
+                    _, c_like = st.columns([1, 1])
+                    with c_like:
+                        st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
+                                  type=like_type, use_container_width=True,
+                                  on_click=do_toggle_like, args=(msg_id,))
             st.info(_escape_md(row['content']))
             st.write("")
 
