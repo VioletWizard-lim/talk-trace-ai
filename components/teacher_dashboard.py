@@ -226,7 +226,8 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
 
         elif act_type == "토의":
             if "discussion_conclusion" in df_oc.columns:
-                conclusions = df_oc["discussion_conclusion"].dropna()
+                conclusion_rows = df_oc[df_oc["discussion_conclusion"].notna() & (df_oc["discussion_conclusion"].astype(str).str.strip() != "")]
+                conclusions = conclusion_rows["discussion_conclusion"]
                 if not conclusions.empty:
                     st.subheader("☁️ 결론 워드클라우드")
                     freq = build_word_frequencies(conclusions)
@@ -234,6 +235,8 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
                         wc_col, _ = st.columns([1, 1])
                         with wc_col:
                             st.markdown(build_circular_wordcloud_html(freq), unsafe_allow_html=True)
+                    _submitted_names = conclusion_rows["student_name"].tolist()
+                    st.caption(f"✅ 제출한 학생 ({len(_submitted_names)}명): {', '.join(_submitted_names)}")
                 else:
                     st.info("아직 제출된 결론이 없습니다.")
 
@@ -324,7 +327,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     _render_participation_section(supabase, room_name, act_type)
 
     _render_oc_section(supabase, room_name, act_type, current_topic, df_all)
-    render_depth_analysis_section(supabase, room_name, act_type)
+    render_depth_analysis_section(supabase, room_name, act_type, _debate_status == "ended")
 
     st.divider()
     st.subheader("🚨 위험 구역 (방 폭파)")

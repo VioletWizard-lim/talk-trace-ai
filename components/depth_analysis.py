@@ -51,7 +51,7 @@ def _classify_in_batches(opinions_to_classify: list, api_key: str) -> dict:
     return all_results
 
 
-def render_depth_analysis_section(supabase, room_name: str, act_type: str) -> None:
+def render_depth_analysis_section(supabase, room_name: str, act_type: str, is_ended: bool = True) -> None:
     """교사 대시보드에 삽입되는 발언 깊이 분석 섹션."""
     if not depth_level_available():
         return  # depth_level 컬럼 없으면 섹션 비활성화
@@ -62,6 +62,10 @@ def render_depth_analysis_section(supabase, room_name: str, act_type: str) -> No
         "AI가 각 발언을 1~4단계로 분류합니다. "
         "1=단순의견 → 2=근거제시 → 3=반박/심화질문 → 4=통합/종합"
     )
+
+    if not is_ended:
+        st.info(f"💡 {act_type} 종료 후 분석을 실행할 수 있습니다. 위의 **{act_type} 종료** 버튼을 눌러 진행을 마쳐주세요.")
+        return
 
     opinions = fetch_opinions_for_depth(supabase, room_name)
     if not opinions:
