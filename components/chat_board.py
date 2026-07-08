@@ -100,7 +100,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             fetch_room_likes.clear()
             st.session_state['_last_like_ts'] = time.time()
 
-        def render_msg(row):
+        def render_msg(row, show_sentiment_tag=False):
             formatted_timestamp = format_kst_datetime(row.get("timestamp", ""))
             msg_id = row['id']
             count = likes_count.get(msg_id, 0)
@@ -112,12 +112,13 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             like_type = "primary" if is_liked else "secondary"
             name_badge = f"{badge} " if badge else ""
             row_ip = str(row.get("ip_address") or "").strip() if hasattr(row, "get") else ""
+            sentiment_tag = f"`{row.get('sentiment', '')}` " if show_sentiment_tag else ""
 
             if user_role == "교사" and teacher_auth:
                 c_name, c_like, c_del = st.columns([5, 1, 1])
                 with c_name:
                     st.markdown(
-                        f"**{name_badge}{row['student_name']}** "
+                        f"{sentiment_tag}**{name_badge}{row['student_name']}** "
                         f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
                         unsafe_allow_html=True,
                     )
@@ -143,7 +144,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                 c_name, c_like = st.columns([5, 1])
                 with c_name:
                     st.markdown(
-                        f"**{name_badge}{row['student_name']}** "
+                        f"{sentiment_tag}**{name_badge}{row['student_name']}** "
                         f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
                         unsafe_allow_html=True,
                     )
@@ -167,22 +168,13 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                     for _, row in student_df[student_df['sentiment'] == '🔴 반대'].iterrows():
                         render_msg(row)
         else:
-            col_idea, col_plus, col_q = st.columns(3)
-            with col_idea:
-                st.markdown("### 💡 아이디어")
-                with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '💡 아이디어'].iterrows():
-                        render_msg(row)
-            with col_plus:
-                st.markdown("### ➕ 보충")
-                with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '➕ 보충'].iterrows():
-                        render_msg(row)
-            with col_q:
-                st.markdown("### ❓ 질문")
-                with st.container(height=450):
-                    for _, row in student_df[student_df['sentiment'] == '❓ 질문'].iterrows():
-                        render_msg(row)
+            st.markdown("### 💬 아이디어 · 보충 · 질문")
+            with st.container(height=450):
+                _discuss_df = student_df[
+                    student_df['sentiment'].isin(['💡 아이디어', '➕ 보충', '❓ 질문'])
+                ]
+                for _, row in _discuss_df.iterrows():
+                    render_msg(row, show_sentiment_tag=True)
     else:
         st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
