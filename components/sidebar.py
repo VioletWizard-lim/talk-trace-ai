@@ -141,10 +141,6 @@ def render_sidebar(supabase) -> dict:
                     _create_clicked = st.button("새 방 개설하기", type="primary")
                     if '_single_create_msg' in st.session_state:
                         st.success(st.session_state['_single_create_msg'])
-                        st.session_state['_single_create_msg_ttl'] = st.session_state.get('_single_create_msg_ttl', 0) + 1
-                        if st.session_state['_single_create_msg_ttl'] >= 8:
-                            del st.session_state['_single_create_msg']
-                            del st.session_state['_single_create_msg_ttl']
                     if _create_clicked:
                         entry_ok, safe_new_pw, _, entry_error_message = validate_entry_code(new_pw, max_len=MAX_ENTRY_CODE_LEN)
                         title_ok, safe_new_title, _, title_error_message = validate_opinion_content(new_title, max_len=MAX_TOPIC_LEN)
