@@ -138,7 +138,14 @@ def render_sidebar(supabase) -> dict:
                                         index=_preset_mode_idx, horizontal=True)
                     new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
                     st.warning("⚠️ 방 이름은 개설 후 변경할 수 없습니다. 신중하게 입력해 주세요.")
-                    if st.button("새 방 개설하기", type="primary"):
+                    _create_clicked = st.button("새 방 개설하기", type="primary")
+                    if '_single_create_msg' in st.session_state:
+                        st.success(st.session_state['_single_create_msg'])
+                        st.session_state['_single_create_msg_ttl'] = st.session_state.get('_single_create_msg_ttl', 0) + 1
+                        if st.session_state['_single_create_msg_ttl'] >= 8:
+                            del st.session_state['_single_create_msg']
+                            del st.session_state['_single_create_msg_ttl']
+                    if _create_clicked:
                         entry_ok, safe_new_pw, _, entry_error_message = validate_entry_code(new_pw, max_len=MAX_ENTRY_CODE_LEN)
                         title_ok, safe_new_title, _, title_error_message = validate_opinion_content(new_title, max_len=MAX_TOPIC_LEN)
                         can_store_room_pw = topic_entry_code_column_available()
@@ -185,6 +192,7 @@ def render_sidebar(supabase) -> dict:
                                 )
                                 if res is not None:
                                     st.session_state['current_room'] = safe_new_room
+                                    st.session_state['_single_create_msg'] = f"✅ '{safe_new_room}' 방 생성이 완료되었습니다!"
                                     st.toast(f"'{safe_new_room}' 방이 개설되었습니다!", icon="🎉")
                                     st.rerun()
         else:

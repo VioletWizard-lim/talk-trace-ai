@@ -53,7 +53,10 @@ def _cached_pie_chart_json(sentiment_tuple: tuple) -> str:
     df = pd.DataFrame({"sentiment": list(sentiment_tuple)})
     fig = px.pie(df, names="sentiment", hole=0.4, height=400,
                  color="sentiment",
-                 color_discrete_map=_SENTIMENT_COLORS)
+                 color_discrete_map=_SENTIMENT_COLORS,
+                 category_orders={
+                     "sentiment": ["🔴 반대", "🔵 찬성", "💡 아이디어", "➕ 보충", "❓ 질문"]
+                 })
     fig.update_layout(font={"family": UI_FONT_FAMILY})
     return fig.to_json()
 
@@ -83,8 +86,11 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
         badge_map = {}
         on_like_cooldown = False
         if use_likes:
+            _live_msg_ids = set(opinion_df['id'].tolist())
             likes_data = fetch_room_likes(supabase, room_name)
-            likes_count = Counter(item['opinion_id'] for item in likes_data)
+            likes_count = Counter(
+                item['opinion_id'] for item in likes_data if item['opinion_id'] in _live_msg_ids
+            )
             my_likes = {item['opinion_id'] for item in likes_data if item['student_name'] == student_name}
             distinct_counts = sorted({c for c in likes_count.values() if c > 0}, reverse=True)[:3]
             count_to_rank = {c: rank for rank, c in enumerate(distinct_counts, 1)}
@@ -132,16 +138,29 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                   on_click=do_toggle_like, args=(msg_id,))
                     with c_del:
                         if st.button("❌", key=f"del_{msg_id}", help="강제 삭제", use_container_width=True):
+                            st.session_state[f"confirm_del_msg_{msg_id}"] = True
+
+                if st.session_state.get(f"confirm_del_msg_{msg_id}"):
+                    st.warning(f"⚠️ 정말 삭제하시겠습니까?\n\n> {_escape_md(row['content'])}")
+                    col_yes, col_no = st.columns(2)
+                    with col_yes:
+                        if st.button("✅ 삭제 확인", key=f"del_yes_{msg_id}", type="primary", use_container_width=True):
                             try:
                                 if delete_opinion_message(supabase, msg_id) is not None:
                                     fetch_live_messages.clear()
+                                    fetch_room_likes.clear()
                                     _cached_wordcloud.clear()
                                     log_audit("chat_deleted", room_name=room_name, actor_name=student_name,
                                               role=user_role, message_id=msg_id)
-                                    st.toast("의견이 즉시 삭제되었습니다.", icon="🗑️")
+                                    st.session_state.pop(f"confirm_del_msg_{msg_id}", None)
+                                    st.toast("의견이 삭제되었습니다.", icon="🗑️")
                                     st.rerun(scope="app")
                             except Exception as e:
                                 st.error(f"삭제 실패: {e}")
+                    with col_no:
+                        if st.button("취소", key=f"del_no_{msg_id}", use_container_width=True):
+                            st.session_state.pop(f"confirm_del_msg_{msg_id}", None)
+                            st.rerun()
             else:
                 c_name, c_actions = st.columns([7, 2])
                 with c_name:

@@ -479,10 +479,16 @@ def is_recent_submission(supabase: Client, room_name: str, student_name: str, co
 
 
 def delete_opinion_message(supabase: Client, message_id: int):
-    return execute_query(
+    res = execute_query(
         supabase.table("debate").delete().eq("id", message_id),
         fail_message="의견 삭제 실패",
     )
+    if res is not None and likes_available():
+        execute_query(
+            supabase.table("likes").delete().eq("opinion_id", message_id),
+            fail_message="연관 공감 데이터 삭제 실패",
+        )
+    return res
 
 
 def create_teacher_hint(supabase: Client, payload):
