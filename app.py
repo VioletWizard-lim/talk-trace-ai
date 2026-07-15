@@ -120,12 +120,12 @@ _ethics_hint = next(
     None,
 )
 if _ethics_hint:
-    with st.expander("💡 찬성/반대 핵심 논점 보기", expanded=False):
-        col_pro, col_con = st.columns(2)
-        with col_pro:
-            st.markdown(f"**🔵 찬성 측 논점**\n\n{_ethics_hint['pro']}")
-        with col_con:
-            st.markdown(f"**🔴 반대 측 논점**\n\n{_ethics_hint['con']}")
+    st.markdown("**💡 찬성/반대 핵심 논점**")
+    col_pro, col_con = st.columns(2)
+    with col_pro:
+        st.markdown(f"**🔵 찬성 측 논점**\n\n{_ethics_hint['pro']}")
+    with col_con:
+        st.markdown(f"**🔴 반대 측 논점**\n\n{_ethics_hint['con']}")
 
 if user_role == "교사" and teacher_auth:
     with st.expander("✏️ 주제 수정", expanded=False):
