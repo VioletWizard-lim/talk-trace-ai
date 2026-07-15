@@ -172,15 +172,17 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
     st.subheader("🗣️ 내 의견 작성")
     col_input, col_stt = st.columns([4, 1])
     with col_input:
+        _opinion_placeholder = ""
         if current_mode == "⚔️ 찬반 토론":
-            st.caption("✍️ **글쓰기 틀** — ① 주장 → ② 근거 → ③ 예상되는 반론에 대한 반박 순서로 써보세요.")
-            _opinion_placeholder = (
-                "① 주장: 나는 ~라고 생각한다.\n"
-                "② 근거: 왜냐하면 ~이기 때문이다.\n"
-                "③ 반박: ~라는 반론이 있을 수 있지만, ~"
-            )
-        else:
-            _opinion_placeholder = ""
+            if st.button("✍️ 글쓰기 틀 보기", key="show_writing_template"):
+                st.session_state['_show_writing_template'] = True
+            if st.session_state.get('_show_writing_template'):
+                st.caption("**글쓰기 틀** — ① 주장 → ② 근거 → ③ 예상되는 반론에 대한 반박 순서로 써보세요.")
+                _opinion_placeholder = (
+                    "① 주장: 나는 ~라고 생각한다.\n"
+                    "② 근거: 왜냐하면 ~이기 때문이다.\n"
+                    "③ 반박: ~라는 반론이 있을 수 있지만, ~"
+                )
         user_input = st.text_area(
             "의견을 입력하세요",
             key=f"input_{st.session_state['reset_key']}",
