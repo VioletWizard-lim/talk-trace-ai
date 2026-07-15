@@ -20,6 +20,9 @@ def render_home_page():
     else:
         st.title("🏠 말자취(Talk-Trace) AI 토론/토의방 홈")
 
+    st.markdown("#### 말자취(Talk-Trace) AI: 토론·토의 발언 기록 및 사고 변화 분석 시스템")
+    st.caption("대상학년: 고등학교 1학년")
+
     st.markdown(
         """
         ### 사용 방법 (간단 안내)
