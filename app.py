@@ -174,9 +174,14 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
     with col_input:
         _opinion_placeholder = ""
         if current_mode == "⚔️ 찬반 토론":
-            if st.button("✍️ 글쓰기 틀 보기", key="show_writing_template"):
-                st.session_state['_show_writing_template'] = True
-            if st.session_state.get('_show_writing_template'):
+            _writing_style = st.radio(
+                "글쓰기 방식",
+                ["📐 주장-근거-반박 틀 사용", "✏️ 자유롭게 쓰기"],
+                horizontal=True,
+                key="writing_style_radio",
+                label_visibility="collapsed",
+            )
+            if _writing_style == "📐 주장-근거-반박 틀 사용":
                 st.caption("**글쓰기 틀** — ① 주장 → ② 근거 → ③ 예상되는 반론에 대한 반박 순서로 써보세요.")
                 _opinion_placeholder = (
                     "① 주장: 나는 ~라고 생각한다.\n"
