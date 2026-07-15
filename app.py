@@ -120,12 +120,12 @@ _ethics_hint = next(
     None,
 )
 if _ethics_hint:
-    with st.expander("💡 찬성/반대 핵심 논점 보기", expanded=False):
-        col_pro, col_con = st.columns(2)
-        with col_pro:
-            st.markdown(f"**🔵 찬성 측 논점**\n\n{_ethics_hint['pro']}")
-        with col_con:
-            st.markdown(f"**🔴 반대 측 논점**\n\n{_ethics_hint['con']}")
+    st.markdown("**💡 찬성/반대 핵심 논점**")
+    col_pro, col_con = st.columns(2)
+    with col_pro:
+        st.markdown(f"**🔵 찬성 측 논점**\n\n{_ethics_hint['pro']}")
+    with col_con:
+        st.markdown(f"**🔴 반대 측 논점**\n\n{_ethics_hint['con']}")
 
 if user_role == "교사" and teacher_auth:
     with st.expander("✏️ 주제 수정", expanded=False):
@@ -172,11 +172,21 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
     st.subheader("🗣️ 내 의견 작성")
     col_input, col_stt = st.columns([4, 1])
     with col_input:
+        if current_mode == "⚔️ 찬반 토론":
+            st.caption("✍️ **글쓰기 틀** — ① 주장 → ② 근거 → ③ 예상되는 반론에 대한 반박 순서로 써보세요.")
+            _opinion_placeholder = (
+                "① 주장: 나는 ~라고 생각한다.\n"
+                "② 근거: 왜냐하면 ~이기 때문이다.\n"
+                "③ 반박: ~라는 반론이 있을 수 있지만, ~"
+            )
+        else:
+            _opinion_placeholder = ""
         user_input = st.text_area(
             "의견을 입력하세요",
             key=f"input_{st.session_state['reset_key']}",
-            height=80,
+            height=100 if current_mode == "⚔️ 찬반 토론" else 80,
             label_visibility="collapsed",
+            placeholder=_opinion_placeholder,
         )
         opts = ["🔵 찬성", "🔴 반대"] if current_mode == "⚔️ 찬반 토론" else ["💡 아이디어", "➕ 보충", "❓ 질문"]
         sentiment = st.radio("의견 성격", opts, horizontal=True)
