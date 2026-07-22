@@ -8,7 +8,7 @@ import streamlit as st
 from env import get_secret
 from services.ai import generate_ai_response, build_summary_prompt
 from utils import compact_ai_report_output, get_kst_now
-from config import AI_MODEL_NAME, DASHBOARD_FETCH_LIMIT
+from config import AI_MODEL_NAME_PRO, DASHBOARD_FETCH_LIMIT
 from db import (
     fetch_all_opinion_changes, fetch_opinions_for_depth,
     opinion_changes_available, stance_available, depth_level_available,
@@ -487,7 +487,7 @@ def render_summary_section(supabase, room_name, act_type, current_topic, df_all)
                     )
                     try:
                         res_text = generate_ai_response(
-                            prompt, model_name=AI_MODEL_NAME, api_key=get_secret("GEMINI_API_KEY", ""),
+                            prompt, model_name=AI_MODEL_NAME_PRO, api_key=get_secret("GEMINI_API_KEY", ""),
                             log_message="AI 요약 리포트 생성 실패", room_name=room_name,
                         )
                     except Exception as e:
