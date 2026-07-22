@@ -106,13 +106,11 @@ def parse_depth_levels(response_text: str, opinion_ids: set) -> dict:
     파싱 실패한 항목은 depth_level=1 로 기본값 처리합니다.
     """
     result = {}
-    for line in response_text.strip().splitlines():
-        match = re.match(r"id=(\d+):\s*([1-4])", line.strip())
-        if match:
-            oid = int(match.group(1))
-            depth = int(match.group(2))
-            if oid in opinion_ids:
-                result[oid] = depth
+    for match in re.finditer(r"id\s*=\s*(\d+)\s*:\s*([1-4])", response_text, re.IGNORECASE):
+        oid = int(match.group(1))
+        depth = int(match.group(2))
+        if oid in opinion_ids:
+            result[oid] = depth
     # 파싱 실패 항목은 1단계로 기본값
     for oid in opinion_ids:
         if oid not in result:
