@@ -8,7 +8,7 @@ import streamlit as st
 from env import get_secret
 from services.ai import generate_ai_response, build_summary_prompt
 from utils import compact_ai_report_output, get_kst_now
-from config import AI_MODEL_NAME_PRO, DASHBOARD_FETCH_LIMIT
+from config import AI_MODEL_NAME, AI_MODEL_NAME_PRO, DASHBOARD_FETCH_LIMIT
 from db import (
     fetch_all_opinion_changes, fetch_opinions_for_depth,
     opinion_changes_available, stance_available, depth_level_available,
@@ -485,11 +485,19 @@ def render_summary_section(supabase, room_name, act_type, current_topic, df_all)
                         stance_summary=stance_summary,
                         depth_summary=depth_summary,
                     )
+                    api_key = get_secret("GEMINI_API_KEY", "")
                     try:
                         res_text = generate_ai_response(
-                            prompt, model_name=AI_MODEL_NAME_PRO, api_key=get_secret("GEMINI_API_KEY", ""),
-                            log_message="AI 요약 리포트 생성 실패", room_name=room_name,
+                            prompt, model_name=AI_MODEL_NAME_PRO, api_key=api_key,
+                            log_message="AI 요약 리포트 생성 실패 (Pro)", room_name=room_name,
+                            fallback=None,
                         )
+                        if not res_text:
+                            # Pro 실패 시 Flash로 재시도
+                            res_text = generate_ai_response(
+                                prompt, model_name=AI_MODEL_NAME, api_key=api_key,
+                                log_message="AI 요약 리포트 생성 실패 (Flash 재시도)", room_name=room_name,
+                            )
                     except Exception as e:
                         st.error(f"🚨 AI 호출 중 오류가 발생했습니다: {e}")
                         res_text = None

@@ -7,7 +7,7 @@ import streamlit as st
 
 from db import bulk_update_depth_levels, depth_level_available, fetch_opinions_for_depth
 from env import get_secret
-from config import AI_MODEL_NAME_PRO, UI_FONT_FAMILY
+from config import AI_MODEL_NAME, AI_MODEL_NAME_PRO, UI_FONT_FAMILY
 from services.ai import build_depth_analysis_prompt, generate_ai_response, parse_depth_levels
 
 logger = logging.getLogger("talk_trace_ai")
@@ -37,9 +37,18 @@ def _classify_in_batches(opinions_to_classify: list, api_key: str) -> dict:
             prompt=prompt,
             model_name=AI_MODEL_NAME_PRO,
             api_key=api_key,
-            log_message="depth_analysis_batch",
+            log_message="depth_analysis_batch (Pro)",
             fallback="",
         )
+        if not response:
+            # Pro 실패 시 Flash로 재시도
+            response = generate_ai_response(
+                prompt=prompt,
+                model_name=AI_MODEL_NAME,
+                api_key=api_key,
+                log_message="depth_analysis_batch (Flash 재시도)",
+                fallback="",
+            )
         if response:
             batch_ids = {oid for oid, _ in batch}
             parsed = parse_depth_levels(response, batch_ids)
@@ -100,13 +109,19 @@ def render_depth_analysis_section(supabase, room_name: str, act_type: str, is_en
             return
 
         # 재분석 시 전체 재분류, 처음 실행 시 미분류만
+        is_reanalysis = unclassified_count == 0
         to_classify = (
             list(zip(df["id"].tolist(), df["content"].tolist()))
-            if unclassified_count == 0  # 재분석
+            if is_reanalysis
             else list(zip(unclassified["id"].tolist(), unclassified["content"].tolist()))
         )
 
-        with st.spinner(f"🤖 AI가 {len(to_classify)}개 발언을 분석 중입니다..."):
+        spinner_text = (
+            f"🔄 재분석 중입니다... ({len(to_classify)}개 발언)"
+            if is_reanalysis
+            else f"🤖 AI가 {len(to_classify)}개 발언을 분석 중입니다..."
+        )
+        with st.spinner(spinner_text):
             results = _classify_in_batches(to_classify, api_key)
 
         updates = [{"id": oid, "depth_level": lvl} for oid, lvl in results.items()]
