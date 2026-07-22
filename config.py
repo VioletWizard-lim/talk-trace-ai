@@ -1,6 +1,7 @@
 from env import get_secret
 
 AI_MODEL_NAME = "gemini-2.5-flash"
+AI_MODEL_NAME_PRO = "gemini-2.5-pro"
 LIVE_BOARD_FETCH_LIMIT = 100
 DASHBOARD_FETCH_LIMIT = 300
 LIVE_REFRESH_INTERVAL = "20s"
