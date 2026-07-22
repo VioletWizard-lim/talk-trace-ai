@@ -100,13 +100,19 @@ def render_depth_analysis_section(supabase, room_name: str, act_type: str, is_en
             return
 
         # 재분석 시 전체 재분류, 처음 실행 시 미분류만
+        is_reanalysis = unclassified_count == 0
         to_classify = (
             list(zip(df["id"].tolist(), df["content"].tolist()))
-            if unclassified_count == 0  # 재분석
+            if is_reanalysis
             else list(zip(unclassified["id"].tolist(), unclassified["content"].tolist()))
         )
 
-        with st.spinner(f"🤖 AI가 {len(to_classify)}개 발언을 분석 중입니다..."):
+        spinner_text = (
+            f"🔄 재분석 중입니다... ({len(to_classify)}개 발언)"
+            if is_reanalysis
+            else f"🤖 AI가 {len(to_classify)}개 발언을 분석 중입니다..."
+        )
+        with st.spinner(spinner_text):
             results = _classify_in_batches(to_classify, api_key)
 
         updates = [{"id": oid, "depth_level": lvl} for oid, lvl in results.items()]
