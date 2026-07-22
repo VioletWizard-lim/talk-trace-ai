@@ -7,7 +7,7 @@ import streamlit as st
 
 from db import bulk_update_depth_levels, depth_level_available, fetch_opinions_for_depth
 from env import get_secret
-from config import AI_MODEL_NAME_PRO, UI_FONT_FAMILY
+from config import AI_MODEL_NAME, AI_MODEL_NAME_PRO, UI_FONT_FAMILY
 from services.ai import build_depth_analysis_prompt, generate_ai_response, parse_depth_levels
 
 logger = logging.getLogger("talk_trace_ai")
@@ -37,9 +37,18 @@ def _classify_in_batches(opinions_to_classify: list, api_key: str) -> dict:
             prompt=prompt,
             model_name=AI_MODEL_NAME_PRO,
             api_key=api_key,
-            log_message="depth_analysis_batch",
+            log_message="depth_analysis_batch (Pro)",
             fallback="",
         )
+        if not response:
+            # Pro 실패 시 Flash로 재시도
+            response = generate_ai_response(
+                prompt=prompt,
+                model_name=AI_MODEL_NAME,
+                api_key=api_key,
+                log_message="depth_analysis_batch (Flash 재시도)",
+                fallback="",
+            )
         if response:
             batch_ids = {oid for oid, _ in batch}
             parsed = parse_depth_levels(response, batch_ids)
