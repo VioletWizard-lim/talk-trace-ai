@@ -31,6 +31,8 @@ def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_numb
                     st.error("❌ 암호가 틀렸습니다.")
                 elif not normalize_user_text(student_number, max_len=20):
                     st.error("❌ 학번을 입력해야 입장할 수 있습니다.")
+                elif not normalize_user_text(student_number, max_len=20).isdigit():
+                    st.error("❌ 학번은 숫자만 입력할 수 있습니다.")
                 else:
                     st.session_state['joined'] = True
                     st.rerun()
