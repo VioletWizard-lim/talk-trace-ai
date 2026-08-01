@@ -22,7 +22,6 @@ def _s(val, default=""):
     return default if (val is None or (isinstance(val, float) and pd.isna(val))) else str(val)
 
 
-@st.fragment(run_every=20)
 def _render_learning_analysis_section(supabase, room_name, act_type, current_topic, df_all):
     if not opinion_changes_available():
         return
@@ -107,7 +106,6 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
         st.caption("AI 분석이 아직 없습니다.")
 
 
-@st.fragment(run_every=20)
 def _render_stance_section(supabase, room_name, act_type, current_topic, df_all):
     if not opinion_changes_available():
         return
@@ -248,7 +246,6 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                     st.info("아직 제출된 결론이 없습니다.")
 
 
-@st.fragment
 def _render_debate_control(supabase, room_name):
     """토론 진행 제어 — fragment로 분리해 무거운 대시보드 렌더링과 독립적으로 즉시 반응."""
     debate_status = fetch_debate_status(supabase, room_name)
@@ -268,7 +265,6 @@ def _render_debate_control(supabase, room_name):
                 st.rerun(scope="app")
 
 
-@st.fragment(run_every=10)
 def _render_participation_section(supabase, room_name, act_type):
     col_ptitle, col_pref = st.columns([7, 2])
     with col_ptitle:
@@ -348,7 +344,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     _render_dashboard_tabs(supabase, room_name, user_role, student_name, current_topic, act_type)
 
 
-@st.fragment
+@st.fragment(run_every=10)
 def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current_topic, act_type):
     """탭 선택 + 내용 렌더링을 fragment로 분리해, 탭 전환이 앱 전체가 아니라
     이 부분만 다시 그리도록 함. 이렇게 하면 탭을 눌렀을 때 이전 탭 내용이
