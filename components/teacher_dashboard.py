@@ -293,6 +293,39 @@ def _render_participation_section(supabase, room_name, act_type):
         st.info(f"{act_type} 데이터가 없습니다.")
 
 
+_DASHBOARD_TABS = [
+    "📝 요약 리포트",
+    "💡 AI 힌트",
+    "📊 참여도",
+    "🔍 배움 분석",
+    "📈 발언 깊이",
+    "🚨 위험 구역",
+]
+_DASHBOARD_TAB_KEY = "teacher_dashboard_active_tab"
+_DASHBOARD_TAB_CSS = f"""
+    <style>
+    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] div[role="radiogroup"] {{
+        gap: 4px;
+        border-bottom: 2px solid #eee;
+        padding-bottom: 4px;
+    }}
+    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label {{
+        background: #f0f2f6;
+        border-radius: 8px 8px 0 0;
+        padding: 8px 14px !important;
+        margin: 0 !important;
+    }}
+    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label[data-checked="true"] {{
+        background: #ff4b4b;
+    }}
+    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label[data-checked="true"] p {{
+        color: white !important;
+        font-weight: 700;
+    }}
+    </style>
+"""
+
+
 def render_teacher_dashboard(supabase, room_name, user_role, student_name, current_topic, current_mode, act_type):
     st.divider()
     col_dash_title, col_dash_refresh = st.columns([8, 2])
@@ -303,46 +336,62 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             fetch_live_messages.clear()
             st.rerun()
 
-    # ── 1. 토론 진행 제어 (스크롤 없이 즉시 접근) ──
+    # ── 토론 진행 제어 (스크롤/탭 이동 없이 항상 즉시 접근 가능하도록 상단 고정) ──
     if session_control_available():
         st.subheader("🎛️ 토론 진행 제어")
         _render_debate_control(supabase, room_name)
-        st.divider()
 
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
-
-    # ── 2. 수업 종료 및 전체 요약 리포트 (토론 종료 후에만 표시) ──
     _debate_status = fetch_debate_status(supabase, room_name) if session_control_available() else "ended"
-    if _debate_status == "ended":
-        render_summary_section(supabase, room_name, act_type, current_topic, df_all)
-    elif session_control_available():
-        st.info(f"💡 위의 **{act_type} 종료** 버튼을 누르면 수업 종료 및 전체 {act_type} 요약 리포트가 활성화됩니다.")
-
-    # ── 3. AI 토의 촉진 ──
-    st.divider()
-    render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
-
-    # ── 4. 학생 참여도 현황 (10초마다 자동 갱신) ──
-    st.divider()
-    _render_participation_section(supabase, room_name, act_type)
-
-    _render_oc_section(supabase, room_name, act_type, current_topic, df_all)
-    render_depth_analysis_section(supabase, room_name, act_type, _debate_status == "ended")
 
     st.divider()
-    st.subheader("🚨 위험 구역 (방 폭파)")
-    with st.expander("이 방 전체 삭제하기 (클릭 시 펼쳐짐)", expanded=False):
-        if not ROOM_DESTROY_ENABLED:
-            st.warning("운영 안전 모드로 방 폭파 기능이 비활성화되어 있습니다.")
-        else:
-            st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록이 완전히 삭제됩니다.")
-            _confirm_text = st.text_input("삭제를 진행하려면 아래에 **확인했습니다** 를 입력하세요", key=f"destroy_confirm_{room_name}")
-            if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True, disabled=_confirm_text != "확인했습니다"):
-                try:
-                    if destroy_room_data(supabase, room_name) is None:
-                        st.stop()
-                    log_audit("room_destroyed", room_name=room_name, actor_name=student_name, role=user_role)
-                    st.success("성공적으로 파괴되었습니다.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"삭제 중 오류 발생: {e}")
+
+    # 탭 선택 상태를 session_state에 저장해, 버튼 클릭으로 인한 전체 rerun 후에도
+    # 선택된 탭이 첫 번째 탭으로 초기화되지 않고 유지되도록 함 (st.tabs는 이 방식의
+    # 상태 유지를 지원하지 않아 st.radio를 탭처럼 사용).
+    if _DASHBOARD_TAB_KEY not in st.session_state:
+        st.session_state[_DASHBOARD_TAB_KEY] = _DASHBOARD_TABS[0]
+    st.markdown(_DASHBOARD_TAB_CSS, unsafe_allow_html=True)
+    active_tab = st.radio(
+        "대시보드 메뉴",
+        _DASHBOARD_TABS,
+        key=_DASHBOARD_TAB_KEY,
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+
+    if active_tab == "📝 요약 리포트":
+        if _debate_status == "ended":
+            render_summary_section(supabase, room_name, act_type, current_topic, df_all)
+        elif session_control_available():
+            st.info(f"💡 위의 **{act_type} 종료** 버튼을 누르면 수업 종료 및 전체 {act_type} 요약 리포트가 활성화됩니다.")
+
+    elif active_tab == "💡 AI 힌트":
+        render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
+
+    elif active_tab == "📊 참여도":
+        _render_participation_section(supabase, room_name, act_type)
+
+    elif active_tab == "🔍 배움 분석":
+        _render_oc_section(supabase, room_name, act_type, current_topic, df_all)
+
+    elif active_tab == "📈 발언 깊이":
+        render_depth_analysis_section(supabase, room_name, act_type, _debate_status == "ended")
+
+    elif active_tab == "🚨 위험 구역":
+        st.subheader("🚨 위험 구역 (방 폭파)")
+        with st.expander("이 방 전체 삭제하기 (클릭 시 펼쳐짐)", expanded=False):
+            if not ROOM_DESTROY_ENABLED:
+                st.warning("운영 안전 모드로 방 폭파 기능이 비활성화되어 있습니다.")
+            else:
+                st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록이 완전히 삭제됩니다.")
+                _confirm_text = st.text_input("삭제를 진행하려면 아래에 **확인했습니다** 를 입력하세요", key=f"destroy_confirm_{room_name}")
+                if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True, disabled=_confirm_text != "확인했습니다"):
+                    try:
+                        if destroy_room_data(supabase, room_name) is None:
+                            st.stop()
+                        log_audit("room_destroyed", room_name=room_name, actor_name=student_name, role=user_role)
+                        st.success("성공적으로 파괴되었습니다.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"삭제 중 오류 발생: {e}")
