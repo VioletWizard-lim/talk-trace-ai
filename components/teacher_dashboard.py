@@ -321,8 +321,8 @@ _DASHBOARD_TAB_CSS = f"""
         margin: 0 !important;
         transition: background 0.15s, color 0.15s;
     }}
-    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label input[type="radio"] {{
-        display: none;
+    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label > div:first-child {{
+        display: none !important;
     }}
     div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label:has(input:checked) {{
         background: #ff4b4b;
