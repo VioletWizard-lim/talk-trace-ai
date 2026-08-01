@@ -23,14 +23,13 @@ def _s(val, default=""):
 
 
 @st.fragment(run_every=20)
-def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
+def _render_learning_analysis_section(supabase, room_name, act_type, current_topic, df_all):
     if not opinion_changes_available():
         return
     df_oc = fetch_all_opinion_changes(supabase, room_name)
     if df_oc.empty:
         return
 
-    st.divider()
     st.subheader("🔍 학생별 배움 분석")
     students = df_oc["student_name"].tolist()
 
@@ -107,8 +106,16 @@ def _render_oc_section(supabase, room_name, act_type, current_topic, df_all):
     else:
         st.caption("AI 분석이 아직 없습니다.")
 
+
+@st.fragment(run_every=20)
+def _render_stance_section(supabase, room_name, act_type, current_topic, df_all):
+    if not opinion_changes_available():
+        return
+    df_oc = fetch_all_opinion_changes(supabase, room_name)
+    if df_oc.empty:
+        return
+
     if stance_available():
-        st.divider()
         if act_type == "토론":
             st.subheader("📊 입장 변화 현황")
             col_d1, col_d2 = st.columns(2)
@@ -296,6 +303,7 @@ def _render_participation_section(supabase, room_name, act_type):
 _TAB_CONTROL = "🎛️ 토론 제어"
 _TAB_PARTICIPATION = "📊 참여도"
 _TAB_LEARNING = "🔍 배움 분석"
+_TAB_STANCE = "📊 입장 변화"
 _TAB_DEPTH = "📈 발언 깊이"
 _TAB_SUMMARY = "📝 요약 리포트"
 _DASHBOARD_TAB_KEY = "teacher_dashboard_active_tab"
@@ -311,11 +319,15 @@ _DASHBOARD_TAB_CSS = f"""
         border-radius: 8px 8px 0 0;
         padding: 8px 14px !important;
         margin: 0 !important;
+        transition: background 0.15s, color 0.15s;
     }}
-    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label[data-checked="true"] {{
+    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label input[type="radio"] {{
+        display: none;
+    }}
+    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label:has(input:checked) {{
         background: #ff4b4b;
     }}
-    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label[data-checked="true"] p {{
+    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label:has(input:checked) p {{
         color: white !important;
         font-weight: 700;
     }}
@@ -337,7 +349,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     _debate_status = fetch_debate_status(supabase, room_name) if session_control_available() else "ended"
 
     # 요약 리포트는 토론/토의 종료 전에는 탭 자체를 숨김
-    tabs = [_TAB_CONTROL, _TAB_PARTICIPATION, _TAB_LEARNING, _TAB_DEPTH]
+    tabs = [_TAB_CONTROL, _TAB_PARTICIPATION, _TAB_LEARNING, _TAB_STANCE, _TAB_DEPTH]
     if _debate_status == "ended":
         tabs.append(_TAB_SUMMARY)
 
@@ -384,7 +396,10 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
         _render_participation_section(supabase, room_name, act_type)
 
     elif active_tab == _TAB_LEARNING:
-        _render_oc_section(supabase, room_name, act_type, current_topic, df_all)
+        _render_learning_analysis_section(supabase, room_name, act_type, current_topic, df_all)
+
+    elif active_tab == _TAB_STANCE:
+        _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
 
     elif active_tab == _TAB_DEPTH:
         render_depth_analysis_section(supabase, room_name, act_type, _debate_status == "ended")
