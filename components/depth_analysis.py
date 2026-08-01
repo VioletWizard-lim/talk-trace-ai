@@ -65,7 +65,6 @@ def render_depth_analysis_section(supabase, room_name: str, act_type: str, is_en
     if not depth_level_available():
         return  # depth_level 컬럼 없으면 섹션 비활성화
 
-    st.divider()
     st.subheader("📈 발언 깊이 분석")
     st.caption(
         "AI가 각 발언을 1~4단계로 분류합니다. "
