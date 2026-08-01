@@ -372,10 +372,15 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
     )
     st.divider()
 
-    _render_tab_content(
-        active_tab, supabase, room_name, user_role, student_name,
-        current_topic, act_type, df_all, _debate_status,
-    )
+    # 탭마다 고유한 key를 부여해, 탭 전환 시 이전 탭의 남은 요소가 완전히
+    # 정리되기 전에 새 탭 내용이 그 아래 잠깐 겹쳐 보이는 문제를 방지.
+    # (같은 컨테이너를 재사용하면 Streamlit이 이전 내용을 부분적으로만
+    # 교체하다 늦게 지우는 경우가 있어, 탭별로 컨테이너 자체를 새로 만듦)
+    with st.container(key=f"dashboard_tab_content_{active_tab}"):
+        _render_tab_content(
+            active_tab, supabase, room_name, user_role, student_name,
+            current_topic, act_type, df_all, _debate_status,
+        )
 
 
 def _render_tab_content(active_tab, supabase, room_name, user_role, student_name, current_topic, act_type, df_all, _debate_status):
