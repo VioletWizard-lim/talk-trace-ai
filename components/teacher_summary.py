@@ -529,10 +529,19 @@ def render_summary_section(supabase, room_name, act_type, current_topic, df_all)
         _render_report_cards(report_text)
 
         # PDF (입장변화 + 깊이 포함)
+        # report_text가 바뀌지 않았으면 캐시된 PDF를 그대로 재사용해,
+        # 탭을 볼 때마다 DB 재조회 + PDF 재생성이 반복되지 않도록 함
+        # (다른 탭보다 요약 탭 전환이 유독 느리게 느껴지던 주요 원인).
+        _pdf_cache_key = f'ai_report_pdf_{room_name}'
+        _cached_pdf = st.session_state.get(_pdf_cache_key)
         try:
-            df_oc = fetch_all_opinion_changes(supabase, room_name) if opinion_changes_available() else pd.DataFrame()
-            depth_opinions = fetch_opinions_for_depth(supabase, room_name) if depth_level_available() else []
-            pdf_bytes = _build_pdf(room_name, act_type, current_topic, report_text, df_oc, depth_opinions)
+            if _cached_pdf and _cached_pdf.get('report_text') == report_text:
+                pdf_bytes = _cached_pdf['bytes']
+            else:
+                df_oc = fetch_all_opinion_changes(supabase, room_name) if opinion_changes_available() else pd.DataFrame()
+                depth_opinions = fetch_opinions_for_depth(supabase, room_name) if depth_level_available() else []
+                pdf_bytes = _build_pdf(room_name, act_type, current_topic, report_text, df_oc, depth_opinions)
+                st.session_state[_pdf_cache_key] = {'report_text': report_text, 'bytes': pdf_bytes}
             st.download_button(
                 "📄 리포트 PDF 다운로드",
                 data=pdf_bytes,
