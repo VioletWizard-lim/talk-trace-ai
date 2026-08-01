@@ -345,6 +345,14 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             fetch_live_messages.clear()
             st.rerun()
 
+    _render_dashboard_tabs(supabase, room_name, user_role, student_name, current_topic, act_type)
+
+
+@st.fragment
+def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current_topic, act_type):
+    """탭 선택 + 내용 렌더링을 fragment로 분리해, 탭 전환이 앱 전체가 아니라
+    이 부분만 다시 그리도록 함. 이렇게 하면 탭을 눌렀을 때 이전 탭 내용이
+    잠깐 그대로 남아있다가 뒤늦게 바뀌는 지연/잔상 없이 즉시 전환된다."""
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
     _debate_status = fetch_debate_status(supabase, room_name) if session_control_available() else "ended"
 
@@ -353,9 +361,9 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     if _debate_status == "ended":
         tabs.append(_TAB_SUMMARY)
 
-    # 탭 선택 상태를 session_state에 저장해, 버튼 클릭으로 인한 전체 rerun 후에도
-    # 선택된 탭이 첫 번째 탭으로 초기화되지 않고 유지되도록 함 (st.tabs는 이 방식의
-    # 상태 유지를 지원하지 않아 st.radio를 탭처럼 사용).
+    # 탭 선택 상태를 session_state에 저장해, 다른 곳에서 발생하는 전체 rerun
+    # 이후에도 선택된 탭이 첫 번째 탭으로 초기화되지 않고 유지되도록 함
+    # (st.tabs는 이 방식의 상태 유지를 지원하지 않아 st.radio를 탭처럼 사용).
     if st.session_state.get(_DASHBOARD_TAB_KEY) not in tabs:
         st.session_state[_DASHBOARD_TAB_KEY] = tabs[0]
     st.markdown(_DASHBOARD_TAB_CSS, unsafe_allow_html=True)
@@ -368,6 +376,13 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     )
     st.divider()
 
+    _render_tab_content(
+        active_tab, supabase, room_name, user_role, student_name,
+        current_topic, act_type, df_all, _debate_status,
+    )
+
+
+def _render_tab_content(active_tab, supabase, room_name, user_role, student_name, current_topic, act_type, df_all, _debate_status):
     if active_tab == _TAB_CONTROL:
         if session_control_available():
             st.subheader("🎛️ 토론 진행 제어")
