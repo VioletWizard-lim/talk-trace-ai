@@ -307,8 +307,18 @@ _TAB_STANCE = "📊 입장 변화"
 _TAB_DEPTH = "📈 발언 깊이"
 _TAB_SUMMARY = "📝 요약 리포트"
 _DASHBOARD_TAB_KEY = "teacher_dashboard_active_tab"
+_DASHBOARD_TAB_BODY_KEY = "dashboard_tab_body"
 _DASHBOARD_TAB_CSS = f"""
     <style>
+    /* 탭 전환 시 새 내용이 준비될 때까지 이전 탭 내용이 흐려지도록 함.
+       APP_CSS가 *[data-stale="true"]에 opacity:1 !important를 앱 전역에
+       걸어두어(다른 자동 새로고침 위젯의 깜빡임 방지 목적), 탭 전환 시에도
+       이전 내용이 그대로 선명하게 남아있어 전환이 안 된 것처럼 보이는 문제.
+       이 탭 콘텐츠 영역만 더 높은 명시도(specificity)로 되돌림. */
+    div[data-testid="stVerticalBlock"][class*="st-key-{_DASHBOARD_TAB_BODY_KEY}"][data-stale="true"] {{
+        opacity: 0.35 !important;
+        transition: opacity 0.15s ease-in-out !important;
+    }}
     div[class*="st-key-{_DASHBOARD_TAB_KEY}"] div[role="radiogroup"] {{
         gap: 4px;
         border-bottom: 2px solid #eee;
@@ -368,6 +378,14 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
     )
     st.divider()
 
+    with st.container(key=_DASHBOARD_TAB_BODY_KEY):
+        _render_tab_content(
+            active_tab, supabase, room_name, user_role, student_name,
+            current_topic, act_type, df_all, _debate_status,
+        )
+
+
+def _render_tab_content(active_tab, supabase, room_name, user_role, student_name, current_topic, act_type, df_all, _debate_status):
     if active_tab == _TAB_CONTROL:
         if session_control_available():
             st.subheader("🎛️ 토론 진행 제어")
