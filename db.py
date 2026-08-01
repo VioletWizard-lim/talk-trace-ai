@@ -386,59 +386,69 @@ def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code, crea
     return res
 
 
-def fetch_room_entry_code(supabase: Client, room_name):
-    order_candidates = ["id", "created_at", None]
-    for order_col in order_candidates:
+@st.cache_resource
+def _resolve_topic_order_col(_supabase: Client):
+    """topic 테이블 정렬에 쓸 수 있는 컬럼을 프로세스당 한 번만 판별해 캐시.
+    id 컬럼이 없는 배포에서 매 호출(수십 초 간격 폴링 등)마다 42703 에러가
+    반복 발생하며 로그를 채우는 것을 방지하기 위함."""
+    for order_col in ["id", "created_at", None]:
         try:
-            query = supabase.table("topic").select("entry_code").eq("room_name", room_name)
+            query = _supabase.table("topic").select("room_name")
             if order_col:
                 query = query.order(order_col, desc=True)
-            res = query.execute()
-
-            if not res or not res.data:
-                return ""
-
-            raw_values = [item.get("entry_code") for item in res.data]
-            if raw_values and all(value is None for value in raw_values):
-                logger.warning("entry_code 조회 결과가 모두 None입니다. 권한/정책 문제로 판단되어 입장을 차단합니다.")
-                return None
-
-            for code in [str(v).strip() for v in raw_values if v is not None]:
-                if code:
-                    return code
-            return ""
-
+            query.limit(1).execute()
+            return order_col
         except Exception as e:
-            if _is_undefined_column_error(e, "entry_code"):
-                logger.warning("topic.entry_code 컬럼이 없어 공개방으로 처리합니다.")
-                return ""
             if order_col and _is_undefined_column_error(e, order_col):
-                logger.info("topic.%s 컬럼이 없어 다음 정렬 기준으로 재시도합니다.", order_col)
+                logger.info("topic.%s 컬럼이 없어 정렬 기준에서 제외합니다.", order_col)
                 continue
-            st.error(f"방 입장 암호 조회 실패: {e}")
-            logger.exception("방 입장 암호 조회 실패: %s", e)
             return None
     return None
 
 
+def fetch_room_entry_code(supabase: Client, room_name):
+    order_col = _resolve_topic_order_col(supabase)
+    try:
+        query = supabase.table("topic").select("entry_code").eq("room_name", room_name)
+        if order_col:
+            query = query.order(order_col, desc=True)
+        res = query.execute()
+
+        if not res or not res.data:
+            return ""
+
+        raw_values = [item.get("entry_code") for item in res.data]
+        if raw_values and all(value is None for value in raw_values):
+            logger.warning("entry_code 조회 결과가 모두 None입니다. 권한/정책 문제로 판단되어 입장을 차단합니다.")
+            return None
+
+        for code in [str(v).strip() for v in raw_values if v is not None]:
+            if code:
+                return code
+        return ""
+
+    except Exception as e:
+        if _is_undefined_column_error(e, "entry_code"):
+            logger.warning("topic.entry_code 컬럼이 없어 공개방으로 처리합니다.")
+            return ""
+        st.error(f"방 입장 암호 조회 실패: {e}")
+        logger.exception("방 입장 암호 조회 실패: %s", e)
+        return None
+
+
 @st.cache_data(ttl=30)
 def fetch_topic_data(_supabase: Client, room_name):
-    order_candidates = ["id", "created_at", None]
-    for order_col in order_candidates:
-        try:
-            query = _supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
-            if order_col:
-                query = query.order(order_col, desc=True)
-            res = query.execute()
-            return res.data[0] if res and res.data else {}
-        except Exception as e:
-            if order_col and _is_undefined_column_error(e, order_col):
-                logger.info("topic.%s 컬럼이 없어 다음 정렬 기준으로 재시도합니다.", order_col)
-                continue
-            st.error(f"주제 조회 실패: {e}")
-            logger.exception("주제 조회 실패: %s", e)
-            return {}
-    return {}
+    order_col = _resolve_topic_order_col(_supabase)
+    try:
+        query = _supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
+        if order_col:
+            query = query.order(order_col, desc=True)
+        res = query.execute()
+        return res.data[0] if res and res.data else {}
+    except Exception as e:
+        st.error(f"주제 조회 실패: {e}")
+        logger.exception("주제 조회 실패: %s", e)
+        return {}
 
 
 # ==========================================
