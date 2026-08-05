@@ -1,4 +1,4 @@
-FROM ghcr.io/violetwizard-lim/talk-trace-ai:base
+FROM python:3.11-slim
 
 WORKDIR /app
 COPY . .
@@ -6,7 +6,7 @@ COPY . .
 RUN apt-get update && apt-get install -y --no-install-recommends fonts-nanum \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir "reportlab>=4.0.0" "matplotlib>=3.7.0"
+RUN pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 7860
 
