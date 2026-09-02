@@ -102,41 +102,34 @@ def get_or_create_session_uuid():
 
     같은 학교 와이파이(NAT)를 쓰는 학생들은 공인 IP가 모두 동일해
     IP만으로는 기기를 구분할 수 없음. localStorage에 UUID를 저장해두고
-    쿼리 파라미터(sid)로 되돌려 받는 방식으로, 새로고침/재접속해도
+    streamlit-javascript로 그 값을 되돌려 받는 방식으로, 새로고침/재접속해도
     같은 브라우저라면 값이 유지되는 식별자를 만든다.
     (브라우저를 바꾸거나 데이터를 지우면 새로 발급됨 — 영구 식별자는 아님)
+
+    처음 접속 시 JS 실행 결과가 돌아오기까지 한 번의 rerun이 걸리므로,
+    최초 1회는 빈 문자열을 반환할 수 있음 (이후 호출부터는 값이 채워짐).
     """
-    import uuid as _uuid
-
-    sid = st.query_params.get("sid", "")
-    if sid:
-        st.session_state["session_uuid"] = sid
-        return sid
-
     if st.session_state.get("session_uuid"):
         return st.session_state["session_uuid"]
 
-    # sid가 아직 없으면: JS로 localStorage 확인 후 있으면 그 값을,
-    # 없으면 새로 만든 값을 URL(sid=...)에 붙여 재접속시킨다.
-    st.components.v1.html(
+    from streamlit_javascript import st_javascript
+
+    sid = st_javascript(
         """
-        <script>
         (function() {
             let sid = localStorage.getItem('ttai_sid');
             if (!sid) {
                 sid = crypto.randomUUID();
                 localStorage.setItem('ttai_sid', sid);
             }
-            const url = new URL(window.parent.location.href);
-            if (url.searchParams.get('sid') !== sid) {
-                url.searchParams.set('sid', sid);
-                window.parent.location.replace(url.toString());
-            }
-        })();
-        </script>
+            return sid;
+        })()
         """,
-        height=0,
+        key="ttai_session_uuid",
     )
+    if isinstance(sid, str) and sid:
+        st.session_state["session_uuid"] = sid
+        return sid
     return ""
 
 
