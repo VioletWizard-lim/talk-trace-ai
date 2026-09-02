@@ -253,7 +253,7 @@ def ai_feedback_available() -> bool:
 # [4] 방(topic) 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=20, show_spinner=False)
+@st.cache_data(ttl=20, show_spinner="방 목록을 불러오는 중입니다...")
 def fetch_room_names(_supabase: Client, include_hidden: bool = False):
     hide_filter = topic_is_hidden_available() and not include_hidden
 
