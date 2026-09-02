@@ -12,8 +12,8 @@ from validators import with_fallback_author_role
 from utils import log_audit
 from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
 from components.teacher_hint import render_hint_section
-from components.teacher_summary import render_summary_section
-from components.depth_analysis import render_depth_analysis_section
+from components.teacher_summary import render_summary_section, auto_generate_summary_report, auto_build_pdf_cache
+from components.depth_analysis import render_depth_analysis_section, auto_classify_all_opinions
 
 logger = logging.getLogger("talk_trace_ai")
 
@@ -256,7 +256,7 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                     st.info("아직 제출된 결론이 없습니다.")
 
 
-def _render_debate_control(supabase, room_name):
+def _render_debate_control(supabase, room_name, act_type, current_topic):
     """토론 진행 제어 — fragment로 분리해 무거운 대시보드 렌더링과 독립적으로 즉시 반응."""
     debate_status = fetch_debate_status(supabase, room_name)
     if debate_status == "ended":
@@ -272,6 +272,12 @@ def _render_debate_control(supabase, room_name):
             if set_debate_status(supabase, room_name, "ended") is not None:
                 fetch_debate_status.clear()
                 st.toast("⏹️ 토론이 종료되었습니다. 학생들에게 생각 변화 입력창이 표시됩니다.", icon="✅")
+                with st.spinner("🤖 발언 깊이 분석과 요약 리포트를 자동으로 준비하고 있습니다..."):
+                    fetch_live_messages.clear()
+                    fresh_df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
+                    auto_classify_all_opinions(supabase, room_name)
+                    if auto_generate_summary_report(supabase, room_name, act_type, current_topic, fresh_df_all):
+                        auto_build_pdf_cache(supabase, room_name, act_type, current_topic)
                 st.rerun(scope="app")
 
 
@@ -447,7 +453,7 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
     if active_tab == _TAB_CONTROL:
         if session_control_available():
             st.subheader("🎛️ 토론 진행 제어")
-            _render_debate_control(supabase, room_name)
+            _render_debate_control(supabase, room_name, act_type, current_topic)
             st.divider()
         render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
         st.divider()

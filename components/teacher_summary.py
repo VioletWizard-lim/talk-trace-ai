@@ -447,6 +447,103 @@ def _render_report_cards(report_text: str):
 # ── 메인 섹션 렌더링 ───────────────────────────────────────────────────────────
 
 @st.fragment
+def generate_summary_report_text(supabase, room_name, act_type, current_topic, df_all) -> str | None:
+    """요약 리포트 본문을 생성합니다 (UI 없이 텍스트만 반환, 실패 시 None).
+
+    수동 버튼 클릭과 토론/토의 종료 시 자동 생성 양쪽에서 공유하는 핵심 로직.
+    """
+    if df_all.empty:
+        return None
+
+    full_history = "\n".join([
+        f"[{row['student_name']} - {row['sentiment']}] {row['content']}"
+        for _, row in df_all.iterrows()
+    ])
+
+    stance_summary = ""
+    if act_type == "토론" and opinion_changes_available() and stance_available():
+        df_oc = fetch_all_opinion_changes(supabase, room_name)
+        stance_summary = _build_stance_summary(df_oc)
+
+    depth_summary = ""
+    if depth_level_available():
+        depth_opinions = fetch_opinions_for_depth(supabase, room_name)
+        depth_summary = _build_depth_summary(depth_opinions)
+
+    prompt = build_summary_prompt(
+        act_type, current_topic, full_history,
+        stance_summary=stance_summary,
+        depth_summary=depth_summary,
+    )
+    api_key = get_secret("GEMINI_API_KEY", "")
+    try:
+        res_text = generate_ai_response(
+            prompt, model_name=AI_MODEL_NAME_PRO, api_key=api_key,
+            log_message="AI 요약 리포트 생성 실패 (Pro)", room_name=room_name,
+            fallback=None,
+        )
+        if not res_text:
+            res_text = generate_ai_response(
+                prompt, model_name=AI_MODEL_NAME, api_key=api_key,
+                log_message="AI 요약 리포트 생성 실패 (Flash 재시도)", room_name=room_name,
+            )
+    except Exception:
+        return None
+    if not res_text:
+        return None
+    return compact_ai_report_output(res_text)
+
+
+def auto_generate_summary_report(supabase, room_name, act_type, current_topic, df_all) -> bool:
+    """토론/토의 종료 시 자동으로 호출되는 요약 리포트 생성.
+
+    UI 버튼 없이 조용히 실행되어 session_state 캐시와 DB(topic.ai_report)에
+    저장한다. 이미 생성된 리포트가 있으면 다시 만들지 않는다.
+    """
+    _cache_key = f'ai_report_text_{room_name}'
+    if st.session_state.get(_cache_key):
+        return True
+    if not st.session_state.get(_cache_key) and topic_ai_report_available():
+        saved = fetch_ai_report(supabase, room_name)
+        if saved:
+            st.session_state[_cache_key] = saved
+            return True
+
+    report_text = generate_summary_report_text(supabase, room_name, act_type, current_topic, df_all)
+    if not report_text:
+        return False
+    st.session_state[_cache_key] = report_text
+    if topic_ai_report_available():
+        save_ai_report(supabase, room_name, report_text)
+    return True
+
+
+def auto_build_pdf_cache(supabase, room_name, act_type, current_topic) -> None:
+    """리포트 PDF를 미리 만들어 session_state에 캐시해둔다.
+
+    render_summary_section의 PDF 캐시(_pdf_cache_key)와 동일한 형식으로
+    저장하므로, 교사가 요약 탭을 처음 열 때 다시 계산할 필요가 없어
+    탭 전환이 느려지는 문제(이전 탭 내용이 잠깐 남아 보이는 현상)를 방지한다.
+    """
+    _cache_key = f'ai_report_text_{room_name}'
+    report_text = st.session_state.get(_cache_key, '')
+    if not report_text:
+        return
+
+    _pdf_cache_key = f'ai_report_pdf_{room_name}'
+    _cached_pdf = st.session_state.get(_pdf_cache_key)
+    if _cached_pdf and _cached_pdf.get('report_text') == report_text:
+        return  # 이미 캐시됨
+
+    try:
+        df_oc = fetch_all_opinion_changes(supabase, room_name) if opinion_changes_available() else pd.DataFrame()
+        depth_opinions = fetch_opinions_for_depth(supabase, room_name) if depth_level_available() else []
+        pdf_bytes = _build_pdf(room_name, act_type, current_topic, report_text, df_oc, depth_opinions)
+        st.session_state[_pdf_cache_key] = {'report_text': report_text, 'bytes': pdf_bytes}
+    except Exception:
+        pass  # PDF 미리 만들기는 실패해도 요약 리포트 자체엔 영향 없음
+
+
 def render_summary_section(supabase, room_name, act_type, current_topic, df_all):
     st.subheader(f"📝 수업 종료 및 전체 {act_type} 요약 리포트")
 
@@ -460,57 +557,20 @@ def render_summary_section(supabase, room_name, act_type, current_topic, df_all)
     col_gen, col_excel = st.columns([3, 1])
     with col_gen:
         if st.button(f"✨ {act_type} 요약 및 베스트 발언 추출", use_container_width=True, type="primary"):
-            st.toast("👀 AI가 전체 기록을 꼼꼼히 읽고 있습니다...", icon="⏳")
-            with st.spinner("✍️ 요약 리포트를 작성하고 있습니다..."):
-                if not df_all.empty:
-                    full_history = "\n".join([
-                        f"[{row['student_name']} - {row['sentiment']}] {row['content']}"
-                        for _, row in df_all.iterrows()
-                    ])
-
-                    # 입장 변화 데이터
-                    stance_summary = ""
-                    if act_type == "토론" and opinion_changes_available() and stance_available():
-                        df_oc = fetch_all_opinion_changes(supabase, room_name)
-                        stance_summary = _build_stance_summary(df_oc)
-
-                    # 발언 깊이 데이터
-                    depth_summary = ""
-                    if depth_level_available():
-                        depth_opinions = fetch_opinions_for_depth(supabase, room_name)
-                        depth_summary = _build_depth_summary(depth_opinions)
-
-                    prompt = build_summary_prompt(
-                        act_type, current_topic, full_history,
-                        stance_summary=stance_summary,
-                        depth_summary=depth_summary,
-                    )
-                    api_key = get_secret("GEMINI_API_KEY", "")
-                    try:
-                        res_text = generate_ai_response(
-                            prompt, model_name=AI_MODEL_NAME_PRO, api_key=api_key,
-                            log_message="AI 요약 리포트 생성 실패 (Pro)", room_name=room_name,
-                            fallback=None,
-                        )
-                        if not res_text:
-                            # Pro 실패 시 Flash로 재시도
-                            res_text = generate_ai_response(
-                                prompt, model_name=AI_MODEL_NAME, api_key=api_key,
-                                log_message="AI 요약 리포트 생성 실패 (Flash 재시도)", room_name=room_name,
-                            )
-                    except Exception as e:
-                        st.error(f"🚨 AI 호출 중 오류가 발생했습니다: {e}")
-                        res_text = None
-                    if res_text:
-                        report_text = compact_ai_report_output(res_text)
-                        st.session_state[_cache_key] = report_text
-                        if topic_ai_report_available():
-                            save_ai_report(supabase, room_name, report_text)
-                        st.toast("✅ 리포트 작성 완료!", icon="🎉")
-                    elif res_text is not None:
-                        st.toast("🚨 AI 호출 오류가 발생했습니다.", icon="❌")
+            if df_all.empty:
+                st.toast("🚨 분석할 데이터가 없습니다.", icon="⚠️")
+            else:
+                st.toast("👀 AI가 전체 기록을 꼼꼼히 읽고 있습니다...", icon="⏳")
+                with st.spinner("✍️ 요약 리포트를 작성하고 있습니다..."):
+                    report_text = generate_summary_report_text(supabase, room_name, act_type, current_topic, df_all)
+                if report_text:
+                    st.session_state[_cache_key] = report_text
+                    if topic_ai_report_available():
+                        save_ai_report(supabase, room_name, report_text)
+                    st.session_state.pop(f'ai_report_pdf_{room_name}', None)  # 리포트가 바뀌었으니 PDF 캐시 무효화
+                    st.toast("✅ 리포트 작성 완료!", icon="🎉")
                 else:
-                    st.toast("🚨 분석할 데이터가 없습니다.", icon="⚠️")
+                    st.toast("🚨 AI 호출 오류가 발생했습니다.", icon="❌")
 
     with col_excel:
         if not df_all.empty:
