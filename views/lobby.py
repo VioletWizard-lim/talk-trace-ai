@@ -1,5 +1,5 @@
 import streamlit as st
-from db import fetch_room_entry_code, find_duplicate_session
+from db import fetch_room_entry_code, find_duplicate_session, find_duplicate_presence, upsert_session_presence
 from validators import validate_student_number
 from config import AUTO_JOIN_ON_REFRESH
 
@@ -33,11 +33,17 @@ def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_numb
                 elif not number_ok:
                     st.error(f"❌ {number_error_message}")
                 else:
-                    if find_duplicate_session(supabase, room_name, student_number, st.session_state.get("session_uuid", "")):
+                    session_id = st.session_state.get("session_uuid", "")
+                    is_duplicate = (
+                        find_duplicate_presence(supabase, room_name, student_number, session_id)
+                        or find_duplicate_session(supabase, room_name, student_number, session_id)
+                    )
+                    if is_duplicate:
                         st.toast(
                             "⚠️ 이 학번은 다른 기기/브라우저에서도 최근 접속한 기록이 있습니다. 본인이 맞는지 확인해 주세요.",
                             icon="⚠️",
                         )
+                    upsert_session_presence(supabase, room_name, student_number, session_id)
                     st.session_state['joined'] = True
                     st.rerun()
         else:

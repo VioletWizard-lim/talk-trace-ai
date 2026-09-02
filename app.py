@@ -18,6 +18,7 @@ from db import (
     topic_entry_code_column_available,
     update_room_entry_code,
     update_topic,
+    upsert_session_presence,
     using_service_role_key,
 )
 from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS
@@ -162,9 +163,11 @@ if user_role == "교사" and teacher_auth and topic_entry_code_column_available(
                     st.rerun()
 
 @st.fragment(run_every=20)
-def _poll_debate_status(room_name):
-    """학생 화면에서 5초마다 토론 상태를 확인하고 변경 시 전체 rerun."""
+def _poll_debate_status(room_name, student_number):
+    """학생 화면에서 5초마다 토론 상태를 확인하고 변경 시 전체 rerun. 접속 기록도 함께 갱신한다."""
     current = fetch_debate_status(supabase, room_name)
+    if student_number:
+        upsert_session_presence(supabase, room_name, student_number, st.session_state.get("session_uuid", ""))
     if current != st.session_state.get("_last_debate_status"):
         st.session_state["_last_debate_status"] = current
         st.rerun(scope="app")
@@ -289,7 +292,7 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         st.rerun()
 
 if user_role == "학생" and opinion_changes_available():
-    _poll_debate_status(room_name)
+    _poll_debate_status(room_name, student_number)
     debate_status = fetch_debate_status(supabase, room_name)
     # 학생에게 토론 진행 상태를 항상 명시적으로 표시
     if debate_status == "ended":

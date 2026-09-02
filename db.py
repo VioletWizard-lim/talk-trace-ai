@@ -163,6 +163,7 @@ def check_schema_columns() -> dict:
         ("opinion_changes.ai_feedback",    lambda: supabase.table("opinion_changes").select("ai_feedback").limit(1).execute()),
         ("topic.ai_report",                lambda: supabase.table("topic").select("ai_report").limit(1).execute()),
         ("topic.is_hidden",                lambda: supabase.table("topic").select("is_hidden").limit(1).execute()),
+        ("session_presence.session_id",    lambda: supabase.table("session_presence").select("session_id").limit(1).execute()),
     ]
 
     results = {}
@@ -247,6 +248,9 @@ def depth_level_available() -> bool:
 
 def ai_feedback_available() -> bool:
     return _schema().get("opinion_changes.ai_feedback", False)
+
+def session_presence_available() -> bool:
+    return _schema().get("session_presence.session_id", False)
 
 
 # ==========================================
@@ -555,6 +559,60 @@ def find_duplicate_session(
             return True
 
     return False
+
+
+def find_duplicate_presence(
+    supabase: Client, room_name: str, student_name: str, current_session_id: str, window_minutes: int = 5
+) -> bool:
+    """같은 방·같은 학번이 다른 session_id로 최근(window_minutes) 접속해 있는지 확인합니다.
+
+    발언/생각 변화 제출 여부와 무관하게 '입장'만으로 남긴 접속 기록(session_presence)을
+    기준으로 판단한다. session_presence 테이블이 없으면 확인 불가하므로 False.
+    """
+    if not session_presence_available() or not current_session_id:
+        return False
+
+    from datetime import timedelta
+    from utils import get_kst_now
+    cutoff = (get_kst_now() - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+
+    res = execute_query(
+        supabase.table("session_presence")
+        .select("session_id")
+        .eq("room_name", room_name)
+        .eq("student_name", student_name)
+        .neq("session_id", current_session_id)
+        .gte("last_seen", cutoff),
+        fail_message="접속 기록 확인 실패",
+    )
+    return bool(res and res.data)
+
+
+def upsert_session_presence(supabase: Client, room_name: str, student_name: str, session_id: str):
+    """입장(또는 접속 유지) 시점에 접속 기록을 남긴다. 같은 방+학번 기록이 있으면 갱신, 없으면 새로 생성."""
+    if not session_presence_available() or not session_id:
+        return None
+
+    now = get_kst_now_str()
+    payload = {"session_id": session_id, "last_seen": now}
+
+    existing = execute_query(
+        supabase.table("session_presence")
+        .select("id")
+        .eq("room_name", room_name)
+        .eq("student_name", student_name)
+        .limit(1),
+        fail_message="접속 기록 조회 실패",
+    )
+    if existing and existing.data:
+        return execute_query(
+            supabase.table("session_presence").update(payload).eq("id", existing.data[0]["id"]),
+            fail_message="접속 기록 갱신 실패",
+        )
+    return execute_query(
+        supabase.table("session_presence").insert({"room_name": room_name, "student_name": student_name, **payload}),
+        fail_message="접속 기록 생성 실패",
+    )
 
 
 def delete_opinion_message(supabase: Client, message_id: int, deleted_by: str = ""):
