@@ -6,6 +6,7 @@ from supabase import Client, create_client
 
 from auth import _hash_password, _is_hashed, _verify_password  # noqa: F401
 from env import get_secret
+from utils import get_kst_now_str
 
 logger = logging.getLogger("talk_trace_ai")
 
@@ -146,6 +147,9 @@ def check_schema_columns() -> dict:
     checks = [
         ("debate.ip_address",              lambda: supabase.table("debate").select("ip_address").limit(1).execute()),
         ("debate.session_id",              lambda: supabase.table("debate").select("session_id").limit(1).execute()),
+        ("debate.is_deleted",              lambda: supabase.table("debate").select("is_deleted").limit(1).execute()),
+        ("debate.deleted_by",              lambda: supabase.table("debate").select("deleted_by").limit(1).execute()),
+        ("debate.deleted_at",              lambda: supabase.table("debate").select("deleted_at").limit(1).execute()),
         ("opinion_changes.session_id",     lambda: supabase.table("opinion_changes").select("session_id").limit(1).execute()),
         ("topic.entry_code",               lambda: supabase.table("topic").select("entry_code").limit(1).execute()),
         ("topic.created_by_teacher_id",    lambda: supabase.table("topic").select("created_by_teacher_id").limit(1).execute()),
@@ -197,6 +201,15 @@ def debate_ip_column_available() -> bool:
 
 def debate_session_id_column_available() -> bool:
     return _schema().get("debate.session_id", False)
+
+def debate_soft_delete_available() -> bool:
+    return _schema().get("debate.is_deleted", False)
+
+def debate_deleted_by_column_available() -> bool:
+    return _schema().get("debate.deleted_by", False)
+
+def debate_deleted_at_column_available() -> bool:
+    return _schema().get("debate.deleted_at", False)
 
 def opinion_changes_session_id_column_available() -> bool:
     return _schema().get("opinion_changes.session_id", False)
@@ -465,8 +478,12 @@ def fetch_topic_data(_supabase: Client, room_name):
 
 @st.cache_data(ttl=20)
 def fetch_live_messages(_supabase: Client, room_name, limit):
+    query = _supabase.table("debate").select("*").eq("room_name", room_name)
+    if debate_soft_delete_available():
+        # 삭제된(보관함으로 이동한) 발언은 실시간 보드/통계에서 제외
+        query = query.or_("is_deleted.is.null,is_deleted.eq.false")
     res = execute_query(
-        _supabase.table("debate").select("*").eq("room_name", room_name).order("id", desc=True).limit(limit),
+        query.order("id", desc=True).limit(limit),
         fail_message="🚨 데이터 불러오기 실패",
     )
     if not res or not res.data:
@@ -496,10 +513,65 @@ def is_recent_submission(supabase: Client, room_name: str, student_name: str, co
     return bool(res and res.data)
 
 
-def delete_opinion_message(supabase: Client, message_id: int):
+def delete_opinion_message(supabase: Client, message_id: int, deleted_by: str = ""):
+    """발언을 삭제(보관)합니다.
+
+    is_deleted 컬럼이 있으면 소프트 삭제(보관소로 이동, 복구 가능)하고,
+    없으면 기존처럼 완전 삭제(하드 삭제)합니다.
+    """
+    if debate_soft_delete_available():
+        payload = {"is_deleted": True}
+        if debate_deleted_at_column_available():
+            payload["deleted_at"] = get_kst_now_str()
+        if deleted_by and debate_deleted_by_column_available():
+            payload["deleted_by"] = deleted_by
+        res = execute_query(
+            supabase.table("debate").update(payload).eq("id", message_id),
+            fail_message="의견 삭제(보관) 실패",
+        )
+        return res
+
     res = execute_query(
         supabase.table("debate").delete().eq("id", message_id),
         fail_message="의견 삭제 실패",
+    )
+    if res is not None and likes_available():
+        execute_query(
+            supabase.table("likes").delete().eq("opinion_id", message_id),
+            fail_message="연관 공감 데이터 삭제 실패",
+        )
+    return res
+
+
+def restore_opinion_message(supabase: Client, message_id: int):
+    """보관소에서 발언을 복구합니다 (소프트 삭제 취소)."""
+    payload = {"is_deleted": False}
+    if debate_deleted_at_column_available():
+        payload["deleted_at"] = None
+    return execute_query(
+        supabase.table("debate").update(payload).eq("id", message_id),
+        fail_message="의견 복구 실패",
+    )
+
+
+def fetch_deleted_messages(supabase: Client, room_name: str):
+    """방의 삭제(보관)된 발언 목록을 조회합니다."""
+    if not debate_soft_delete_available():
+        return pd.DataFrame()
+    res = execute_query(
+        supabase.table("debate").select("*").eq("room_name", room_name).eq("is_deleted", True).order("id", desc=True),
+        fail_message="삭제 보관함 조회 실패",
+    )
+    if not res or not res.data:
+        return pd.DataFrame()
+    return pd.DataFrame(res.data)
+
+
+def permanently_delete_message(supabase: Client, message_id: int):
+    """보관소에서 발언을 완전히 삭제합니다 (되돌릴 수 없음)."""
+    res = execute_query(
+        supabase.table("debate").delete().eq("id", message_id),
+        fail_message="완전 삭제 실패",
     )
     if res is not None and likes_available():
         execute_query(
