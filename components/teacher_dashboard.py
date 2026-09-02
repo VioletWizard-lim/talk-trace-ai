@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_live_messages, opinion_changes_available, session_control_available, set_debate_status, stance_available
+from db import ai_feedback_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -306,12 +306,59 @@ def _render_participation_section(supabase, room_name, act_type):
         st.info(f"{act_type} 데이터가 없습니다.")
 
 
+def _render_archive_section(supabase, room_name):
+    st.subheader("🗑️ 삭제 보관소")
+    st.caption("실시간 보드에서 삭제된 발언이 여기 보관됩니다. 복구하거나 완전히 삭제할 수 있습니다.")
+
+    deleted_df = fetch_deleted_messages(supabase, room_name)
+    if deleted_df.empty:
+        st.info("삭제된 발언이 없습니다.")
+        return
+
+    for _, row in deleted_df.iterrows():
+        msg_id = row["id"]
+        deleted_at = _s(row.get("deleted_at"))
+        deleted_by = _s(row.get("deleted_by"))
+        meta_bits = [b for b in [f"삭제 시각: {deleted_at}" if deleted_at else "", f"삭제한 사람: {deleted_by}" if deleted_by else ""] if b]
+
+        with st.container(border=True):
+            st.markdown(f"**{row.get('student_name', '')}** — {row.get('content', '')}")
+            if meta_bits:
+                st.caption(" · ".join(meta_bits))
+
+            col_restore, col_purge = st.columns(2)
+            with col_restore:
+                if st.button("↩️ 복구", key=f"archive_restore_{msg_id}", use_container_width=True):
+                    if restore_opinion_message(supabase, msg_id) is not None:
+                        fetch_live_messages.clear()
+                        st.toast("발언을 복구했습니다.", icon="↩️")
+                        st.rerun(scope="app")
+            with col_purge:
+                if st.button("❌ 완전 삭제", key=f"archive_purge_{msg_id}", use_container_width=True):
+                    st.session_state[f"confirm_purge_{msg_id}"] = True
+
+            if st.session_state.get(f"confirm_purge_{msg_id}"):
+                st.warning("⚠️ 완전히 삭제하면 되돌릴 수 없습니다. 정말 삭제하시겠습니까?")
+                col_yes, col_no = st.columns(2)
+                with col_yes:
+                    if st.button("✅ 완전 삭제 확인", key=f"confirm_purge_yes_{msg_id}", type="primary", use_container_width=True):
+                        if permanently_delete_message(supabase, msg_id) is not None:
+                            st.session_state.pop(f"confirm_purge_{msg_id}", None)
+                            st.toast("완전히 삭제했습니다.", icon="🗑️")
+                            st.rerun(scope="app")
+                with col_no:
+                    if st.button("취소", key=f"confirm_purge_no_{msg_id}", use_container_width=True):
+                        st.session_state.pop(f"confirm_purge_{msg_id}", None)
+                        st.rerun()
+
+
 _TAB_CONTROL = "🎛️ 토론 제어"
 _TAB_PARTICIPATION = "📊 참여도"
 _TAB_LEARNING = "🔍 배움 분석"
 _TAB_STANCE = "📊 입장 변화"
 _TAB_DEPTH = "📈 발언 깊이"
 _TAB_SUMMARY = "📝 요약 리포트"
+_TAB_ARCHIVE = "🗑️ 삭제 보관소"
 _DASHBOARD_TAB_KEY = "teacher_dashboard_active_tab"
 _DASHBOARD_TAB_CSS = f"""
     <style>
@@ -366,6 +413,9 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
     tabs = [_TAB_CONTROL, _TAB_PARTICIPATION, _TAB_LEARNING, _TAB_STANCE, _TAB_DEPTH]
     if _debate_status == "ended":
         tabs.append(_TAB_SUMMARY)
+    # 삭제 보관소는 DB에 소프트 삭제 컬럼이 마련된 경우에만 노출
+    if debate_soft_delete_available():
+        tabs.append(_TAB_ARCHIVE)
 
     # 탭 선택 상태를 session_state에 저장해, 다른 곳에서 발생하는 전체 rerun
     # 이후에도 선택된 탭이 첫 번째 탭으로 초기화되지 않고 유지되도록 함
@@ -432,3 +482,6 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
 
     elif active_tab == _TAB_SUMMARY:
         render_summary_section(supabase, room_name, act_type, current_topic, df_all)
+
+    elif active_tab == _TAB_ARCHIVE:
+        _render_archive_section(supabase, room_name)

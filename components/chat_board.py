@@ -2,7 +2,7 @@ import time
 import streamlit as st
 import plotly.io as pio
 from collections import Counter
-from db import fetch_live_messages, delete_opinion_message, fetch_room_likes, toggle_like, likes_available
+from db import fetch_live_messages, delete_opinion_message, fetch_room_likes, toggle_like, likes_available, debate_soft_delete_available
 from validators import with_fallback_author_role, mask_ip_for_teacher
 from utils import format_kst_datetime, log_audit
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -147,19 +147,27 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             st.session_state[f"confirm_del_msg_{msg_id}"] = True
 
                 if st.session_state.get(f"confirm_del_msg_{msg_id}"):
-                    st.warning(f"⚠️ 정말 삭제하시겠습니까?\n\n> {_escape_md(row['content'])}")
+                    _del_notice = (
+                        "삭제된 발언은 교사 대시보드의 삭제 보관소에서 복구할 수 있습니다."
+                        if debate_soft_delete_available()
+                        else "삭제하면 완전히 사라지며 복구할 수 없습니다."
+                    )
+                    st.warning(f"⚠️ 정말 삭제하시겠습니까? ({_del_notice})\n\n> {_escape_md(row['content'])}")
                     col_yes, col_no = st.columns(2)
                     with col_yes:
                         if st.button("✅ 삭제 확인", key=f"del_yes_{msg_id}", type="primary", use_container_width=True):
                             try:
-                                if delete_opinion_message(supabase, msg_id) is not None:
+                                if delete_opinion_message(supabase, msg_id, deleted_by=student_name) is not None:
                                     fetch_live_messages.clear()
                                     fetch_room_likes.clear()
                                     _cached_wordcloud.clear()
                                     log_audit("chat_deleted", room_name=room_name, actor_name=student_name,
                                               role=user_role, message_id=msg_id)
                                     st.session_state.pop(f"confirm_del_msg_{msg_id}", None)
-                                    st.toast("의견이 삭제되었습니다.", icon="🗑️")
+                                    if debate_soft_delete_available():
+                                        st.toast("의견이 보관소로 이동되었습니다.", icon="🗑️")
+                                    else:
+                                        st.toast("의견이 삭제되었습니다.", icon="🗑️")
                                     st.rerun(scope="app")
                             except Exception as e:
                                 st.error(f"삭제 실패: {e}")
