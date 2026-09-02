@@ -1,6 +1,6 @@
 import streamlit as st
 from db import fetch_room_entry_code
-from validators import normalize_user_text
+from validators import validate_student_number
 from config import AUTO_JOIN_ON_REFRESH
 
 
@@ -23,16 +23,15 @@ def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_numb
     else:
         if user_role == "학생":
             student_pw = st.text_input("🔒 방 입장 암호 (공개방이면 비워두세요)", type="password")
+            number_ok, _, _, number_error_message = validate_student_number(student_number)
             if st.button(f"🚀 '{room_name}' 입장하기", type="primary", use_container_width=True):
                 real_pw = fetch_room_entry_code(supabase, room_name)
                 if real_pw is None:
                     st.error("🚨 방 암호 정보를 확인할 수 없어 입장을 차단했습니다. 잠시 후 다시 시도해 주세요.")
                 elif real_pw and student_pw != real_pw:
                     st.error("❌ 암호가 틀렸습니다.")
-                elif not normalize_user_text(student_number, max_len=20):
-                    st.error("❌ 학번을 입력해야 입장할 수 있습니다.")
-                elif not normalize_user_text(student_number, max_len=20).isdigit():
-                    st.error("❌ 학번은 숫자만 입력할 수 있습니다.")
+                elif not number_ok:
+                    st.error(f"❌ {number_error_message}")
                 else:
                     st.session_state['joined'] = True
                     st.rerun()
