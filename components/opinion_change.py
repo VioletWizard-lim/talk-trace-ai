@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 
 from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
-from utils import anonymize_ip, create_analysis_image, get_client_ip
+from utils import anonymize_ip, create_analysis_image, get_client_ip, get_or_create_session_uuid
 from db import (
     ai_feedback_available,
     fetch_live_messages,
@@ -100,7 +100,8 @@ def render_pre_opinion_form(supabase, room_name, student_name, current_topic, ac
             return
         raw_ip = get_client_ip()
         anon_ip = anonymize_ip(raw_ip)
-        res = upsert_pre_opinion(supabase, room_name, student_name, pre_input.strip(), initial_stance=initial_stance, ip_address=anon_ip)
+        session_uuid = get_or_create_session_uuid()
+        res = upsert_pre_opinion(supabase, room_name, student_name, pre_input.strip(), initial_stance=initial_stance, ip_address=anon_ip, session_id=session_uuid)
         if res is not None:
             st.toast("✅ 내 생각이 기록되었습니다. 이제 토론에 참여할 수 있습니다!", icon="🎉")
             st.rerun(scope="app")

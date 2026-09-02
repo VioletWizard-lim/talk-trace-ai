@@ -145,6 +145,8 @@ def check_schema_columns() -> dict:
 
     checks = [
         ("debate.ip_address",              lambda: supabase.table("debate").select("ip_address").limit(1).execute()),
+        ("debate.session_id",              lambda: supabase.table("debate").select("session_id").limit(1).execute()),
+        ("opinion_changes.session_id",     lambda: supabase.table("opinion_changes").select("session_id").limit(1).execute()),
         ("topic.entry_code",               lambda: supabase.table("topic").select("entry_code").limit(1).execute()),
         ("topic.created_by_teacher_id",    lambda: supabase.table("topic").select("created_by_teacher_id").limit(1).execute()),
         ("topic.created_by",               lambda: supabase.table("topic").select("created_by").limit(1).execute()),
@@ -192,6 +194,12 @@ def _schema() -> dict:
 
 def debate_ip_column_available() -> bool:
     return _schema().get("debate.ip_address", False)
+
+def debate_session_id_column_available() -> bool:
+    return _schema().get("debate.session_id", False)
+
+def opinion_changes_session_id_column_available() -> bool:
+    return _schema().get("opinion_changes.session_id", False)
 
 def topic_entry_code_column_available() -> bool:
     return _schema().get("topic.entry_code", False)
@@ -555,7 +563,7 @@ def fetch_opinion_change(_supabase: Client, room_name: str, student_name: str):
     return res.data[0]
 
 
-def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_opinion: str, initial_stance: str = None, ip_address: str = None):
+def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_opinion: str, initial_stance: str = None, ip_address: str = None, session_id: str = None):
     if not opinion_changes_available():
         return None
     payload = {"pre_opinion": pre_opinion}
@@ -574,10 +582,15 @@ def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_
         )
     if res is not None:
         fetch_opinion_change.clear()
-    # IP는 별도 업데이트 — 컬럼 미존재 시 실패해도 메인 저장에 영향 없음
+    # IP/세션ID는 별도 업데이트 — 컬럼 미존재 시 실패해도 메인 저장에 영향 없음
     if ip_address and res is not None:
         try:
             supabase.table("opinion_changes").update({"ip_address": ip_address}).eq("room_name", room_name).eq("student_name", student_name).execute()
+        except Exception:
+            pass
+    if session_id and res is not None:
+        try:
+            supabase.table("opinion_changes").update({"session_id": session_id}).eq("room_name", room_name).eq("student_name", student_name).execute()
         except Exception:
             pass
     return res

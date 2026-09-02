@@ -97,6 +97,49 @@ def anonymize_ip(raw_ip: str) -> str | None:
     return None
 
 
+def get_or_create_session_uuid():
+    """브라우저(기기)마다 고유한 세션 UUID를 발급/유지합니다.
+
+    같은 학교 와이파이(NAT)를 쓰는 학생들은 공인 IP가 모두 동일해
+    IP만으로는 기기를 구분할 수 없음. localStorage에 UUID를 저장해두고
+    쿼리 파라미터(sid)로 되돌려 받는 방식으로, 새로고침/재접속해도
+    같은 브라우저라면 값이 유지되는 식별자를 만든다.
+    (브라우저를 바꾸거나 데이터를 지우면 새로 발급됨 — 영구 식별자는 아님)
+    """
+    import uuid as _uuid
+
+    sid = st.query_params.get("sid", "")
+    if sid:
+        st.session_state["session_uuid"] = sid
+        return sid
+
+    if st.session_state.get("session_uuid"):
+        return st.session_state["session_uuid"]
+
+    # sid가 아직 없으면: JS로 localStorage 확인 후 있으면 그 값을,
+    # 없으면 새로 만든 값을 URL(sid=...)에 붙여 재접속시킨다.
+    st.components.v1.html(
+        """
+        <script>
+        (function() {
+            let sid = localStorage.getItem('ttai_sid');
+            if (!sid) {
+                sid = crypto.randomUUID();
+                localStorage.setItem('ttai_sid', sid);
+            }
+            const url = new URL(window.parent.location.href);
+            if (url.searchParams.get('sid') !== sid) {
+                url.searchParams.set('sid', sid);
+                window.parent.location.replace(url.toString());
+            }
+        })();
+        </script>
+        """,
+        height=0,
+    )
+    return ""
+
+
 def log_audit(event, room_name="", actor_name="", role="", **extra):
     logger.info(
         "AUDIT event=%s room=%s actor=%s role=%s extra=%s",
