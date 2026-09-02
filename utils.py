@@ -98,39 +98,30 @@ def anonymize_ip(raw_ip: str) -> str | None:
 
 
 def get_or_create_session_uuid():
-    """브라우저(기기)마다 고유한 세션 UUID를 발급/유지합니다.
+    """탭(접속)마다 고유한 세션 UUID를 발급/유지합니다.
 
     같은 학교 와이파이(NAT)를 쓰는 학생들은 공인 IP가 모두 동일해
-    IP만으로는 기기를 구분할 수 없음. localStorage에 UUID를 저장해두고
-    streamlit-javascript로 그 값을 되돌려 받는 방식으로, 새로고침/재접속해도
-    같은 브라우저라면 값이 유지되는 식별자를 만든다.
-    (브라우저를 바꾸거나 데이터를 지우면 새로 발급됨 — 영구 식별자는 아님)
+    IP만으로는 기기를 구분할 수 없음. URL 쿼리 파라미터(sid)에 UUID를
+    실어두는 방식으로, 새로고침(F5)해도 브라우저가 같은 URL을 다시
+    요청하므로 값이 유지되는 식별자를 만든다.
 
-    처음 접속 시 JS 실행 결과가 돌아오기까지 한 번의 rerun이 걸리므로,
-    최초 1회는 빈 문자열을 반환할 수 있음 (이후 호출부터는 값이 채워짐).
+    (브라우저 JS로 localStorage를 읽어와 Python에 되돌려주는 방식도
+    시도했으나, 커스텀 컴포넌트의 프론트엔드-백엔드 값 전달 프로토콜이
+    Streamlit 버전에 따라 깨지는 문제가 있어 제외함. 이 방식은 그런
+    문제가 구조적으로 발생하지 않는 대신, 완전히 새 탭에서 sid 없이
+    주소만 다시 입력해 들어오면 새로 발급됨.)
     """
     if st.session_state.get("session_uuid"):
         return st.session_state["session_uuid"]
 
-    from streamlit_javascript import st_javascript
+    sid = st.query_params.get("sid", "")
+    if not sid:
+        import uuid as _uuid
+        sid = str(_uuid.uuid4())
+        st.query_params["sid"] = sid
 
-    sid = st_javascript(
-        """
-        (function() {
-            let sid = localStorage.getItem('ttai_sid');
-            if (!sid) {
-                sid = crypto.randomUUID();
-                localStorage.setItem('ttai_sid', sid);
-            }
-            return sid;
-        })()
-        """,
-        key="ttai_session_uuid",
-    )
-    if isinstance(sid, str) and sid:
-        st.session_state["session_uuid"] = sid
-        return sid
-    return ""
+    st.session_state["session_uuid"] = sid
+    return sid
 
 
 def log_audit(event, room_name="", actor_name="", role="", **extra):
