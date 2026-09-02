@@ -7,6 +7,7 @@ import streamlit as st
 
 from db import bulk_update_depth_levels, depth_level_available, fetch_opinions_for_depth
 from env import get_secret
+from utils import dashboard_busy_key, dashboard_pending_action_key
 from config import AI_MODEL_NAME, AI_MODEL_NAME_PRO, UI_FONT_FAMILY
 from services.ai import build_depth_analysis_prompt, generate_ai_response, parse_depth_levels
 
@@ -87,6 +88,48 @@ def auto_classify_all_opinions(supabase, room_name: str) -> bool:
     return bool(bulk_update_depth_levels(supabase, updates))
 
 
+def run_manual_depth_generation(supabase, room_name: str) -> None:
+    """"🔍 분석 실행"/"🔄 재분석" 버튼의 실제 실행부.
+
+    대시보드 탭 라디오가 비활성화된 상태로 화면에 반영된 뒤 호출되도록,
+    버튼 클릭 시 바로 실행하지 않고 pending 플래그를 거쳐 여기서 실행된다.
+    """
+    api_key = get_secret("GEMINI_API_KEY", "")
+    if not api_key:
+        st.error("❌ GEMINI_API_KEY가 설정되어 있지 않습니다.")
+        return
+
+    opinions = fetch_opinions_for_depth(supabase, room_name)
+    if not opinions:
+        return
+    df = pd.DataFrame(opinions)
+    unclassified = df[df["depth_level"].isna()]
+
+    # 재분석 시 전체 재분류, 처음 실행 시 미분류만
+    is_reanalysis = unclassified.empty
+    to_classify = (
+        list(zip(df["id"].tolist(), df["content"].tolist()))
+        if is_reanalysis
+        else list(zip(unclassified["id"].tolist(), unclassified["content"].tolist()))
+    )
+    if not to_classify:
+        return
+
+    spinner_text = (
+        f"🔄 재분석 중입니다... ({len(to_classify)}개 발언)"
+        if is_reanalysis
+        else f"🤖 AI가 {len(to_classify)}개 발언을 분석 중입니다..."
+    )
+    with st.spinner(spinner_text):
+        results = _classify_in_batches(to_classify, api_key)
+
+    updates = [{"id": oid, "depth_level": lvl} for oid, lvl in results.items()]
+    if bulk_update_depth_levels(supabase, updates):
+        st.toast(f"✅ {len(updates)}개 발언 분류 완료!", icon="📈")
+    else:
+        st.error("일부 발언 저장에 실패했습니다. 다시 시도해 주세요.")
+
+
 def render_depth_analysis_section(supabase, room_name: str, act_type: str, is_ended: bool = True) -> None:
     """교사 대시보드에 삽입되는 발언 깊이 분석 섹션."""
     if not depth_level_available():
@@ -129,34 +172,12 @@ def render_depth_analysis_section(supabase, room_name: str, act_type: str, is_en
             st.warning(f"⚠️ {unclassified_count}개 발언이 아직 분류되지 않았습니다.")
 
     if run_analysis:
-        api_key = get_secret("GEMINI_API_KEY", "")
-        if not api_key:
-            st.error("❌ GEMINI_API_KEY가 설정되어 있지 않습니다.")
-            return
-
-        # 재분석 시 전체 재분류, 처음 실행 시 미분류만
-        is_reanalysis = unclassified_count == 0
-        to_classify = (
-            list(zip(df["id"].tolist(), df["content"].tolist()))
-            if is_reanalysis
-            else list(zip(unclassified["id"].tolist(), unclassified["content"].tolist()))
-        )
-
-        spinner_text = (
-            f"🔄 재분석 중입니다... ({len(to_classify)}개 발언)"
-            if is_reanalysis
-            else f"🤖 AI가 {len(to_classify)}개 발언을 분석 중입니다..."
-        )
-        with st.spinner(spinner_text):
-            results = _classify_in_batches(to_classify, api_key)
-
-        updates = [{"id": oid, "depth_level": lvl} for oid, lvl in results.items()]
-        success = bulk_update_depth_levels(supabase, updates)
-        if success:
-            st.toast(f"✅ {len(updates)}개 발언 분류 완료!", icon="📈")
-            st.rerun()
-        else:
-            st.error("일부 발언 저장에 실패했습니다. 다시 시도해 주세요.")
+        # 무거운 작업(AI 호출)은 여기서 바로 실행하지 않고, 대시보드 탭
+        # 라디오가 "생성 중(비활성)" 상태로 먼저 반영되도록 플래그만 세우고
+        # rerun한다 (다른 탭으로 이동해 생성이 꼬이는 것 방지).
+        st.session_state[dashboard_busy_key(room_name)] = True
+        st.session_state[dashboard_pending_action_key(room_name)] = "manual_depth"
+        st.rerun(scope="app")
 
     # 분류된 데이터가 있으면 차트 표시
     classified_df = df[df["depth_level"].notna()].copy()

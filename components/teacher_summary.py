@@ -7,7 +7,7 @@ import streamlit as st
 
 from env import get_secret
 from services.ai import generate_ai_response, build_summary_prompt
-from utils import compact_ai_report_output, get_kst_now
+from utils import compact_ai_report_output, get_kst_now, dashboard_busy_key, dashboard_pending_action_key
 from config import AI_MODEL_NAME, AI_MODEL_NAME_PRO, DASHBOARD_FETCH_LIMIT
 from db import (
     fetch_all_opinion_changes, fetch_opinions_for_depth,
@@ -544,6 +544,26 @@ def auto_build_pdf_cache(supabase, room_name, act_type, current_topic) -> None:
         pass  # PDF 미리 만들기는 실패해도 요약 리포트 자체엔 영향 없음
 
 
+def run_manual_summary_generation(supabase, room_name, act_type, current_topic, df_all) -> None:
+    """"✨ 요약 및 베스트 발언 추출" 버튼의 실제 실행부.
+
+    대시보드 탭 라디오가 비활성화된 상태로 화면에 반영된 뒤 호출되도록,
+    버튼 클릭 시 바로 실행하지 않고 pending 플래그를 거쳐 여기서 실행된다.
+    """
+    st.toast("👀 AI가 전체 기록을 꼼꼼히 읽고 있습니다...", icon="⏳")
+    with st.spinner("✍️ 요약 리포트를 작성하고 있습니다..."):
+        report_text = generate_summary_report_text(supabase, room_name, act_type, current_topic, df_all)
+    _cache_key = f'ai_report_text_{room_name}'
+    if report_text:
+        st.session_state[_cache_key] = report_text
+        if topic_ai_report_available():
+            save_ai_report(supabase, room_name, report_text)
+        st.session_state.pop(f'ai_report_pdf_{room_name}', None)  # 리포트가 바뀌었으니 PDF 캐시 무효화
+        st.toast("✅ 리포트 작성 완료!", icon="🎉")
+    else:
+        st.toast("🚨 AI 호출 오류가 발생했습니다.", icon="❌")
+
+
 def render_summary_section(supabase, room_name, act_type, current_topic, df_all):
     st.subheader(f"📝 수업 종료 및 전체 {act_type} 요약 리포트")
 
@@ -560,17 +580,12 @@ def render_summary_section(supabase, room_name, act_type, current_topic, df_all)
             if df_all.empty:
                 st.toast("🚨 분석할 데이터가 없습니다.", icon="⚠️")
             else:
-                st.toast("👀 AI가 전체 기록을 꼼꼼히 읽고 있습니다...", icon="⏳")
-                with st.spinner("✍️ 요약 리포트를 작성하고 있습니다..."):
-                    report_text = generate_summary_report_text(supabase, room_name, act_type, current_topic, df_all)
-                if report_text:
-                    st.session_state[_cache_key] = report_text
-                    if topic_ai_report_available():
-                        save_ai_report(supabase, room_name, report_text)
-                    st.session_state.pop(f'ai_report_pdf_{room_name}', None)  # 리포트가 바뀌었으니 PDF 캐시 무효화
-                    st.toast("✅ 리포트 작성 완료!", icon="🎉")
-                else:
-                    st.toast("🚨 AI 호출 오류가 발생했습니다.", icon="❌")
+                # 무거운 작업(AI 호출)은 여기서 바로 실행하지 않고, 대시보드
+                # 탭 라디오가 "생성 중(비활성)" 상태로 먼저 반영되도록 플래그만
+                # 세우고 rerun한다 (다른 탭으로 이동해 생성이 꼬이는 것 방지).
+                st.session_state[dashboard_busy_key(room_name)] = True
+                st.session_state[dashboard_pending_action_key(room_name)] = "manual_summary"
+                st.rerun(scope="app")
 
     with col_excel:
         if not df_all.empty:
