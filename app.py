@@ -5,6 +5,7 @@ import streamlit as st
 
 from db import (
     debate_ip_column_available,
+    debate_session_id_column_available,
     ensure_db_login,
     fetch_debate_status,
     fetch_live_messages,
@@ -20,7 +21,7 @@ from db import (
     using_service_role_key,
 )
 from config import APP_CSS, MAX_ENTRY_CODE_LEN, MAX_STUDENT_NAME_LEN, DIGITAL_ETHICS_TOPICS
-from utils import anonymize_ip, get_client_ip, get_kst_now_str, log_audit
+from utils import anonymize_ip, get_client_ip, get_kst_now_str, get_or_create_session_uuid, log_audit
 from validators import validate_entry_code, validate_opinion_content, validate_student_name
 from views.home import render_home_page
 from views.lobby import render_lobby_page
@@ -52,6 +53,8 @@ if 'teacher_id' not in st.session_state: st.session_state['teacher_id'] = ""
 if 'is_working' not in st.session_state: st.session_state['is_working'] = False
 if 'ai_hint_manual_mode' not in st.session_state: st.session_state['ai_hint_manual_mode'] = False
 if '_last_debate_status' not in st.session_state: st.session_state['_last_debate_status'] = None
+
+get_or_create_session_uuid()
 
 if st.session_state['page'] != "home":
     col_home_btn, _ = st.columns([1, 7])
@@ -255,6 +258,8 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
                 anonymized_ip = anonymize_ip(client_ip)
                 if anonymized_ip:
                     insert_payload["ip_address"] = anonymized_ip
+            if debate_session_id_column_available() and st.session_state.get("session_uuid"):
+                insert_payload["session_id"] = st.session_state["session_uuid"]
             try:
                 res = submit_opinion(supabase, insert_payload)
                 if res is None:

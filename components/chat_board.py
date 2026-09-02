@@ -118,6 +118,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             like_type = "primary" if is_liked else "secondary"
             name_badge = f"{badge} " if badge else ""
             row_ip = str(row.get("ip_address") or "").strip() if hasattr(row, "get") else ""
+            row_session = str(row.get("session_id") or "").strip() if hasattr(row, "get") else ""
             sentiment_tag = f"`{row.get('sentiment', '')}` " if show_sentiment_tag else ""
 
             if user_role == "교사" and teacher_auth:
@@ -128,8 +129,13 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                         f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
                         unsafe_allow_html=True,
                     )
-                    if row_ip:
-                        st.caption(f"IP: {mask_ip_for_teacher(row_ip)}")
+                    if row_ip or row_session:
+                        _id_bits = []
+                        if row_ip:
+                            _id_bits.append(f"IP: {mask_ip_for_teacher(row_ip)}")
+                        if row_session:
+                            _id_bits.append(f"세션: {row_session[:8]}")
+                        st.caption(" · ".join(_id_bits))
                 with c_actions:
                     _, c_like, c_del = st.columns([0.1, 1, 1])
                     with c_like:
