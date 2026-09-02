@@ -272,12 +272,12 @@ def _render_debate_control(supabase, room_name, act_type, current_topic):
             if set_debate_status(supabase, room_name, "ended") is not None:
                 fetch_debate_status.clear()
                 st.toast("⏹️ 토론이 종료되었습니다. 학생들에게 생각 변화 입력창이 표시됩니다.", icon="✅")
-                with st.spinner("🤖 발언 깊이 분석과 요약 리포트를 자동으로 준비하고 있습니다..."):
-                    fetch_live_messages.clear()
-                    fresh_df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
-                    auto_classify_all_opinions(supabase, room_name)
-                    if auto_generate_summary_report(supabase, room_name, act_type, current_topic, fresh_df_all):
-                        auto_build_pdf_cache(supabase, room_name, act_type, current_topic)
+                # 자동 생성(발언 깊이/요약 리포트)은 무거운 작업이라 바로 여기서
+                # 실행하지 않고, 플래그만 세운 뒤 rerun한다. 그래야 탭 라디오가
+                # "생성 중(비활성)" 상태로 먼저 화면에 반영된 다음에 무거운 작업이
+                # 시작되어, 그 사이 다른 탭을 눌러 생성이 꼬이는 걸 막을 수 있다.
+                st.session_state[f"_auto_gen_busy_{room_name}"] = True
+                st.session_state[f"_auto_gen_pending_{room_name}"] = True
                 st.rerun(scope="app")
 
 
@@ -429,14 +429,29 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
     if st.session_state.get(_DASHBOARD_TAB_KEY) not in tabs:
         st.session_state[_DASHBOARD_TAB_KEY] = tabs[0]
     st.markdown(_DASHBOARD_TAB_CSS, unsafe_allow_html=True)
+    _is_busy = st.session_state.get(f"_auto_gen_busy_{room_name}", False)
+    if _is_busy:
+        st.caption("⏳ 자동 분석/리포트 생성이 끝날 때까지 탭 이동이 잠시 제한됩니다.")
     active_tab = st.radio(
         "대시보드 메뉴",
         tabs,
         key=_DASHBOARD_TAB_KEY,
         horizontal=True,
         label_visibility="collapsed",
+        disabled=_is_busy,
     )
     st.divider()
+
+    if st.session_state.get(f"_auto_gen_pending_{room_name}"):
+        st.session_state[f"_auto_gen_pending_{room_name}"] = False
+        with st.spinner("🤖 발언 깊이 분석과 요약 리포트를 자동으로 준비하고 있습니다..."):
+            fetch_live_messages.clear()
+            fresh_df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
+            auto_classify_all_opinions(supabase, room_name)
+            if auto_generate_summary_report(supabase, room_name, act_type, current_topic, fresh_df_all):
+                auto_build_pdf_cache(supabase, room_name, act_type, current_topic)
+        st.session_state[f"_auto_gen_busy_{room_name}"] = False
+        st.rerun(scope="app")
 
     # 탭마다 고유한 key를 부여해, 탭 전환 시 이전 탭의 남은 요소가 완전히
     # 정리되기 전에 새 탭 내용이 그 아래 잠깐 겹쳐 보이는 문제를 방지.
