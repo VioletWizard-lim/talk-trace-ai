@@ -6,8 +6,10 @@ from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
 from utils import anonymize_ip, create_analysis_image, get_client_ip, get_or_create_session_uuid
 from db import (
     ai_feedback_available,
+    depth_level_available,
     fetch_live_messages,
     fetch_opinion_change,
+    fetch_opinions_for_depth,
     opinion_changes_available,
     save_opinion_analysis,
     save_opinion_feedback,
@@ -17,6 +19,7 @@ from db import (
 )
 from env import get_secret
 from services.ai import build_feedback_prompt, build_opinion_change_prompt, generate_ai_response
+from components.depth_analysis import _DEPTH_LABELS
 
 
 _STANCE_OPTIONS = ["🔵 찬성", "🔴 반대"]
@@ -107,6 +110,30 @@ def render_pre_opinion_form(supabase, room_name, student_name, current_topic, ac
             st.rerun(scope="app")
         else:
             st.error("저장에 실패했습니다. 다시 시도해 주세요.")
+
+
+def _build_student_depth_summary(supabase, room_name, student_name) -> str:
+    """학생 본인 발언들의 깊이(1~4단계) 분포를 요약 문자열로 만든다.
+
+    발언 깊이 분석이 아직 실행되지 않았거나(컬럼/데이터 없음) 해당
+    학생의 분류된 발언이 없으면 빈 문자열을 반환한다.
+    """
+    if not depth_level_available():
+        return ""
+    opinions = fetch_opinions_for_depth(supabase, room_name)
+    if not opinions:
+        return ""
+    levels = [
+        int(o["depth_level"]) for o in opinions
+        if o.get("student_name") == student_name and o.get("depth_level") is not None
+    ]
+    if not levels:
+        return ""
+
+    avg = sum(levels) / len(levels)
+    counts = {lvl: levels.count(lvl) for lvl in sorted(set(levels))}
+    breakdown = ", ".join(f"{_DEPTH_LABELS[lvl]} {cnt}회" for lvl, cnt in counts.items())
+    return f"평균 {avg:.1f}단계 (총 {len(levels)}개 발언) — {breakdown}"
 
 
 @st.fragment
@@ -211,6 +238,9 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
                     st.rerun()
 
         if ai_analysis:
+            depth_summary = _build_student_depth_summary(supabase, room_name, student_name)
+            if depth_summary:
+                st.info(f"📈 **나의 발언 깊이:** {depth_summary}")
             st.info("🤖 **AI 배움 분석**")
             st.markdown(ai_analysis.replace("\n", "\n\n"))
             _render_image_download(
@@ -218,6 +248,7 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
                 session_key=f"img_{room_name}_{student_name}",
                 btn_key="dl_analysis_student",
                 ai_feedback=ai_feedback,
+                depth_summary=depth_summary,
             )
         else:
             if st.button("🤖 AI 배움 분석 받기", use_container_width=True):
@@ -226,14 +257,15 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
 
 
 def _render_image_download(student_name, topic, pre_opinion, post_opinion, ai_analysis,
-                           session_key, btn_key, ai_feedback=""):
+                           session_key, btn_key, ai_feedback="", depth_summary=""):
     """이미지를 base64 데이터 URI 링크로 렌더링 — rerun 없이 즉시 다운로드."""
     import base64
-    cache_key = f"{session_key}_{len(ai_analysis)}_{len(ai_feedback)}_b64"
+    cache_key = f"{session_key}_{len(ai_analysis)}_{len(ai_feedback)}_{len(depth_summary)}_b64"
     if cache_key not in st.session_state:
         try:
             img_bytes = create_analysis_image(
-                student_name, topic, pre_opinion, post_opinion, ai_analysis, ai_feedback
+                student_name, topic, pre_opinion, post_opinion, ai_analysis, ai_feedback,
+                depth_summary=depth_summary,
             )
             st.session_state[cache_key] = base64.b64encode(img_bytes).decode()
         except Exception:

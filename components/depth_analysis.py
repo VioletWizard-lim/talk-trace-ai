@@ -60,6 +60,33 @@ def _classify_in_batches(opinions_to_classify: list, api_key: str) -> dict:
     return all_results
 
 
+def auto_classify_all_opinions(supabase, room_name: str) -> bool:
+    """토론/토의 종료 시 자동으로 호출되는 발언 깊이 분석.
+
+    미분류 발언만 분류하며(이미 분류된 발언은 재분석하지 않음),
+    UI 버튼 없이 조용히 실행되고 성공 여부만 반환한다.
+    """
+    if not depth_level_available():
+        return False
+    api_key = get_secret("GEMINI_API_KEY", "")
+    if not api_key:
+        return False
+
+    opinions = fetch_opinions_for_depth(supabase, room_name)
+    if not opinions:
+        return False
+
+    df = pd.DataFrame(opinions)
+    unclassified = df[df["depth_level"].isna()]
+    if unclassified.empty:
+        return True  # 이미 전부 분류됨
+
+    to_classify = list(zip(unclassified["id"].tolist(), unclassified["content"].tolist()))
+    results = _classify_in_batches(to_classify, api_key)
+    updates = [{"id": oid, "depth_level": lvl} for oid, lvl in results.items()]
+    return bool(bulk_update_depth_levels(supabase, updates))
+
+
 def render_depth_analysis_section(supabase, room_name: str, act_type: str, is_ended: bool = True) -> None:
     """교사 대시보드에 삽입되는 발언 깊이 분석 섹션."""
     if not depth_level_available():
