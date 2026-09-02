@@ -1,5 +1,10 @@
 import streamlit as st
-from db import fetch_room_entry_code, find_duplicate_session, find_duplicate_presence, upsert_session_presence
+from db import (
+    fetch_room_entry_code,
+    find_duplicate_session,
+    claim_session_presence,
+    find_number_switch_abuse,
+)
 from validators import validate_student_number
 from config import AUTO_JOIN_ON_REFRESH
 
@@ -34,18 +39,24 @@ def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_numb
                     st.error(f"❌ {number_error_message}")
                 else:
                     session_id = st.session_state.get("session_uuid", "")
-                    is_duplicate = (
-                        find_duplicate_presence(supabase, room_name, student_number, session_id)
-                        or find_duplicate_session(supabase, room_name, student_number, session_id)
-                    )
-                    if is_duplicate:
-                        st.toast(
-                            "⚠️ 이 학번은 다른 기기/브라우저에서도 최근 접속한 기록이 있습니다. 본인이 맞는지 확인해 주세요.",
-                            icon="⚠️",
+                    already_used = find_number_switch_abuse(supabase, room_name, session_id, student_number)
+                    if already_used:
+                        st.error(
+                            f"❌ 이 브라우저는 이미 {len(already_used)}개의 다른 학번({', '.join(already_used)})으로 "
+                            "이 방에 입장한 기록이 있습니다. 학번을 여러 번 바꿔 입장할 수 없습니다."
                         )
-                    upsert_session_presence(supabase, room_name, student_number, session_id)
-                    st.session_state['joined'] = True
-                    st.rerun()
+                    else:
+                        is_duplicate = (
+                            claim_session_presence(supabase, room_name, student_number, session_id)
+                            or find_duplicate_session(supabase, room_name, student_number, session_id)
+                        )
+                        if is_duplicate:
+                            st.toast(
+                                "⚠️ 이 학번은 다른 기기/브라우저에서 이미 접속 중인 것 같습니다. 본인이 맞는지 확인해 주세요.",
+                                icon="⚠️",
+                            )
+                        st.session_state['joined'] = True
+                        st.rerun()
         else:
             if AUTO_JOIN_ON_REFRESH and teacher_auth and not admin_auth:
                 st.session_state['joined'] = True

@@ -561,16 +561,76 @@ def find_duplicate_session(
     return False
 
 
-def find_duplicate_presence(
-    supabase: Client, room_name: str, student_name: str, current_session_id: str, window_minutes: int = 5
+def claim_session_presence(
+    supabase: Client, room_name: str, student_name: str, session_id: str, window_minutes: int = 5
 ) -> bool:
-    """같은 방·같은 학번이 다른 session_id로 최근(window_minutes) 접속해 있는지 확인합니다.
+    """입장/접속 유지 시점에 학번 점유 상태를 확인하고, 점유 가능할 때만 내 것으로 갱신한다.
 
-    발언/생각 변화 제출 여부와 무관하게 '입장'만으로 남긴 접속 기록(session_presence)을
-    기준으로 판단한다. session_presence 테이블이 없으면 확인 불가하므로 False.
+    - 기존 점유 기록이 없거나, 점유자가 나 자신(session_id 동일)이거나,
+      점유자가 오래(window_minutes 이상) 조용했다면 → 내가 점유(갱신/생성)하고 False 반환.
+    - 다른 session_id가 아직 활동 중(window_minutes 이내)이면 → 점유를 뺏지 않고 그대로 두고
+      True(중복 경고 필요) 반환.
+
+    한쪽이 점유권을 계속 유지하게 해서, 먼저 들어온 사람이 새로고침할 때마다
+    자기 자신이 침입자로 오인되는 것을 방지한다. session_presence 테이블이 없으면
+    확인 자체가 불가능하므로 항상 False.
     """
-    if not session_presence_available() or not current_session_id:
+    if not session_presence_available() or not session_id:
         return False
+
+    from datetime import timedelta
+    from utils import get_kst_now
+    cutoff = (get_kst_now() - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+    now = get_kst_now_str()
+
+    existing = execute_query(
+        supabase.table("session_presence")
+        .select("id, session_id, last_seen")
+        .eq("room_name", room_name)
+        .eq("student_name", student_name)
+        .limit(1),
+        fail_message="접속 기록 조회 실패",
+    )
+    row = existing.data[0] if existing and existing.data else None
+
+    if row is None:
+        execute_query(
+            supabase.table("session_presence").insert(
+                {"room_name": room_name, "student_name": student_name, "session_id": session_id, "last_seen": now}
+            ),
+            fail_message="접속 기록 생성 실패",
+        )
+        return False
+
+    is_owner = row.get("session_id") == session_id
+    is_stale = (row.get("last_seen") or "") < cutoff
+
+    if is_owner or is_stale:
+        execute_query(
+            supabase.table("session_presence").update({"session_id": session_id, "last_seen": now}).eq("id", row["id"]),
+            fail_message="접속 기록 갱신 실패",
+        )
+        return False
+
+    return True
+
+
+def find_number_switch_abuse(
+    supabase: Client,
+    room_name: str,
+    session_id: str,
+    student_name: str,
+    window_minutes: int = 10,
+    max_numbers: int = 3,
+) -> list:
+    """같은 브라우저(session_id)가 같은 방에서 최근 서로 다른 학번을 몇 개나 썼는지 확인합니다.
+
+    오타 등 실수를 감안해 max_numbers(기본 3개)까지는 허용하고,
+    이번 시도까지 포함해 그 이상이 되면 이미 사용된 다른 학번 목록을 반환한다
+    (허용 범위 내면 빈 리스트).
+    """
+    if not session_presence_available() or not session_id:
+        return []
 
     from datetime import timedelta
     from utils import get_kst_now
@@ -578,41 +638,16 @@ def find_duplicate_presence(
 
     res = execute_query(
         supabase.table("session_presence")
-        .select("session_id")
+        .select("student_name")
         .eq("room_name", room_name)
-        .eq("student_name", student_name)
-        .neq("session_id", current_session_id)
+        .eq("session_id", session_id)
         .gte("last_seen", cutoff),
-        fail_message="접속 기록 확인 실패",
+        fail_message="학번 전환 확인 실패",
     )
-    return bool(res and res.data)
-
-
-def upsert_session_presence(supabase: Client, room_name: str, student_name: str, session_id: str):
-    """입장(또는 접속 유지) 시점에 접속 기록을 남긴다. 같은 방+학번 기록이 있으면 갱신, 없으면 새로 생성."""
-    if not session_presence_available() or not session_id:
-        return None
-
-    now = get_kst_now_str()
-    payload = {"session_id": session_id, "last_seen": now}
-
-    existing = execute_query(
-        supabase.table("session_presence")
-        .select("id")
-        .eq("room_name", room_name)
-        .eq("student_name", student_name)
-        .limit(1),
-        fail_message="접속 기록 조회 실패",
-    )
-    if existing and existing.data:
-        return execute_query(
-            supabase.table("session_presence").update(payload).eq("id", existing.data[0]["id"]),
-            fail_message="접속 기록 갱신 실패",
-        )
-    return execute_query(
-        supabase.table("session_presence").insert({"room_name": room_name, "student_name": student_name, **payload}),
-        fail_message="접속 기록 생성 실패",
-    )
+    others = sorted({row["student_name"] for row in (res.data if res else [])} - {student_name})
+    if len(others) + 1 > max_numbers:
+        return others
+    return []
 
 
 def delete_opinion_message(supabase: Client, message_id: int, deleted_by: str = ""):
