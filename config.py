@@ -9,7 +9,6 @@ AI_HINT_ENABLED = str(get_secret("AI_HINT_ENABLED", "true")).lower() not in ("fa
 ROOM_DESTROY_ENABLED = str(get_secret("ROOM_DESTROY_ENABLED", "true")).lower() not in ("false", "0", "no")
 AUTO_JOIN_ON_REFRESH = str(get_secret("AUTO_JOIN_ON_REFRESH", "false")).lower() not in ("false", "0", "no")
 MAX_ROOM_NAME_LEN = 60
-MAX_STUDENT_NAME_LEN = 30
 MAX_TOPIC_LEN = 120
 MAX_ENTRY_CODE_LEN = 60
 UI_FONT_FAMILY = "sans-serif"

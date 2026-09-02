@@ -201,7 +201,8 @@ def render_sidebar(supabase) -> dict:
             student_number = st.text_input(
                 "학번",
                 key="student_number_input",
-                placeholder="예: 1101",
+                placeholder="예: 10101 (4~5자리 숫자)",
+                max_chars=5,
                 disabled=_joined,
                 help="방 입장 후에는 학번을 변경할 수 없습니다." if _joined else None,
             )

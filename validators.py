@@ -215,6 +215,26 @@ def validate_student_name(raw_text, max_len=30):
     )
 
 
+def validate_student_number(raw_text):
+    """
+    학번 검증. 4자리 또는 5자리 숫자만 허용합니다.
+    """
+    stripped = (raw_text or "").strip()
+    if not stripped:
+        return (
+            False, "",
+            ValidationError.EMPTY,
+            VALIDATION_MESSAGES[ValidationError.EMPTY].format(field="학번"),
+        )
+    if not re.fullmatch(r"\d{4,5}", stripped):
+        return (
+            False, "",
+            ValidationError.INVALID_CHARS,
+            "학번은 4자리 또는 5자리 숫자로만 입력해 주세요. (예: 10101)",
+        )
+    return True, stripped, None, None
+
+
 def validate_opinion_content(raw_text, max_len=700):
     """
     의견 내용 검증.

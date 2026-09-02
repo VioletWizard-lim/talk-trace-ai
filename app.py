@@ -20,9 +20,9 @@ from db import (
     update_topic,
     using_service_role_key,
 )
-from config import APP_CSS, MAX_ENTRY_CODE_LEN, MAX_STUDENT_NAME_LEN, DIGITAL_ETHICS_TOPICS
+from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS
 from utils import anonymize_ip, get_client_ip, get_kst_now_str, get_or_create_session_uuid, log_audit
-from validators import validate_entry_code, validate_opinion_content, validate_student_name
+from validators import validate_entry_code, validate_opinion_content, validate_student_number
 from views.home import render_home_page
 from views.lobby import render_lobby_page
 from components.admin_panel import render_admin_page
@@ -238,14 +238,15 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
             st.stop()
         st.session_state['is_working'] = True
         input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
-        student_ok, safe_student_name, student_error_code, student_error_message = validate_student_name(student_name, max_len=MAX_STUDENT_NAME_LEN)
-        student_number_ok, safe_student_number, _, student_number_error_message = validate_student_name(student_number, max_len=20)
-        if not student_number_ok and user_role == "학생":
-            st.session_state['is_working'] = False
-            st.error(f"❌ {student_number_error_message}")
-            st.stop()
-        if user_role == "학생" and (not safe_student_name or safe_student_name == "익명"):
-            safe_student_name = safe_student_number or "학번미입력"
+        student_number_ok, safe_student_number, _, student_number_error_message = validate_student_number(student_number)
+        if user_role == "학생":
+            if not student_number_ok:
+                st.session_state['is_working'] = False
+                st.error(f"❌ {student_number_error_message}")
+                st.stop()
+            safe_student_name = safe_student_number
+        else:
+            safe_student_name = student_name
         if input_ok and safe_input:
             now = get_kst_now_str()
             author_role_for_submit = "교사" if user_role == "교사" else "학생"

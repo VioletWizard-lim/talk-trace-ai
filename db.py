@@ -513,6 +513,50 @@ def is_recent_submission(supabase: Client, room_name: str, student_name: str, co
     return bool(res and res.data)
 
 
+def find_duplicate_session(
+    supabase: Client, room_name: str, student_name: str, current_session_id: str, window_minutes: int = 10
+) -> bool:
+    """같은 방·같은 학번이 다른 브라우저/기기(session_id)에서 최근에 활동했는지 확인합니다.
+
+    차단은 하지 않고 경고 표시용으로만 쓰인다. session_id 컬럼이 없으면 확인 불가하므로 False.
+    """
+    if not current_session_id:
+        return False
+
+    from datetime import timedelta
+    from utils import get_kst_now
+    cutoff = (get_kst_now() - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+
+    if debate_session_id_column_available():
+        res = execute_query(
+            supabase.table("debate")
+            .select("session_id")
+            .eq("room_name", room_name)
+            .eq("student_name", student_name)
+            .neq("session_id", current_session_id)
+            .gte("timestamp", cutoff)
+            .limit(1),
+            fail_message="중복 접속 확인 실패",
+        )
+        if res and res.data:
+            return True
+
+    if opinion_changes_session_id_column_available():
+        res = execute_query(
+            supabase.table("opinion_changes")
+            .select("session_id")
+            .eq("room_name", room_name)
+            .eq("student_name", student_name)
+            .neq("session_id", current_session_id)
+            .limit(1),
+            fail_message="중복 접속 확인 실패(opinion_changes)",
+        )
+        if res and res.data:
+            return True
+
+    return False
+
+
 def delete_opinion_message(supabase: Client, message_id: int, deleted_by: str = ""):
     """발언을 삭제(보관)합니다.
 
