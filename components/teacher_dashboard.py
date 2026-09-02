@@ -6,7 +6,7 @@ import streamlit as st
 
 from db import ai_feedback_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, set_debate_status, stance_available
 from utils import create_analysis_image
-from components.opinion_change import _render_image_download, _STANCE_OPTIONS, render_feedback_card
+from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from validators import with_fallback_author_role
 from utils import log_audit
@@ -104,12 +104,16 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
         render_feedback_card(ai_feedback)
 
     if ai:
+        depth_summary = _build_student_depth_summary(supabase, room_name, selected)
+        if depth_summary:
+            st.caption(f"📈 발언 깊이: {depth_summary}")
         st.caption("🤖 AI 배움 분석")
         st.markdown(ai.replace("\n", "\n\n"))
         _render_image_download(
             selected, current_topic, pre, post, ai,
             session_key=f"img_teacher_{room_name}_{selected}",
             btn_key="dl_analysis_teacher",
+            depth_summary=depth_summary,
             ai_feedback=ai_feedback,
         )
     else:
