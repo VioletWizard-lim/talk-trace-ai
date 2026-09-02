@@ -538,10 +538,13 @@ def render_summary_section(supabase, room_name, act_type, current_topic, df_all)
             if _cached_pdf and _cached_pdf.get('report_text') == report_text:
                 pdf_bytes = _cached_pdf['bytes']
             else:
-                df_oc = fetch_all_opinion_changes(supabase, room_name) if opinion_changes_available() else pd.DataFrame()
-                depth_opinions = fetch_opinions_for_depth(supabase, room_name) if depth_level_available() else []
-                pdf_bytes = _build_pdf(room_name, act_type, current_topic, report_text, df_oc, depth_opinions)
-                st.session_state[_pdf_cache_key] = {'report_text': report_text, 'bytes': pdf_bytes}
+                # 캐시가 없을 때(최초 1회)만 실제로 느린 작업이 발생하므로,
+                # 이때만 로딩 표시를 띄운다 (매 탭 전환마다 뜨지 않도록).
+                with st.spinner("📄 PDF를 준비하고 있습니다..."):
+                    df_oc = fetch_all_opinion_changes(supabase, room_name) if opinion_changes_available() else pd.DataFrame()
+                    depth_opinions = fetch_opinions_for_depth(supabase, room_name) if depth_level_available() else []
+                    pdf_bytes = _build_pdf(room_name, act_type, current_topic, report_text, df_oc, depth_opinions)
+                    st.session_state[_pdf_cache_key] = {'report_text': report_text, 'bytes': pdf_bytes}
             st.download_button(
                 "📄 리포트 PDF 다운로드",
                 data=pdf_bytes,
