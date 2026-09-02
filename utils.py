@@ -97,6 +97,19 @@ def anonymize_ip(raw_ip: str) -> str | None:
     return None
 
 
+def dashboard_busy_key(room_name: str) -> str:
+    """교사 대시보드에서 무거운 AI 작업(자동/수동 생성)이 진행 중일 때
+    탭 전환을 막기 위한 session_state 키. 여러 컴포넌트 파일이 공유하므로
+    순환 임포트를 피하기 위해 이 파일(의존성 없는 utils)에 둔다."""
+    return f"_dashboard_busy_{room_name}"
+
+
+def dashboard_pending_action_key(room_name: str) -> str:
+    """어떤 무거운 작업을 실행해야 하는지 나타내는 session_state 키.
+    값은 액션 이름 문자열(예: "auto_end", "manual_summary", "manual_depth")."""
+    return f"_dashboard_pending_action_{room_name}"
+
+
 def get_or_create_session_uuid():
     """탭(접속)마다 고유한 세션 UUID를 발급/유지합니다.
 
