@@ -147,8 +147,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                     with col_c_text:
                         st.markdown(
                             f"`{c.get('comment_type', '')}` **{c.get('student_name', '')}** "
-                            f"<span style='color:gray; font-size:12px;'>{format_kst_datetime(c.get('timestamp', ''))}</span>"
-                            f"<br>{_escape_md(c.get('content', ''))}",
+                            f"<span style='color:gray; font-size:12px;'>{format_kst_datetime(c.get('timestamp', ''))}</span>",
                             unsafe_allow_html=True,
                         )
                         if user_role == "교사" and teacher_auth:
@@ -161,6 +160,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                 if c_session:
                                     _id_bits.append(f"세션: {c_session[:8]}")
                                 st.caption(" · ".join(_id_bits))
+                        st.markdown(_escape_md(c.get('content', '')))
                     with col_c_like:
                         st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
                                   type=c_like_type,
@@ -232,13 +232,13 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             _id_bits.append(f"세션: {row_session[:8]}")
                         st.caption(" · ".join(_id_bits))
                 with c_actions:
-                    _, c_like, c_del = st.columns([0.1, 1, 1])
+                    c_like, c_del = st.columns([1, 1])
                     with c_like:
                         st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
-                                  type=like_type, use_container_width=True,
+                                  type=like_type,
                                   on_click=do_toggle_like, args=(msg_id,))
                     with c_del:
-                        if st.button("❌", key=f"del_{msg_id}", help="강제 삭제", use_container_width=True):
+                        if st.button("❌", key=f"del_{msg_id}", help="강제 삭제"):
                             st.session_state[f"confirm_del_msg_{msg_id}"] = True
 
                 if st.session_state.get(f"confirm_del_msg_{msg_id}"):
@@ -279,11 +279,9 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                         unsafe_allow_html=True,
                     )
                 with c_actions:
-                    _, c_like = st.columns([1, 1])
-                    with c_like:
-                        st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
-                                  type=like_type, use_container_width=True,
-                                  on_click=do_toggle_like, args=(msg_id,))
+                    st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
+                              type=like_type,
+                              on_click=do_toggle_like, args=(msg_id,))
             st.info(_escape_md(row['content']))
             if use_comments:
                 render_reply_thread(msg_id)
