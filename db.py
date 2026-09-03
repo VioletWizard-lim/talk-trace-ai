@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 import streamlit as st
@@ -170,19 +171,24 @@ def check_schema_columns() -> dict:
         ("comment_likes.comment_id",       lambda: supabase.table("comment_likes").select("comment_id").limit(1).execute()),
     ]
 
-    results = {}
-    connection_error: Exception | None = None
-    for key, query_fn in checks:
+    def _run_check(item):
+        key, query_fn = item
         try:
             query_fn()
-            results[key] = True
+            return key, True, None
         except Exception as e:
             if _is_connection_error(e):
-                connection_error = e
-                results[key] = False
-            else:
-                logger.info("컬럼 미존재 확인 [%s]: %s", key, e)
-                results[key] = False
+                return key, False, e
+            logger.info("컬럼 미존재 확인 [%s]: %s", key, e)
+            return key, False, None
+
+    results = {}
+    connection_error: Exception | None = None
+    with ThreadPoolExecutor(max_workers=len(checks)) as executor:
+        for key, ok, err in executor.map(_run_check, checks):
+            results[key] = ok
+            if err is not None:
+                connection_error = err
 
     if connection_error is not None:
         # 연결 오류 발생 시 결과를 캐시하지 않고 예외 전파 → 다음 호출 시 재시도
