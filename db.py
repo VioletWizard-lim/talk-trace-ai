@@ -165,6 +165,8 @@ def check_schema_columns() -> dict:
         ("topic.is_hidden",                lambda: supabase.table("topic").select("is_hidden").limit(1).execute()),
         ("session_attempts.session_id",    lambda: supabase.table("session_attempts").select("session_id").limit(1).execute()),
         ("comments.debate_id",             lambda: supabase.table("comments").select("debate_id").limit(1).execute()),
+        ("comments.ip_address",            lambda: supabase.table("comments").select("ip_address").limit(1).execute()),
+        ("comments.session_id",            lambda: supabase.table("comments").select("session_id").limit(1).execute()),
         ("comment_likes.comment_id",       lambda: supabase.table("comment_likes").select("comment_id").limit(1).execute()),
     ]
 
@@ -256,6 +258,12 @@ def session_attempts_available() -> bool:
 
 def comments_available() -> bool:
     return _schema().get("comments.debate_id", False)
+
+def comments_ip_column_available() -> bool:
+    return _schema().get("comments.ip_address", False)
+
+def comments_session_id_column_available() -> bool:
+    return _schema().get("comments.session_id", False)
 
 def comment_likes_available() -> bool:
     return _schema().get("comment_likes.comment_id", False)
@@ -820,7 +828,10 @@ def fetch_comments_for_room(_supabase: Client, room_name: str) -> list:
     return res.data if res and res.data else []
 
 
-def create_comment(supabase: Client, room_name: str, debate_id: int, student_name: str, comment_type: str, content: str):
+def create_comment(
+    supabase: Client, room_name: str, debate_id: int, student_name: str, comment_type: str, content: str,
+    ip_address: str = None, session_id: str = None,
+):
     """발언에 댓글(반박/보충)을 작성합니다."""
     if not comments_available():
         return None
@@ -832,6 +843,10 @@ def create_comment(supabase: Client, room_name: str, debate_id: int, student_nam
         "content": content,
         "timestamp": get_kst_now_str(),
     }
+    if ip_address and comments_ip_column_available():
+        payload["ip_address"] = ip_address
+    if session_id and comments_session_id_column_available():
+        payload["session_id"] = session_id
     return execute_query(supabase.table("comments").insert(payload), fail_message="댓글 작성 실패")
 
 
