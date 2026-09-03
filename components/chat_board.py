@@ -235,29 +235,33 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             sentiment_tag = f"`{row.get('sentiment', '')}` " if show_sentiment_tag else ""
 
             if user_role == "교사" and teacher_auth:
-                c_name, c_actions = st.columns([7, 2])
-                with c_name:
-                    st.markdown(
-                        f"{sentiment_tag}**{name_badge}{row['student_name']}** "
-                        f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
-                        unsafe_allow_html=True,
-                    )
-                    if row_ip or row_session:
-                        _id_bits = []
-                        if row_ip:
-                            _id_bits.append(f"IP: {mask_ip_for_teacher(row_ip)}")
-                        if row_session:
-                            _id_bits.append(f"세션: {row_session[:8]}")
-                        st.caption(" · ".join(_id_bits))
-                with c_actions:
-                    c_like, c_del = st.columns([1, 1], gap="small")
-                    with c_like:
-                        st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
-                                  type=like_type,
-                                  on_click=do_toggle_like, args=(msg_id,))
-                    with c_del:
-                        if st.button("❌", key=f"del_{msg_id}", help="강제 삭제"):
-                            st.session_state[f"confirm_del_msg_{msg_id}"] = True
+                with st.container(border=True):
+                    c_name, c_actions = st.columns([7, 2])
+                    with c_name:
+                        st.markdown(
+                            f"{sentiment_tag}**{name_badge}{row['student_name']}** "
+                            f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
+                            unsafe_allow_html=True,
+                        )
+                        if row_ip or row_session:
+                            _id_bits = []
+                            if row_ip:
+                                _id_bits.append(f"IP: {mask_ip_for_teacher(row_ip)}")
+                            if row_session:
+                                _id_bits.append(f"세션: {row_session[:8]}")
+                            st.caption(" · ".join(_id_bits))
+                    with c_actions:
+                        c_like, c_del = st.columns([1, 1], gap="small")
+                        with c_like:
+                            st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
+                                      type=like_type,
+                                      on_click=do_toggle_like, args=(msg_id,))
+                        with c_del:
+                            if st.button("❌", key=f"del_{msg_id}", help="강제 삭제"):
+                                st.session_state[f"confirm_del_msg_{msg_id}"] = True
+                    st.info(_escape_md(row['content']))
+                    if use_comments:
+                        render_reply_thread(msg_id)
 
                 if st.session_state.get(f"confirm_del_msg_{msg_id}"):
                     _del_notice = (
@@ -289,20 +293,21 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             st.session_state.pop(f"confirm_del_msg_{msg_id}", None)
                             st.rerun()
             else:
-                c_name, c_actions = st.columns([7, 2])
-                with c_name:
-                    st.markdown(
-                        f"{sentiment_tag}**{name_badge}{row['student_name']}** "
-                        f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
-                        unsafe_allow_html=True,
-                    )
-                with c_actions:
-                    st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
-                              type=like_type,
-                              on_click=do_toggle_like, args=(msg_id,))
-            st.info(_escape_md(row['content']))
-            if use_comments:
-                render_reply_thread(msg_id)
+                with st.container(border=True):
+                    c_name, c_actions = st.columns([7, 2])
+                    with c_name:
+                        st.markdown(
+                            f"{sentiment_tag}**{name_badge}{row['student_name']}** "
+                            f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
+                            unsafe_allow_html=True,
+                        )
+                    with c_actions:
+                        st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
+                                  type=like_type, use_container_width=True,
+                                  on_click=do_toggle_like, args=(msg_id,))
+                    st.info(_escape_md(row['content']))
+                    if use_comments:
+                        render_reply_thread(msg_id)
             st.write("")
 
         if current_mode == "⚔️ 찬반 토론":
