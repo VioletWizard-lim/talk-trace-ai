@@ -6,7 +6,9 @@ from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
 from utils import anonymize_ip, create_analysis_image, get_client_ip, get_or_create_session_uuid
 from db import (
     ai_feedback_available,
+    comments_available,
     depth_level_available,
+    fetch_comments_for_room,
     fetch_live_messages,
     fetch_opinion_change,
     fetch_opinions_for_depth,
@@ -288,14 +290,24 @@ _FEEDBACK_FALLBACK = "발언 기록이 부족하여 분석이 어렵습니다."
 
 
 def _get_debate_history(supabase, room_name, student_name):
-    """학생 발언 기록을 문자열로 반환. 없으면 None."""
+    """학생 발언 + 답글 기록을 문자열로 반환. 아무것도 없으면 None."""
     df_all = fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
-    if df_all.empty:
+    student_df = df_all[df_all["student_name"] == student_name] if not df_all.empty else df_all
+    lines = (
+        [f"- [{row['sentiment']}] {row['content']}" for _, row in student_df.iterrows()]
+        if not student_df.empty else []
+    )
+
+    if comments_available():
+        lines += [
+            f"- [답글:{c.get('comment_type', '')}] {c.get('content', '')}"
+            for c in fetch_comments_for_room(supabase, room_name)
+            if c.get("student_name") == student_name
+        ]
+
+    if not lines:
         return None
-    student_df = df_all[df_all["student_name"] == student_name]
-    if student_df.empty:
-        return None
-    return "\n".join(f"- [{row['sentiment']}] {row['content']}" for _, row in student_df.iterrows())
+    return "\n".join(lines)
 
 
 def _trigger_feedback_only(supabase, room_name, student_name, act_type, current_topic) -> bool:

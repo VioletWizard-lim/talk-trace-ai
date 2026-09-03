@@ -13,6 +13,7 @@ from db import (
     fetch_all_opinion_changes, fetch_opinions_for_depth,
     opinion_changes_available, stance_available, depth_level_available,
     topic_ai_report_available, save_ai_report, fetch_ai_report,
+    comments_available, fetch_comments_for_room,
 )
 
 _NANUM_FONT_PATH = "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"
@@ -459,6 +460,14 @@ def generate_summary_report_text(supabase, room_name, act_type, current_topic, d
         f"[{row['student_name']} - {row['sentiment']}] {row['content']}"
         for _, row in df_all.iterrows()
     ])
+
+    if comments_available():
+        comment_lines = "\n".join([
+            f"[{c.get('student_name', '')} - 답글:{c.get('comment_type', '')}] {c.get('content', '')}"
+            for c in fetch_comments_for_room(supabase, room_name)
+        ])
+        if comment_lines:
+            full_history += "\n" + comment_lines
 
     stance_summary = ""
     if act_type == "토론" and opinion_changes_available() and stance_available():
