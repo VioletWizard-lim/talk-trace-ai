@@ -143,7 +143,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                     c_like_label = f"👍 {c_count}" if c_count > 0 else "👍"
                     c_like_type = "primary" if c_is_liked else "secondary"
 
-                    col_c_text, col_c_like, col_c_del = st.columns([6, 1.2, 0.8])
+                    col_c_text, col_c_like, col_c_del = st.columns([6, 1.3, 1.3])
                     with col_c_text:
                         st.markdown(
                             f"`{c.get('comment_type', '')}` **{c.get('student_name', '')}** "
@@ -163,11 +163,11 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                 st.caption(" · ".join(_id_bits))
                     with col_c_like:
                         st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
-                                  type=c_like_type, use_container_width=True,
+                                  type=c_like_type,
                                   on_click=do_toggle_comment_like, args=(c_id,))
                     with col_c_del:
                         if user_role == "교사" and teacher_auth:
-                            if st.button("❌", key=f"cdel_{c_id}", help="댓글 삭제", use_container_width=True):
+                            if st.button("❌", key=f"cdel_{c_id}", help="댓글 삭제"):
                                 if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
                                     fetch_comments_for_room.clear()
                                     st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
