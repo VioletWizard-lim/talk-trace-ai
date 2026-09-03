@@ -164,6 +164,8 @@ def check_schema_columns() -> dict:
         ("topic.ai_report",                lambda: supabase.table("topic").select("ai_report").limit(1).execute()),
         ("topic.is_hidden",                lambda: supabase.table("topic").select("is_hidden").limit(1).execute()),
         ("session_attempts.session_id",    lambda: supabase.table("session_attempts").select("session_id").limit(1).execute()),
+        ("comments.debate_id",             lambda: supabase.table("comments").select("debate_id").limit(1).execute()),
+        ("comment_likes.comment_id",       lambda: supabase.table("comment_likes").select("comment_id").limit(1).execute()),
     ]
 
     results = {}
@@ -251,6 +253,12 @@ def ai_feedback_available() -> bool:
 
 def session_attempts_available() -> bool:
     return _schema().get("session_attempts.session_id", False)
+
+def comments_available() -> bool:
+    return _schema().get("comments.debate_id", False)
+
+def comment_likes_available() -> bool:
+    return _schema().get("comment_likes.comment_id", False)
 
 
 # ==========================================
@@ -790,6 +798,116 @@ def create_teacher_hint(supabase: Client, payload):
         supabase.table("debate").insert(payload),
         fail_message="교사 힌트 전송 실패",
     )
+
+
+# ==========================================
+# [댓글(반박/보충)] 관련 쿼리
+# ==========================================
+
+@st.cache_data(ttl=15)
+def fetch_comments_for_room(_supabase: Client, room_name: str) -> list:
+    """이 방의 삭제되지 않은 모든 댓글을 반환합니다. [{"id", "debate_id", "student_name", ...}, ...]"""
+    if not comments_available():
+        return []
+    res = execute_query(
+        _supabase.table("comments")
+        .select("*")
+        .eq("room_name", room_name)
+        .or_("is_deleted.is.null,is_deleted.eq.false")
+        .order("id"),
+        fail_message="댓글 조회 실패",
+    )
+    return res.data if res and res.data else []
+
+
+def create_comment(supabase: Client, room_name: str, debate_id: int, student_name: str, comment_type: str, content: str):
+    """발언에 댓글(반박/보충)을 작성합니다."""
+    if not comments_available():
+        return None
+    payload = {
+        "room_name": room_name,
+        "debate_id": debate_id,
+        "student_name": student_name,
+        "comment_type": comment_type,
+        "content": content,
+        "timestamp": get_kst_now_str(),
+    }
+    return execute_query(supabase.table("comments").insert(payload), fail_message="댓글 작성 실패")
+
+
+def delete_comment(supabase: Client, comment_id: int, deleted_by: str = ""):
+    """댓글을 소프트 삭제(보관)합니다."""
+    payload = {"is_deleted": True, "deleted_at": get_kst_now_str()}
+    if deleted_by:
+        payload["deleted_by"] = deleted_by
+    return execute_query(
+        supabase.table("comments").update(payload).eq("id", comment_id),
+        fail_message="댓글 삭제 실패",
+    )
+
+
+def restore_comment(supabase: Client, comment_id: int):
+    """보관소에서 댓글을 복구합니다."""
+    return execute_query(
+        supabase.table("comments").update({"is_deleted": False, "deleted_at": None}).eq("id", comment_id),
+        fail_message="댓글 복구 실패",
+    )
+
+
+def fetch_deleted_comments(supabase: Client, room_name: str) -> list:
+    """방의 삭제(보관)된 댓글 목록을 조회합니다."""
+    if not comments_available():
+        return []
+    res = execute_query(
+        supabase.table("comments").select("*").eq("room_name", room_name).eq("is_deleted", True).order("deleted_at", desc=True),
+        fail_message="삭제된 댓글 조회 실패",
+    )
+    return res.data if res and res.data else []
+
+
+def permanently_delete_comment(supabase: Client, comment_id: int):
+    """보관소에서 댓글을 완전히 삭제합니다 (되돌릴 수 없음)."""
+    res = execute_query(
+        supabase.table("comments").delete().eq("id", comment_id),
+        fail_message="댓글 완전 삭제 실패",
+    )
+    if res is not None and comment_likes_available():
+        execute_query(
+            supabase.table("comment_likes").delete().eq("comment_id", comment_id),
+            fail_message="연관 댓글 공감 삭제 실패",
+        )
+    return res
+
+
+@st.cache_data(ttl=15)
+def fetch_comment_likes_for_room(_supabase: Client, room_name: str) -> list:
+    """방의 모든 댓글 공감 데이터를 반환합니다: [{"comment_id": ..., "student_name": ...}, ...]"""
+    if not comment_likes_available():
+        return []
+    res = execute_query(
+        _supabase.table("comment_likes").select("comment_id, student_name").eq("room_name", room_name),
+        fail_message="댓글 공감 조회 실패",
+    )
+    return res.data if res and res.data else []
+
+
+def toggle_comment_like(supabase: Client, comment_id: int, room_name: str, student_name: str) -> bool:
+    """댓글 공감 토글. 이미 공감 시 취소(False 반환), 없으면 추가(True 반환)."""
+    existing = execute_query(
+        supabase.table("comment_likes").select("id").eq("comment_id", comment_id).eq("student_name", student_name),
+        fail_message="댓글 공감 확인 실패",
+    )
+    if existing and existing.data:
+        execute_query(
+            supabase.table("comment_likes").delete().eq("comment_id", comment_id).eq("student_name", student_name),
+            fail_message="댓글 공감 취소 실패",
+        )
+        return False
+    execute_query(
+        supabase.table("comment_likes").insert({"comment_id": comment_id, "room_name": room_name, "student_name": student_name}),
+        fail_message="댓글 공감 추가 실패",
+    )
+    return True
 
 
 

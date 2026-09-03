@@ -2,8 +2,12 @@ import time
 import streamlit as st
 import plotly.io as pio
 from collections import Counter
-from db import fetch_live_messages, delete_opinion_message, fetch_room_likes, toggle_like, likes_available, debate_soft_delete_available
-from validators import with_fallback_author_role, mask_ip_for_teacher
+from db import (
+    fetch_live_messages, delete_opinion_message, fetch_room_likes, toggle_like, likes_available, debate_soft_delete_available,
+    comments_available, comment_likes_available, fetch_comments_for_room, fetch_comment_likes_for_room,
+    create_comment, delete_comment, toggle_comment_like,
+)
+from validators import with_fallback_author_role, mask_ip_for_teacher, validate_opinion_content
 from utils import format_kst_datetime, log_audit
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, LIVE_REFRESH_INTERVAL, UI_FONT_FAMILY
@@ -11,6 +15,8 @@ from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, LIVE_REFRESH_I
 
 _RANK_BADGES = {1: "🥇", 2: "🥈", 3: "🥉"}
 _LIKE_COOLDOWN = 3
+_COMMENT_TYPES = ["🤔 반박", "➕ 보충"]
+_COMMENT_MAX_LEN = 300
 
 _SENTIMENT_COLORS = {
     "🔵 찬성": "#1565C0",
@@ -101,10 +107,83 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             }
             on_like_cooldown = (time.time() - st.session_state.get('_last_like_ts', 0)) < _LIKE_COOLDOWN
 
+        use_comments = comments_available()
+        comments_by_debate_id = {}
+        use_comment_likes = comment_likes_available()
+        comment_likes_count = {}
+        my_comment_likes = set()
+        if use_comments:
+            for c in fetch_comments_for_room(supabase, room_name):
+                comments_by_debate_id.setdefault(c["debate_id"], []).append(c)
+            if use_comment_likes:
+                comment_likes_data = fetch_comment_likes_for_room(supabase, room_name)
+                comment_likes_count = Counter(item['comment_id'] for item in comment_likes_data)
+                my_comment_likes = {item['comment_id'] for item in comment_likes_data if item['student_name'] == student_name}
+        on_comment_like_cooldown = (time.time() - st.session_state.get('_last_comment_like_ts', 0)) < _LIKE_COOLDOWN
+
+        def do_toggle_comment_like(comment_id):
+            toggle_comment_like(supabase, comment_id, room_name, student_name)
+            fetch_comment_likes_for_room.clear()
+            st.session_state['_last_comment_like_ts'] = time.time()
+
         def do_toggle_like(msg_id):
             toggle_like(supabase, msg_id, room_name, student_name)
             fetch_room_likes.clear()
             st.session_state['_last_like_ts'] = time.time()
+
+        def render_reply_thread(msg_id):
+            comments = comments_by_debate_id.get(msg_id, [])
+            with st.expander(f"💬 답글 ({len(comments)})", expanded=False):
+                for c in comments:
+                    c_id = c["id"]
+                    c_count = comment_likes_count.get(c_id, 0)
+                    c_is_liked = c_id in my_comment_likes
+                    c_is_self = bool(student_name and c.get('student_name') == student_name)
+                    c_like_disabled = c_is_self or not use_comment_likes or (on_comment_like_cooldown and not c_is_liked)
+                    c_like_label = f"👍 {c_count}" if c_count > 0 else "👍"
+                    c_like_type = "primary" if c_is_liked else "secondary"
+
+                    col_c_text, col_c_like, col_c_del = st.columns([6, 1.2, 0.8])
+                    with col_c_text:
+                        st.markdown(
+                            f"`{c.get('comment_type', '')}` **{c.get('student_name', '')}** "
+                            f"<span style='color:gray; font-size:12px;'>{format_kst_datetime(c.get('timestamp', ''))}</span>"
+                            f"<br>{_escape_md(c.get('content', ''))}",
+                            unsafe_allow_html=True,
+                        )
+                    with col_c_like:
+                        st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
+                                  type=c_like_type, use_container_width=True,
+                                  on_click=do_toggle_comment_like, args=(c_id,))
+                    with col_c_del:
+                        if user_role == "교사" and teacher_auth:
+                            if st.button("❌", key=f"cdel_{c_id}", help="댓글 삭제", use_container_width=True):
+                                if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
+                                    fetch_comments_for_room.clear()
+                                    st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
+                                    st.rerun(scope="app")
+                    st.divider()
+
+                comment_type = st.radio(
+                    "답글 유형", _COMMENT_TYPES, horizontal=True,
+                    key=f"comment_type_{msg_id}", label_visibility="collapsed",
+                )
+                _comment_reset_n = st.session_state.get(f"comment_reset_{msg_id}", 0)
+                comment_input = st.text_input(
+                    "답글 내용", key=f"comment_input_{msg_id}_{_comment_reset_n}",
+                    placeholder="반박이나 보충할 내용을 적어주세요.",
+                    label_visibility="collapsed",
+                )
+                if st.button("답글 등록", key=f"comment_submit_{msg_id}", use_container_width=True):
+                    ok, safe_content, _, error_message = validate_opinion_content(comment_input, max_len=_COMMENT_MAX_LEN)
+                    if not ok:
+                        st.warning(error_message)
+                    else:
+                        if create_comment(supabase, room_name, msg_id, student_name, comment_type, safe_content) is not None:
+                            fetch_comments_for_room.clear()
+                            st.session_state[f"comment_reset_{msg_id}"] = _comment_reset_n + 1
+                            st.toast("✅ 답글이 등록되었습니다.", icon="💬")
+                            st.rerun(scope="app")
 
         def render_msg(row, show_sentiment_tag=False):
             formatted_timestamp = format_kst_datetime(row.get("timestamp", ""))
@@ -190,6 +269,8 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                   type=like_type, use_container_width=True,
                                   on_click=do_toggle_like, args=(msg_id,))
             st.info(_escape_md(row['content']))
+            if use_comments:
+                render_reply_thread(msg_id)
             st.write("")
 
         if current_mode == "⚔️ 찬반 토론":
