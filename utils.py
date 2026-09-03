@@ -154,13 +154,10 @@ def to_bool_flag(value):
 
 _FONT_CANDIDATES = [
     "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-    "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
 ]
 _FONT_BOLD_CANDIDATES = [
     "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
     "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-    "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
 ]
 
 _AI_SUBSECTION_LABELS = ("배움의 변화:", "성장한 점:", "한 줄 요약:")
