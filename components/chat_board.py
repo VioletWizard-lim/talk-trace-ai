@@ -6,6 +6,7 @@ from db import (
     fetch_live_messages, delete_opinion_message, fetch_room_likes, toggle_like, likes_available, debate_soft_delete_available,
     comments_available, comment_likes_available, fetch_comments_for_room, fetch_comment_likes_for_room,
     create_comment, delete_comment, toggle_comment_like,
+    fetch_debate_status, session_control_available,
 )
 from validators import with_fallback_author_role, mask_ip_for_teacher, validate_opinion_content
 from utils import anonymize_ip, format_kst_datetime, get_client_ip, log_audit
@@ -71,6 +72,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
     opinion_df = with_fallback_author_role(
         fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
     )
+    debate_ended = session_control_available() and fetch_debate_status(supabase, room_name) == "ended"
 
     col_board_title, col_board_ref = st.columns([8, 2])
     with col_board_title:
@@ -174,32 +176,37 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                     st.rerun(scope="app")
                     st.divider()
 
-                comment_type = st.radio(
-                    "답글 유형", _COMMENT_TYPES, horizontal=True,
-                    key=f"comment_type_{msg_id}", label_visibility="collapsed",
-                )
-                _comment_reset_n = st.session_state.get(f"comment_reset_{msg_id}", 0)
-                comment_input = st.text_input(
-                    "답글 내용", key=f"comment_input_{msg_id}_{_comment_reset_n}",
-                    placeholder="반박이나 보충할 내용을 적어주세요.",
-                    label_visibility="collapsed",
-                )
-                if st.button("답글 등록", key=f"comment_submit_{msg_id}", use_container_width=True):
-                    ok, safe_content, _, error_message = validate_opinion_content(comment_input, max_len=_COMMENT_MAX_LEN)
-                    if not ok:
-                        st.warning(error_message)
-                    else:
-                        _client_ip = get_client_ip()
-                        _anon_ip = anonymize_ip(_client_ip) if _client_ip else None
-                        _session_id = st.session_state.get("session_uuid")
-                        if create_comment(
-                            supabase, room_name, msg_id, student_name, comment_type, safe_content,
-                            ip_address=_anon_ip, session_id=_session_id,
-                        ) is not None:
-                            fetch_comments_for_room.clear()
-                            st.session_state[f"comment_reset_{msg_id}"] = _comment_reset_n + 1
-                            st.toast("✅ 답글이 등록되었습니다.", icon="💬")
-                            st.rerun(scope="app")
+                if debate_ended:
+                    st.caption(f"🔒 {act_type}이(가) 종료되어 답글을 작성할 수 없습니다.")
+                else:
+                    comment_type = st.radio(
+                        "답글 유형", _COMMENT_TYPES, horizontal=True,
+                        key=f"comment_type_{msg_id}", label_visibility="collapsed",
+                    )
+                    _comment_reset_n = st.session_state.get(f"comment_reset_{msg_id}", 0)
+                    comment_input = st.text_input(
+                        "답글 내용", key=f"comment_input_{msg_id}_{_comment_reset_n}",
+                        placeholder="반박이나 보충할 내용을 적어주세요.",
+                        label_visibility="collapsed",
+                    )
+                    if st.button("답글 등록", key=f"comment_submit_{msg_id}", use_container_width=True):
+                        ok, safe_content, _, error_message = validate_opinion_content(comment_input, max_len=_COMMENT_MAX_LEN)
+                        if not ok:
+                            st.warning(error_message)
+                        elif debate_ended:
+                            st.warning(f"🔒 {act_type}이(가) 종료되어 답글을 작성할 수 없습니다.")
+                        else:
+                            _client_ip = get_client_ip()
+                            _anon_ip = anonymize_ip(_client_ip) if _client_ip else None
+                            _session_id = st.session_state.get("session_uuid")
+                            if create_comment(
+                                supabase, room_name, msg_id, student_name, comment_type, safe_content,
+                                ip_address=_anon_ip, session_id=_session_id,
+                            ) is not None:
+                                fetch_comments_for_room.clear()
+                                st.session_state[f"comment_reset_{msg_id}"] = _comment_reset_n + 1
+                                st.toast("✅ 답글이 등록되었습니다.", icon="💬")
+                                st.rerun(scope="app")
 
         def render_msg(row, show_sentiment_tag=False):
             formatted_timestamp = format_kst_datetime(row.get("timestamp", ""))
