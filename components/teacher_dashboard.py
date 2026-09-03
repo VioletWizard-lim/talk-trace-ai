@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_attempts, comments_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, session_control_available, session_attempts_available, set_debate_status, stance_available
+from db import ai_feedback_available, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, session_control_available, session_attempts_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -14,6 +14,7 @@ from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
 from components.teacher_hint import render_hint_section
 from components.teacher_summary import render_summary_section, auto_generate_summary_report, auto_build_pdf_cache, run_manual_summary_generation
 from components.depth_analysis import render_depth_analysis_section, auto_classify_all_opinions, run_manual_depth_generation
+from components.moderation_review import render_moderation_review_section, auto_flag_room_content, maybe_auto_flag_periodically
 
 logger = logging.getLogger("talk_trace_ai")
 
@@ -284,6 +285,14 @@ def _render_debate_control(supabase, room_name, act_type, current_topic):
                 st.session_state[dashboard_pending_action_key(room_name)] = "auto_end"
                 st.rerun(scope="app")
 
+        if content_flags_available():
+            if st.button("🚩 지금 유해 발언 검수 실행", use_container_width=True):
+                with st.spinner("🤖 AI가 발언·답글을 검수하고 있습니다..."):
+                    auto_flag_room_content(supabase, room_name)
+                fetch_unreviewed_flags_for_room.clear()
+                st.toast("검수를 완료했습니다. '삭제 보관소' 탭에서 확인하세요.", icon="🚩")
+                st.rerun(scope="app")
+
 
 def _render_presence_reset_section(supabase, room_name):
     st.markdown("**🔓 학번 접속 제한 해제**")
@@ -345,6 +354,9 @@ def _render_participation_section(supabase, room_name, act_type):
 
 
 def _render_archive_section(supabase, room_name):
+    render_moderation_review_section(supabase, room_name)
+    st.divider()
+
     st.subheader("🗑️ 삭제 보관소")
     st.caption("실시간 보드에서 삭제된 발언이 여기 보관됩니다. 복구하거나 완전히 삭제할 수 있습니다.")
 
@@ -496,6 +508,7 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
     잠깐 그대로 남아있다가 뒤늦게 바뀌는 지연/잔상 없이 즉시 전환된다."""
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
     _debate_status = fetch_debate_status(supabase, room_name) if session_control_available() else "ended"
+    maybe_auto_flag_periodically(supabase, room_name, _debate_status)
 
     # 요약 리포트는 토론/토의 종료 전에는 탭 자체를 숨김
     tabs = [_TAB_CONTROL, _TAB_PARTICIPATION, _TAB_LEARNING, _TAB_STANCE, _TAB_DEPTH]
@@ -536,6 +549,7 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
                 fetch_live_messages.clear()
                 fresh_df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
                 auto_classify_all_opinions(supabase, room_name)
+                auto_flag_room_content(supabase, room_name)
                 if auto_generate_summary_report(supabase, room_name, act_type, current_topic, fresh_df_all):
                     auto_build_pdf_cache(supabase, room_name, act_type, current_topic)
         elif _pending_action == "manual_summary":
