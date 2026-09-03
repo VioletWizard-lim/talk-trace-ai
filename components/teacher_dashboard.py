@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_attempts, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, session_attempts_available, set_debate_status, stance_available
+from db import ai_feedback_available, clear_session_attempts, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, opinion_changes_available, permanently_delete_message, restore_opinion_message, room_soft_destroy_available, session_control_available, session_attempts_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -525,8 +525,23 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
         with st.expander("이 방 전체 삭제하기 (클릭 시 펼쳐짐)", expanded=False):
             if not ROOM_DESTROY_ENABLED:
                 st.warning("운영 안전 모드로 방 삭제 기능이 비활성화되어 있습니다.")
+            elif room_soft_destroy_available():
+                st.warning(
+                    f"⚠️ '{room_name}' 방을 숨김 처리하고, 모든 {act_type} 발언을 삭제 보관소로 이동합니다. "
+                    "완전히 사라지는 게 아니라 '방 공개/숨김 관리'와 '삭제 보관소'에서 되돌릴 수 있습니다."
+                )
+                _confirm_text = st.text_input("삭제를 진행하려면 아래에 **확인했습니다** 를 입력하세요", key=f"destroy_confirm_{room_name}")
+                if st.button(f"네, '{room_name}' 방을 삭제합니다", type="primary", use_container_width=True, disabled=_confirm_text != "확인했습니다"):
+                    try:
+                        if destroy_room_data(supabase, room_name, deleted_by=student_name) is None:
+                            st.stop()
+                        log_audit("room_destroyed", room_name=room_name, actor_name=student_name, role=user_role)
+                        st.success("삭제되었습니다. (숨김 처리 + 발언 보관소 이동 — 되돌릴 수 있습니다)")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"삭제 중 오류 발생: {e}")
             else:
-                st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록이 완전히 삭제됩니다.")
+                st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록이 완전히 삭제됩니다. 되돌릴 수 없습니다.")
                 _confirm_text = st.text_input("삭제를 진행하려면 아래에 **확인했습니다** 를 입력하세요", key=f"destroy_confirm_{room_name}")
                 if st.button(f"네, '{room_name}' 방의 모든 데이터를 영구 삭제합니다", type="primary", use_container_width=True, disabled=_confirm_text != "확인했습니다"):
                     try:
