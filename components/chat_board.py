@@ -9,6 +9,7 @@ from db import (
     fetch_debate_status, session_control_available,
 )
 from validators import with_fallback_author_role, mask_ip_for_teacher, validate_opinion_content
+from moderation import find_forbidden_word
 from utils import anonymize_ip, format_kst_datetime, get_client_ip, log_audit
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, UI_FONT_FAMILY
@@ -207,6 +208,8 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                         ok, safe_content, _, error_message = validate_opinion_content(comment_input, max_len=_COMMENT_MAX_LEN)
                         if not ok:
                             st.warning(error_message)
+                        elif find_forbidden_word(safe_content):
+                            st.warning("❌ 욕설/비속어가 포함되어 있어 등록할 수 없습니다. 내용을 수정해 주세요.")
                         elif debate_ended:
                             st.warning(f"🔒 {act_type}이(가) 종료되어 답글을 작성할 수 없습니다.")
                         else:

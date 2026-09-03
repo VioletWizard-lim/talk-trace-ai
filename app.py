@@ -25,6 +25,7 @@ from db import (
 from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS
 from utils import anonymize_ip, get_client_ip, get_kst_now_str, get_or_create_session_uuid, log_audit
 from validators import validate_entry_code, validate_opinion_content, validate_student_number
+from moderation import find_forbidden_word
 from views.home import render_home_page
 from views.lobby import render_lobby_page
 from components.admin_panel import render_admin_page
@@ -261,6 +262,10 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         if user_role == "학생" and is_recent_submission(supabase, room_name, safe_student_name, cooldown_seconds=3):
             st.session_state['is_working'] = False
             st.warning("⏳ 방금 발언을 제출했습니다. 잠시 후 다시 시도해 주세요.")
+            st.stop()
+        if input_ok and safe_input and find_forbidden_word(safe_input):
+            st.session_state['is_working'] = False
+            st.error("❌ 욕설/비속어가 포함되어 있어 제출할 수 없습니다. 내용을 수정해 주세요.")
             st.stop()
         if input_ok and safe_input:
             now = get_kst_now_str()
