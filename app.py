@@ -18,7 +18,7 @@ from db import (
     topic_entry_code_column_available,
     update_room_entry_code,
     update_topic,
-    claim_session_presence,
+    touch_session_attempt,
     using_service_role_key,
 )
 from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS
@@ -167,7 +167,7 @@ def _poll_debate_status(room_name, student_number):
     """학생 화면에서 5초마다 토론 상태를 확인하고 변경 시 전체 rerun. 접속 기록도 함께 갱신한다."""
     current = fetch_debate_status(supabase, room_name)
     if student_number:
-        claim_session_presence(supabase, room_name, student_number, st.session_state.get("session_uuid", ""))
+        touch_session_attempt(supabase, room_name, student_number, st.session_state.get("session_uuid", ""))
     if current != st.session_state.get("_last_debate_status"):
         st.session_state["_last_debate_status"] = current
         st.rerun(scope="app")

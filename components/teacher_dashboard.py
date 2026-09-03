@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_presence, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, session_presence_available, set_debate_status, stance_available
+from db import ai_feedback_available, clear_session_attempts, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, session_attempts_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -309,7 +309,7 @@ def _render_presence_reset_section(supabase, room_name):
         placeholder="예: 10101",
     )
     if st.button("🧹 이 학번 접속 기록 초기화", key=f"presence_reset_btn_{room_name}", disabled=not target_number.strip()):
-        clear_session_presence(supabase, room_name, target_number.strip())
+        clear_session_attempts(supabase, room_name, target_number.strip())
         st.toast(f"✅ '{target_number.strip()}' 학번의 접속 기록을 초기화했습니다.", icon="🧹")
 
 
@@ -510,7 +510,7 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
     if active_tab == _TAB_CONTROL:
         if session_control_available():
             st.subheader("🎛️ 토론 진행 제어")
-            if session_presence_available():
+            if session_attempts_available():
                 col_control, col_presence = st.columns(2)
                 with col_control:
                     _render_debate_control(supabase, room_name, act_type, current_topic)
