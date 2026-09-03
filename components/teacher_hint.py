@@ -39,7 +39,7 @@ def render_hint_section(supabase, room_name, user_role, student_name, current_to
                 try:
                     res_text = generate_ai_response(
                         prompt, model_name=AI_MODEL_NAME, api_key=get_secret("GEMINI_API_KEY", ""),
-                        log_message="AI 힌트 생성 실패", room_name=room_name,
+                        log_message="AI 힌트 생성 실패", fallback="", room_name=room_name,
                     )
                 except Exception as e:
                     st.error(f"🚨 AI 호출 중 오류가 발생했습니다: {e}")
