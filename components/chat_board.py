@@ -145,7 +145,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                     c_like_label = f"👍 {c_count}" if c_count > 0 else "👍"
                     c_like_type = "primary" if c_is_liked else "secondary"
 
-                    col_c_text, col_c_like, col_c_del = st.columns([6, 1.3, 1.3], gap="small")
+                    col_c_text, col_c_actions = st.columns([6, 2])
                     with col_c_text:
                         _header_html = (
                             f"`{c.get('comment_type', '')}` **{c.get('student_name', '')}** "
@@ -168,17 +168,19 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             "<br>".join(filter(None, [_header_html, _id_html, _escape_md(c.get('content', ''))])),
                             unsafe_allow_html=True,
                         )
-                    with col_c_like:
-                        st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
-                                  type=c_like_type,
-                                  on_click=do_toggle_comment_like, args=(c_id,))
-                    with col_c_del:
-                        if user_role == "교사" and teacher_auth:
-                            if st.button("❌", key=f"cdel_{c_id}", help="댓글 삭제"):
-                                if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
-                                    fetch_comments_for_room.clear()
-                                    st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
-                                    st.rerun(scope="app")
+                    with col_c_actions:
+                        c_like, c_del = st.columns([1, 1], gap="small")
+                        with c_like:
+                            st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
+                                      type=c_like_type,
+                                      on_click=do_toggle_comment_like, args=(c_id,))
+                        with c_del:
+                            if user_role == "교사" and teacher_auth:
+                                if st.button("❌", key=f"cdel_{c_id}", help="댓글 삭제"):
+                                    if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
+                                        fetch_comments_for_room.clear()
+                                        st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
+                                        st.rerun(scope="app")
                     st.divider()
 
                 if debate_ended:
