@@ -665,6 +665,19 @@ def clear_session_presence(supabase: Client, room_name: str, student_name: str):
     )
 
 
+def fetch_session_presence_by_room(supabase: Client, room_name: str) -> list:
+    """이 방의 모든 접속 기록(session_presence)을 반환합니다. [{"student_name", "session_id", "last_seen"}, ...]"""
+    if not session_presence_available():
+        return []
+    res = execute_query(
+        supabase.table("session_presence")
+        .select("student_name, session_id, last_seen")
+        .eq("room_name", room_name),
+        fail_message="접속 기록 조회 실패",
+    )
+    return res.data if res and res.data else []
+
+
 def delete_opinion_message(supabase: Client, message_id: int, deleted_by: str = ""):
     """발언을 삭제(보관)합니다.
 

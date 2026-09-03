@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_presence, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, session_presence_available, set_debate_status, stance_available
+from db import ai_feedback_available, clear_session_presence, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, fetch_session_presence_by_room, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, session_presence_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -291,6 +291,18 @@ def _render_presence_reset_section(supabase, room_name):
         "학생이 학번을 여러 번 바꿔 입력해 입장이 막혔거나, 다른 기기 접속 경고가 "
         "잘못 뜨는 경우 해당 학번만 접속 기록을 초기화할 수 있습니다."
     )
+
+    rows = fetch_session_presence_by_room(supabase, room_name)
+    by_session = {}
+    for row in rows:
+        by_session.setdefault(row["session_id"], []).append(row["student_name"])
+    flagged_numbers = sorted({num for nums in by_session.values() if len(nums) >= 3 for num in nums})
+    if flagged_numbers:
+        st.warning(
+            f"⚠️ 같은 브라우저에서 여러 학번을 사용해 입장 제한에 걸릴 수 있는 학번: "
+            f"**{', '.join(flagged_numbers)}**"
+        )
+
     target_number = st.text_input(
         "초기화할 학번",
         key=f"presence_reset_number_{room_name}",
