@@ -184,7 +184,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                             st.rerun(scope="app")
                             else:
                                 st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
-                                          type=c_like_type,
+                                          type=c_like_type, use_container_width=True,
                                           on_click=do_toggle_comment_like, args=(c_id,))
 
                 if debate_ended:
