@@ -509,10 +509,10 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
             st.divider()
         render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
         st.divider()
-        st.subheader("🚨 위험 구역 (방 폭파)")
+        st.subheader("🚨 위험 구역 (토론/토의방 삭제)")
         with st.expander("이 방 전체 삭제하기 (클릭 시 펼쳐짐)", expanded=False):
             if not ROOM_DESTROY_ENABLED:
-                st.warning("운영 안전 모드로 방 폭파 기능이 비활성화되어 있습니다.")
+                st.warning("운영 안전 모드로 방 삭제 기능이 비활성화되어 있습니다.")
             else:
                 st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록이 완전히 삭제됩니다.")
                 _confirm_text = st.text_input("삭제를 진행하려면 아래에 **확인했습니다** 를 입력하세요", key=f"destroy_confirm_{room_name}")
@@ -521,7 +521,7 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
                         if destroy_room_data(supabase, room_name) is None:
                             st.stop()
                         log_audit("room_destroyed", room_name=room_name, actor_name=student_name, role=user_role)
-                        st.success("성공적으로 파괴되었습니다.")
+                        st.success("성공적으로 삭제되었습니다.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"삭제 중 오류 발생: {e}")
