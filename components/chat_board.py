@@ -169,18 +169,22 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             unsafe_allow_html=True,
                         )
                     with col_c_actions:
-                        c_like, c_del = st.columns([1, 1], gap="small")
-                        with c_like:
-                            st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
-                                      type=c_like_type,
-                                      on_click=do_toggle_comment_like, args=(c_id,))
-                        with c_del:
-                            if user_role == "교사" and teacher_auth:
+                        if user_role == "교사" and teacher_auth:
+                            c_like, c_del = st.columns([1, 1], gap="small")
+                            with c_like:
+                                st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
+                                          type=c_like_type,
+                                          on_click=do_toggle_comment_like, args=(c_id,))
+                            with c_del:
                                 if st.button("❌", key=f"cdel_{c_id}", help="댓글 삭제"):
                                     if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
                                         fetch_comments_for_room.clear()
                                         st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
                                         st.rerun(scope="app")
+                        else:
+                            st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
+                                      type=c_like_type,
+                                      on_click=do_toggle_comment_like, args=(c_id,))
                     st.divider()
 
                 if debate_ended:
