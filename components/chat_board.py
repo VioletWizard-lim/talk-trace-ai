@@ -3,7 +3,7 @@ import streamlit as st
 import plotly.io as pio
 from collections import Counter
 from db import (
-    fetch_live_messages, delete_opinion_message, fetch_room_likes, toggle_like, likes_available, debate_soft_delete_available,
+    fetch_live_messages, fetch_latest_message_id, delete_opinion_message, fetch_room_likes, toggle_like, likes_available, debate_soft_delete_available,
     comments_available, comment_likes_available, fetch_comments_for_room, fetch_comment_likes_for_room,
     create_comment, delete_comment, toggle_comment_like,
     fetch_debate_status, session_control_available,
@@ -11,13 +11,15 @@ from db import (
 from validators import with_fallback_author_role, mask_ip_for_teacher, validate_opinion_content
 from utils import anonymize_ip, format_kst_datetime, get_client_ip, log_audit
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
-from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, LIVE_REFRESH_INTERVAL, UI_FONT_FAMILY
+from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, UI_FONT_FAMILY
 
 
 _RANK_BADGES = {1: "🥇", 2: "🥈", 3: "🥉"}
 _LIKE_COOLDOWN = 3
 _COMMENT_TYPES = ["🤔 반박", "➕ 보충"]
 _COMMENT_MAX_LEN = 300
+_NEW_MSG_POLL_INTERVAL = 5       # 가벼운 변경 확인 주기(초)
+_HEAVY_REFRESH_MIN_INTERVAL = 15  # 무거운 재렌더링 최소 간격(초) — 폭주 시 안전장치
 
 _SENTIMENT_COLORS = {
     "🔵 찬성": "#1565C0",
@@ -68,6 +70,7 @@ def _cached_pie_chart_json(sentiment_tuple: tuple) -> str:
     return fig.to_json()
 
 
+@st.fragment
 def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
     opinion_df = with_fallback_author_role(
         fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
@@ -403,15 +406,42 @@ def _render_stats_section(supabase, room_name, current_mode):
                         st.info("워드클라우드를 만들 단어가 아직 부족합니다.")
 
 
-@st.fragment(run_every=LIVE_REFRESH_INTERVAL)
-def _live_chat_board_auto(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
-    _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type)
+@st.fragment(run_every=_NEW_MSG_POLL_INTERVAL)
+def _poll_new_messages(supabase, room_name):
+    """새 발언 유무만 가볍게 확인하고, 있을 때만 무거운 보드 재렌더링을 트리거한다.
+
+    기존에는 접속자 전원이 고정 주기마다 무조건 전체 게시판을
+    다시 그렸는데(과부하의 원인), 이제는 id 하나만 조회하는 저비용 쿼리로
+    변경 여부만 자주 확인하고, 실제로 새 발언이 있을 때만 무거운 재렌더링
+    (전체 앱 rerun)을 일으킨다. 다만 여러 학생이 짧은 시간에 몰려서 올리는
+    경우에도 무거운 재렌더링이 너무 잦아지지 않도록 최소 간격
+    (_HEAVY_REFRESH_MIN_INTERVAL)을 두어, 폭주 상황에서도 기존 방식보다
+    나빠지지 않도록 안전장치를 둔다.
+    """
+    latest_id = fetch_latest_message_id(supabase, room_name)
+    last_seen_key = f"_last_seen_msg_id_{room_name}"
+    last_render_key = f"_last_heavy_render_ts_{room_name}"
+
+    if latest_id == st.session_state.get(last_seen_key):
+        return
+
+    last_render_ts = st.session_state.get(last_render_key, 0)
+    if time.time() - last_render_ts < _HEAVY_REFRESH_MIN_INTERVAL:
+        return  # 새 발언은 있지만 안전장치 간격 전 — 다음 틱에 다시 확인
+
+    st.session_state[last_seen_key] = latest_id
+    st.session_state[last_render_key] = time.time()
+    fetch_live_messages.clear()
+    fetch_room_likes.clear()
+    if comments_available():
+        fetch_comments_for_room.clear()
+        fetch_comment_likes_for_room.clear()
+    st.rerun(scope="app")
 
 
 def render_chat_board(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
-    if st.session_state.get('is_working', False):
-        _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type)
-    else:
-        _live_chat_board_auto(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type)
+    _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type)
+    if not st.session_state.get('is_working', False):
+        _poll_new_messages(supabase, room_name)
     # 통계 섹션은 별도 60초 fragment — 메시지 보드와 독립적으로 갱신
     _render_stats_section(supabase, room_name, current_mode)

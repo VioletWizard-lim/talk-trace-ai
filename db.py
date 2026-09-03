@@ -518,6 +518,21 @@ def fetch_live_messages(_supabase: Client, room_name, limit):
     return pd.DataFrame(res.data)
 
 
+def fetch_latest_message_id(supabase: Client, room_name: str):
+    """이 방의 가장 최근 발언 id만 가볍게 조회합니다 (변경 감지 전용, 캐시 없음).
+
+    실시간 보드가 새 발언 유무만 자주 확인할 때 쓰는 저비용 쿼리 — id 하나만
+    가져오므로 fetch_live_messages(전체 발언+컬럼)보다 훨씬 가볍다.
+    """
+    res = execute_query(
+        supabase.table("debate").select("id").eq("room_name", room_name).order("id", desc=True).limit(1),
+        fail_message="최신 발언 확인 실패",
+    )
+    if res and res.data:
+        return res.data[0]["id"]
+    return None
+
+
 def submit_opinion(supabase: Client, payload):
     return execute_query(supabase.table("debate").insert(payload), fail_message="저장 실패")
 
