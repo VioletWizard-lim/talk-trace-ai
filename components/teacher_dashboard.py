@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_attempts, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, opinion_changes_available, permanently_delete_message, restore_opinion_message, room_soft_destroy_available, session_control_available, session_attempts_available, set_debate_status, stance_available
+from db import ai_feedback_available, clear_session_attempts, comments_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, session_control_available, session_attempts_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -351,8 +351,20 @@ def _render_archive_section(supabase, room_name):
     deleted_df = fetch_deleted_messages(supabase, room_name)
     if deleted_df.empty:
         st.info("삭제된 발언이 없습니다.")
-        return
+    else:
+        _render_deleted_messages(supabase, deleted_df)
 
+    if comments_available():
+        st.divider()
+        st.subheader("🗑️ 삭제된 답글 보관소")
+        deleted_comments = fetch_deleted_comments(supabase, room_name)
+        if not deleted_comments:
+            st.info("삭제된 답글이 없습니다.")
+        else:
+            _render_deleted_comments(supabase, deleted_comments)
+
+
+def _render_deleted_messages(supabase, deleted_df):
     for _, row in deleted_df.iterrows():
         msg_id = row["id"]
         deleted_at = _s(row.get("deleted_at"))
@@ -387,6 +399,44 @@ def _render_archive_section(supabase, room_name):
                 with col_no:
                     if st.button("취소", key=f"confirm_purge_no_{msg_id}", use_container_width=True):
                         st.session_state.pop(f"confirm_purge_{msg_id}", None)
+                        st.rerun()
+
+
+def _render_deleted_comments(supabase, deleted_comments):
+    for c in deleted_comments:
+        c_id = c["id"]
+        deleted_at = _s(c.get("deleted_at"))
+        deleted_by = _s(c.get("deleted_by"))
+        meta_bits = [b for b in [f"삭제 시각: {deleted_at}" if deleted_at else "", f"삭제한 사람: {deleted_by}" if deleted_by else ""] if b]
+
+        with st.container(border=True):
+            st.markdown(f"`{c.get('comment_type', '')}` **{c.get('student_name', '')}** — {c.get('content', '')}")
+            if meta_bits:
+                st.caption(" · ".join(meta_bits))
+
+            col_restore, col_purge = st.columns(2)
+            with col_restore:
+                if st.button("↩️ 복구", key=f"carchive_restore_{c_id}", use_container_width=True):
+                    if restore_comment(supabase, c_id) is not None:
+                        fetch_comments_for_room.clear()
+                        st.toast("답글을 복구했습니다.", icon="↩️")
+                        st.rerun(scope="app")
+            with col_purge:
+                if st.button("❌ 완전 삭제", key=f"carchive_purge_{c_id}", use_container_width=True):
+                    st.session_state[f"confirm_cpurge_{c_id}"] = True
+
+            if st.session_state.get(f"confirm_cpurge_{c_id}"):
+                st.warning("⚠️ 완전히 삭제하면 되돌릴 수 없습니다. 정말 삭제하시겠습니까?")
+                col_yes, col_no = st.columns(2)
+                with col_yes:
+                    if st.button("✅ 완전 삭제 확인", key=f"confirm_cpurge_yes_{c_id}", type="primary", use_container_width=True):
+                        if permanently_delete_comment(supabase, c_id) is not None:
+                            st.session_state.pop(f"confirm_cpurge_{c_id}", None)
+                            st.toast("완전히 삭제했습니다.", icon="🗑️")
+                            st.rerun(scope="app")
+                with col_no:
+                    if st.button("취소", key=f"confirm_cpurge_no_{c_id}", use_container_width=True):
+                        st.session_state.pop(f"confirm_cpurge_{c_id}", None)
                         st.rerun()
 
 
