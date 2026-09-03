@@ -205,6 +205,10 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         sentiment = st.radio("의견 성격", opts, horizontal=True)
 
     with col_stt:
+        if current_mode == "⚔️ 찬반 토론":
+            # 왼쪽 컬럼의 '글쓰기 방식' 라디오만큼 오른쪽 버튼을 아래로 내려
+            # 텍스트 입력창과 나란히 보이도록 맞춘다.
+            st.markdown("<div style='height:44px'></div>", unsafe_allow_html=True)
         st.components.v1.html(
             """
             <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer;">🎤 음성 입력 시작</button>
