@@ -4,6 +4,7 @@ from db import (
     find_duplicate_session,
     claim_session_presence,
     find_number_switch_abuse,
+    log_session_attempt,
 )
 from validators import validate_student_number
 from config import AUTO_JOIN_ON_REFRESH
@@ -46,6 +47,7 @@ def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_numb
                             "이 방에 입장한 기록이 있습니다. 학번을 여러 번 바꿔 입장할 수 없습니다."
                         )
                     else:
+                        log_session_attempt(supabase, room_name, session_id, student_number)
                         is_duplicate = (
                             claim_session_presence(supabase, room_name, student_number, session_id)
                             or find_duplicate_session(supabase, room_name, student_number, session_id)

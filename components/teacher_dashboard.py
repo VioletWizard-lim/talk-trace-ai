@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_presence, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, fetch_session_presence_by_room, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, session_presence_available, set_debate_status, stance_available
+from db import ai_feedback_available, clear_session_presence, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, session_presence_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -292,10 +292,10 @@ def _render_presence_reset_section(supabase, room_name):
         "잘못 뜨는 경우 해당 학번만 접속 기록을 초기화할 수 있습니다."
     )
 
-    rows = fetch_session_presence_by_room(supabase, room_name)
+    rows = fetch_session_attempts_by_room(supabase, room_name)
     by_session = {}
     for row in rows:
-        by_session.setdefault(row["session_id"], []).append(row["student_name"])
+        by_session.setdefault(row["session_id"], set()).add(row["student_name"])
     flagged_numbers = sorted({num for nums in by_session.values() if len(nums) >= 3 for num in nums})
     if flagged_numbers:
         st.warning(
