@@ -145,7 +145,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                     c_like_label = f"👍 {c_count}" if c_count > 0 else "👍"
                     c_like_type = "primary" if c_is_liked else "secondary"
 
-                    col_c_text, col_c_like, col_c_del = st.columns([6, 1.3, 1.3])
+                    col_c_text, col_c_like, col_c_del = st.columns([6, 1.3, 1.3], gap="small")
                     with col_c_text:
                         _header_html = (
                             f"`{c.get('comment_type', '')}` **{c.get('student_name', '')}** "
@@ -244,7 +244,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             _id_bits.append(f"세션: {row_session[:8]}")
                         st.caption(" · ".join(_id_bits))
                 with c_actions:
-                    c_like, c_del = st.columns([1, 1])
+                    c_like, c_del = st.columns([1, 1], gap="small")
                     with c_like:
                         st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
                                   type=like_type,
