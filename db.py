@@ -436,9 +436,10 @@ def upsert_topic_room(supabase: Client, room_name, title, mode, entry_code, crea
 @st.cache_resource
 def _resolve_topic_order_col(_supabase: Client):
     """topic 테이블 정렬에 쓸 수 있는 컬럼을 프로세스당 한 번만 판별해 캐시.
-    id 컬럼이 없는 배포에서 매 호출(수십 초 간격 폴링 등)마다 42703 에러가
-    반복 발생하며 로그를 채우는 것을 방지하기 위함."""
-    for order_col in ["id", "created_at", None]:
+    topic 테이블에는 id 컬럼이 없으므로(room_name이 PK) 시도하지 않고,
+    created_at으로 바로 시도한다 — 없는 컬럼을 매번 찔러보며 42703 에러로
+    로그를 채우는 것을 방지하기 위함."""
+    for order_col in ["created_at", None]:
         try:
             query = _supabase.table("topic").select("room_name")
             if order_col:
