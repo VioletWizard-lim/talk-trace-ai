@@ -284,20 +284,21 @@ def _render_debate_control(supabase, room_name, act_type, current_topic):
                 st.session_state[dashboard_pending_action_key(room_name)] = "auto_end"
                 st.rerun(scope="app")
 
-    if session_presence_available():
-        with st.expander("🔓 학번 접속 제한 해제"):
-            st.caption(
-                "학생이 학번을 여러 번 바꿔 입력해 입장이 막혔거나, 다른 기기 접속 경고가 "
-                "잘못 뜨는 경우 해당 학번만 접속 기록을 초기화할 수 있습니다."
-            )
-            target_number = st.text_input(
-                "초기화할 학번",
-                key=f"presence_reset_number_{room_name}",
-                placeholder="예: 10101",
-            )
-            if st.button("🧹 이 학번 접속 기록 초기화", key=f"presence_reset_btn_{room_name}", disabled=not target_number.strip()):
-                clear_session_presence(supabase, room_name, target_number.strip())
-                st.toast(f"✅ '{target_number.strip()}' 학번의 접속 기록을 초기화했습니다.", icon="🧹")
+
+def _render_presence_reset_section(supabase, room_name):
+    st.markdown("**🔓 학번 접속 제한 해제**")
+    st.caption(
+        "학생이 학번을 여러 번 바꿔 입력해 입장이 막혔거나, 다른 기기 접속 경고가 "
+        "잘못 뜨는 경우 해당 학번만 접속 기록을 초기화할 수 있습니다."
+    )
+    target_number = st.text_input(
+        "초기화할 학번",
+        key=f"presence_reset_number_{room_name}",
+        placeholder="예: 10101",
+    )
+    if st.button("🧹 이 학번 접속 기록 초기화", key=f"presence_reset_btn_{room_name}", disabled=not target_number.strip()):
+        clear_session_presence(supabase, room_name, target_number.strip())
+        st.toast(f"✅ '{target_number.strip()}' 학번의 접속 기록을 초기화했습니다.", icon="🧹")
 
 
 def _render_participation_section(supabase, room_name, act_type):
@@ -497,14 +498,21 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
     if active_tab == _TAB_CONTROL:
         if session_control_available():
             st.subheader("🎛️ 토론 진행 제어")
-            _render_debate_control(supabase, room_name, act_type, current_topic)
+            if session_presence_available():
+                col_control, col_presence = st.columns(2)
+                with col_control:
+                    _render_debate_control(supabase, room_name, act_type, current_topic)
+                with col_presence:
+                    _render_presence_reset_section(supabase, room_name)
+            else:
+                _render_debate_control(supabase, room_name, act_type, current_topic)
             st.divider()
         render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
         st.divider()
-        st.subheader("🚨 위험 구역 (방 폭파)")
+        st.subheader("🚨 위험 구역 (토론/토의방 삭제)")
         with st.expander("이 방 전체 삭제하기 (클릭 시 펼쳐짐)", expanded=False):
             if not ROOM_DESTROY_ENABLED:
-                st.warning("운영 안전 모드로 방 폭파 기능이 비활성화되어 있습니다.")
+                st.warning("운영 안전 모드로 방 삭제 기능이 비활성화되어 있습니다.")
             else:
                 st.error(f"🚨 경고: '{room_name}' 방의 모든 {act_type} 기록이 완전히 삭제됩니다.")
                 _confirm_text = st.text_input("삭제를 진행하려면 아래에 **확인했습니다** 를 입력하세요", key=f"destroy_confirm_{room_name}")
@@ -513,7 +521,7 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
                         if destroy_room_data(supabase, room_name) is None:
                             st.stop()
                         log_audit("room_destroyed", room_name=room_name, actor_name=student_name, role=user_role)
-                        st.success("성공적으로 파괴되었습니다.")
+                        st.success("성공적으로 삭제되었습니다.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"삭제 중 오류 발생: {e}")
