@@ -650,6 +650,21 @@ def find_number_switch_abuse(
     return []
 
 
+def clear_session_presence(supabase: Client, room_name: str, student_name: str = None):
+    """접속 기록(session_presence)을 초기화합니다.
+
+    학생이 장난으로(또는 실수로) 학번을 여러 번 바꿔 입장이 막혔을 때,
+    교사가 해당 방(또는 특정 학번)의 접속 기록을 지워 다시 입장할 수 있게 한다.
+    student_name을 지정하면 그 학번만, 생략하면 방 전체 기록을 지운다.
+    """
+    if not session_presence_available():
+        return None
+    q = supabase.table("session_presence").delete().eq("room_name", room_name)
+    if student_name:
+        q = q.eq("student_name", student_name)
+    return execute_query(q, fail_message="접속 기록 초기화 실패")
+
+
 def delete_opinion_message(supabase: Client, message_id: int, deleted_by: str = ""):
     """발언을 삭제(보관)합니다.
 
