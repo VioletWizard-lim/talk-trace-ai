@@ -169,6 +169,7 @@ def check_schema_columns() -> dict:
         ("comments.ip_address",            lambda: supabase.table("comments").select("ip_address").limit(1).execute()),
         ("comments.session_id",            lambda: supabase.table("comments").select("session_id").limit(1).execute()),
         ("comment_likes.comment_id",       lambda: supabase.table("comment_likes").select("comment_id").limit(1).execute()),
+        ("content_flags.reason",           lambda: supabase.table("content_flags").select("reason").limit(1).execute()),
     ]
 
     def _run_check(item):
@@ -270,6 +271,10 @@ def comments_ip_column_available() -> bool:
 
 def comments_session_id_column_available() -> bool:
     return _schema().get("comments.session_id", False)
+
+def content_flags_available() -> bool:
+    return _schema().get("content_flags.reason", False)
+
 
 def comment_likes_available() -> bool:
     return _schema().get("comment_likes.comment_id", False)
@@ -1297,6 +1302,78 @@ def bulk_update_depth_levels(supabase: Client, updates: list) -> bool:
         if res is None:
             success = False
     return success
+
+
+# ==========================================
+# [AI 유해 발언 플래깅(content_flags)] 관련 쿼리
+# ==========================================
+
+def fetch_flaggable_content(supabase: Client, room_name: str) -> list:
+    """AI 유해 발언 검수 대상 전체 조회 (학생 발언 + 답글).
+
+    반환: [{"source_table": "debate"|"comments", "source_id": int,
+            "student_name": str, "content": str}, ...]
+    """
+    items = []
+    debate_res = execute_query(
+        supabase.table("debate")
+        .select("id, content, student_name")
+        .eq("room_name", room_name)
+        .not_.ilike("student_name", "%선생님%")
+        .or_("is_deleted.is.null,is_deleted.eq.false"),
+        fail_message="유해 발언 검수용 발언 조회 실패",
+    )
+    for row in (debate_res.data if debate_res and debate_res.data else []):
+        items.append({"source_table": "debate", "source_id": row["id"], "student_name": row.get("student_name", ""), "content": row.get("content", "")})
+
+    if comments_available():
+        for c in fetch_comments_for_room(supabase, room_name):
+            items.append({"source_table": "comments", "source_id": c["id"], "student_name": c.get("student_name", ""), "content": c.get("content", "")})
+    return items
+
+
+def fetch_flagged_source_keys(supabase: Client, room_name: str) -> set:
+    """이미 플래그된(검수 이력이 있는) (source_table, source_id) 집합을 반환합니다 (중복 재플래그 방지)."""
+    if not content_flags_available():
+        return set()
+    res = execute_query(
+        supabase.table("content_flags").select("source_table, source_id").eq("room_name", room_name),
+        fail_message="기존 플래그 조회 실패",
+    )
+    return {(row["source_table"], row["source_id"]) for row in (res.data if res and res.data else [])}
+
+
+def create_content_flag(supabase: Client, room_name: str, source_table: str, source_id: int, student_name: str, content: str, reason: str):
+    if not content_flags_available():
+        return None
+    return execute_query(
+        supabase.table("content_flags").insert({
+            "room_name": room_name, "source_table": source_table, "source_id": source_id,
+            "student_name": student_name, "content": content, "reason": reason,
+            "created_at": get_kst_now_str(), "is_reviewed": False,
+        }),
+        fail_message="유해 발언 플래그 저장 실패",
+    )
+
+
+@st.cache_data(ttl=15)
+def fetch_unreviewed_flags_for_room(_supabase: Client, room_name: str) -> list:
+    if not content_flags_available():
+        return []
+    res = execute_query(
+        _supabase.table("content_flags").select("*").eq("room_name", room_name).eq("is_reviewed", False).order("id"),
+        fail_message="검토 대기 플래그 조회 실패",
+    )
+    return res.data if res and res.data else []
+
+
+def mark_flag_reviewed(supabase: Client, flag_id: int, reviewed_by: str = ""):
+    return execute_query(
+        supabase.table("content_flags").update({
+            "is_reviewed": True, "reviewed_by": reviewed_by, "reviewed_at": get_kst_now_str(),
+        }).eq("id", flag_id),
+        fail_message="플래그 검토 처리 실패",
+    )
 
 
 def toggle_like(supabase: Client, opinion_id: int, room_name: str, student_name: str) -> bool:

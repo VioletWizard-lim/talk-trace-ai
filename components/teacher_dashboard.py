@@ -14,6 +14,7 @@ from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
 from components.teacher_hint import render_hint_section
 from components.teacher_summary import render_summary_section, auto_generate_summary_report, auto_build_pdf_cache, run_manual_summary_generation
 from components.depth_analysis import render_depth_analysis_section, auto_classify_all_opinions, run_manual_depth_generation
+from components.moderation_review import render_moderation_review_section, auto_flag_room_content
 
 logger = logging.getLogger("talk_trace_ai")
 
@@ -345,6 +346,9 @@ def _render_participation_section(supabase, room_name, act_type):
 
 
 def _render_archive_section(supabase, room_name):
+    render_moderation_review_section(supabase, room_name)
+    st.divider()
+
     st.subheader("🗑️ 삭제 보관소")
     st.caption("실시간 보드에서 삭제된 발언이 여기 보관됩니다. 복구하거나 완전히 삭제할 수 있습니다.")
 
@@ -536,6 +540,7 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
                 fetch_live_messages.clear()
                 fresh_df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
                 auto_classify_all_opinions(supabase, room_name)
+                auto_flag_room_content(supabase, room_name)
                 if auto_generate_summary_report(supabase, room_name, act_type, current_topic, fresh_df_all):
                     auto_build_pdf_cache(supabase, room_name, act_type, current_topic)
         elif _pending_action == "manual_summary":

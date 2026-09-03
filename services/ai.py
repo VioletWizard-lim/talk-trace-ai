@@ -120,6 +120,45 @@ def parse_depth_levels(response_text: str, opinion_ids: set) -> dict:
     return result
 
 
+def build_moderation_flag_prompt(items: list) -> str:
+    """
+    items: list of (key, content) tuples. key는 "표key" 형태의 임의 문자열 식별자.
+    명백한 욕설(이미 별도 키워드 필터로 차단됨)이 아니라, 그 필터를 우회했거나
+    맥락상 문제되는 발언(인신공격/혐오·차별 표현/따돌림/노골적 성적 표현/자해·폭력 암시 등)만
+    골라내기 위한 2차(AI) 검수용 프롬프트.
+    """
+    lines = "\n".join([f"key={key}: \"{content}\"" for key, content in items])
+    return (
+        "다음은 고등학생 토론/토의 게시판의 발언·답글 목록입니다. "
+        "이 중 교사가 반드시 확인해야 할 문제 발언만 골라내세요.\n\n"
+        "[문제 발언 기준]\n"
+        "- 특정인에 대한 인신공격, 모욕, 조롱\n"
+        "- 혐오 표현이나 차별적 발언(성별, 외모, 지역, 장애 등)\n"
+        "- 따돌림·괴롭힘을 암시하는 발언\n"
+        "- 노골적인 성적 표현\n"
+        "- 자해, 폭력을 암시하거나 위협하는 발언\n"
+        "정상적인 토론 발언(단순 반박, 의견 차이, 강한 어조의 논쟁 등)은 문제 발언이 아닙니다.\n\n"
+        "[출력 형식] 문제 발언이 있는 항목만, 아래 형식으로만 출력하세요. 다른 텍스트는 쓰지 마세요:\n"
+        "key=식별자: 사유(10자 이내)\n\n"
+        "문제 발언이 하나도 없으면 정확히 다음 한 줄만 출력하세요:\n"
+        "NONE\n\n"
+        "[검사할 목록]\n"
+        f"{lines}"
+    )
+
+
+def parse_moderation_flags(response_text: str, keys: set) -> dict:
+    """AI 응답을 파싱해 {key: 사유} dict를 반환합니다. 파싱 안 된 항목은 포함하지 않습니다."""
+    result = {}
+    if not response_text or response_text.strip().upper() == "NONE":
+        return result
+    for match in re.finditer(r"key\s*=\s*([^\s:]+)\s*:\s*(.+)", response_text):
+        key, reason = match.group(1).strip(), match.group(2).strip()
+        if key in keys:
+            result[key] = reason[:50]
+    return result
+
+
 # ── API 키 초기화 상태 추적 (모듈 수준 1회만 실행) ──
 _initialized_api_key: str | None = None
 
