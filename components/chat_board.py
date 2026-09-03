@@ -147,22 +147,27 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
 
                     col_c_text, col_c_like, col_c_del = st.columns([6, 1.3, 1.3])
                     with col_c_text:
-                        st.markdown(
+                        _header_html = (
                             f"`{c.get('comment_type', '')}` **{c.get('student_name', '')}** "
-                            f"<span style='color:gray; font-size:12px;'>{format_kst_datetime(c.get('timestamp', ''))}</span>",
-                            unsafe_allow_html=True,
+                            f"<span style='color:gray; font-size:12px;'>{format_kst_datetime(c.get('timestamp', ''))}</span>"
                         )
+                        _id_html = ""
                         if user_role == "교사" and teacher_auth:
                             c_ip = str(c.get("ip_address") or "").strip()
                             c_session = str(c.get("session_id") or "").strip()
-                            if c_ip or c_session:
-                                _id_bits = []
-                                if c_ip:
-                                    _id_bits.append(f"IP: {mask_ip_for_teacher(c_ip)}")
-                                if c_session:
-                                    _id_bits.append(f"세션: {c_session[:8]}")
-                                st.caption(" · ".join(_id_bits))
-                        st.markdown(_escape_md(c.get('content', '')))
+                            _id_lines = []
+                            if c_ip:
+                                _id_lines.append(f"IP: {mask_ip_for_teacher(c_ip)}")
+                            if c_session:
+                                _id_lines.append(f"세션: {c_session[:8]}")
+                            if _id_lines:
+                                _id_html = "<br>".join(
+                                    f"<span style='color:gray; font-size:12px;'>{line}</span>" for line in _id_lines
+                                )
+                        st.markdown(
+                            "<br>".join(filter(None, [_header_html, _id_html, _escape_md(c.get('content', ''))])),
+                            unsafe_allow_html=True,
+                        )
                     with col_c_like:
                         st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
                                   type=c_like_type,
