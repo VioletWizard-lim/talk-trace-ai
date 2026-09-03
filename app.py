@@ -13,6 +13,7 @@ from db import (
     fetch_pending_teacher_accounts,
     fetch_topic_data,
     init_db,
+    is_recent_submission,
     opinion_changes_available,
     submit_opinion,
     topic_entry_code_column_available,
@@ -257,6 +258,10 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
             safe_student_name = safe_student_number
         else:
             safe_student_name = student_name
+        if user_role == "학생" and is_recent_submission(supabase, room_name, safe_student_name, cooldown_seconds=3):
+            st.session_state['is_working'] = False
+            st.warning("⏳ 방금 발언을 제출했습니다. 잠시 후 다시 시도해 주세요.")
+            st.stop()
         if input_ok and safe_input:
             now = get_kst_now_str()
             author_role_for_submit = "교사" if user_role == "교사" else "학생"

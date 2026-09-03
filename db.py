@@ -793,7 +793,36 @@ def create_teacher_hint(supabase: Client, payload):
 
 
 
-def destroy_room_data(supabase: Client, room_name: str):
+def room_soft_destroy_available() -> bool:
+    """방 삭제를 소프트 삭제(숨김 + 발언 보관)로 처리할 수 있는지 여부."""
+    return topic_is_hidden_available() and debate_soft_delete_available()
+
+
+def destroy_room_data(supabase: Client, room_name: str, deleted_by: str = ""):
+    """방을 삭제합니다.
+
+    소프트 삭제가 가능하면(topic.is_hidden + debate.is_deleted 컬럼 존재)
+    실제로는 아무것도 영구 삭제하지 않고, 방을 숨김 처리하고 발언을
+    보관소로 이동시킨다 — 필요하면 "방 공개/숨김 관리"에서 다시 보이게
+    하고, 삭제 보관소에서 발언을 복구할 수 있다.
+    소프트 삭제가 불가능한 구버전 스키마에서는 기존처럼 완전 삭제한다.
+    """
+    if room_soft_destroy_available():
+        hide_res = toggle_room_visibility(supabase, room_name, True)
+        if hide_res is None:
+            return None
+        messages = execute_query(
+            supabase.table("debate")
+            .select("id")
+            .eq("room_name", room_name)
+            .or_("is_deleted.is.null,is_deleted.eq.false"),
+            fail_message="방 발언 목록 조회 실패",
+        )
+        for row in (messages.data if messages and messages.data else []):
+            delete_opinion_message(supabase, row["id"], deleted_by=deleted_by)
+        fetch_room_names.clear()
+        return {"soft_deleted": True}
+
     topic_res = execute_query(
         supabase.table("topic").delete().eq("room_name", room_name),
         fail_message="방 주제 삭제 실패",
