@@ -313,6 +313,7 @@ def _trigger_feedback_only(supabase, room_name, student_name, act_type, current_
             model_name=AI_MODEL_NAME,
             api_key=api_key,
             log_message="AI 피드백 카드 생성 실패",
+            fallback="",
             room_name=room_name,
             student=student_name,
         )
@@ -343,6 +344,7 @@ def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic
             model_name=AI_MODEL_NAME,
             api_key=api_key,
             log_message="AI 생각 변화 분석 실패",
+            fallback="",
             room_name=room_name,
             student=student_name,
         )
@@ -359,6 +361,7 @@ def _trigger_analysis(supabase, room_name, student_name, act_type, current_topic
                 model_name=AI_MODEL_NAME,
                 api_key=api_key,
                 log_message="AI 피드백 카드 생성 실패",
+                fallback="",
                 room_name=room_name,
                 student=student_name,
             )
