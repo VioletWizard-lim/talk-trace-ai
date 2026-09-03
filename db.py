@@ -164,6 +164,7 @@ def check_schema_columns() -> dict:
         ("topic.ai_report",                lambda: supabase.table("topic").select("ai_report").limit(1).execute()),
         ("topic.is_hidden",                lambda: supabase.table("topic").select("is_hidden").limit(1).execute()),
         ("session_presence.session_id",    lambda: supabase.table("session_presence").select("session_id").limit(1).execute()),
+        ("session_attempts.session_id",    lambda: supabase.table("session_attempts").select("session_id").limit(1).execute()),
     ]
 
     results = {}
@@ -251,6 +252,9 @@ def ai_feedback_available() -> bool:
 
 def session_presence_available() -> bool:
     return _schema().get("session_presence.session_id", False)
+
+def session_attempts_available() -> bool:
+    return _schema().get("session_attempts.session_id", False)
 
 
 # ==========================================
@@ -623,13 +627,17 @@ def find_number_switch_abuse(
     window_minutes: int = 10,
     max_numbers: int = 3,
 ) -> list:
-    """같은 브라우저(session_id)가 같은 방에서 최근 서로 다른 학번을 몇 개나 썼는지 확인합니다.
+    """같은 브라우저(session_id)가 같은 방에서 최근 서로 다른 학번을 몇 개나 시도했는지 확인합니다.
+
+    session_presence(점유 성공 기록)가 아니라 session_attempts(성공/실패와 무관한
+    시도 전체 기록)를 기준으로 세므로, 이미 남이 점유 중인 학번에 계속 들어가려고
+    시도만 하는 경우도 카운트에 포함된다.
 
     오타 등 실수를 감안해 max_numbers(기본 3개)까지는 허용하고,
-    이번 시도까지 포함해 그 이상이 되면 이미 사용된 다른 학번 목록을 반환한다
+    이번 시도까지 포함해 그 이상이 되면 이미 시도한 다른 학번 목록을 반환한다
     (허용 범위 내면 빈 리스트).
     """
-    if not session_presence_available() or not session_id:
+    if not session_attempts_available() or not session_id:
         return []
 
     from datetime import timedelta
@@ -637,7 +645,7 @@ def find_number_switch_abuse(
     cutoff = (get_kst_now() - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
 
     res = execute_query(
-        supabase.table("session_presence")
+        supabase.table("session_attempts")
         .select("student_name")
         .eq("room_name", room_name)
         .eq("session_id", session_id)
@@ -650,30 +658,63 @@ def find_number_switch_abuse(
     return []
 
 
-def clear_session_presence(supabase: Client, room_name: str, student_name: str):
-    """특정 학번의 접속 기록(session_presence)을 초기화합니다.
+def log_session_attempt(supabase: Client, room_name: str, session_id: str, student_name: str):
+    """이 브라우저(session_id)가 이 학번으로 입장을 시도했다는 기록을 남긴다.
 
-    학생이 장난으로(또는 실수로) 학번을 여러 번 바꿔 입장이 막혔을 때,
-    교사가 해당 학번의 접속 기록을 지워 다시 입장할 수 있게 한다.
-    방 전체를 한 번에 초기화하는 기능은 오남용 위험이 있어 제공하지 않는다.
+    점유(session_presence) 성공 여부와 무관하게 항상 기록해야
+    학번 돌려막기 감지(find_number_switch_abuse)가 정확하게 동작한다.
     """
-    if not session_presence_available() or not student_name:
+    if not session_attempts_available() or not session_id:
         return None
     return execute_query(
-        supabase.table("session_presence").delete().eq("room_name", room_name).eq("student_name", student_name),
-        fail_message="접속 기록 초기화 실패",
+        supabase.table("session_attempts").insert(
+            {"room_name": room_name, "session_id": session_id, "student_name": student_name, "last_seen": get_kst_now_str()}
+        ),
+        fail_message="접속 시도 기록 실패",
     )
 
 
-def fetch_session_presence_by_room(supabase: Client, room_name: str) -> list:
-    """이 방의 모든 접속 기록(session_presence)을 반환합니다. [{"student_name", "session_id", "last_seen"}, ...]"""
-    if not session_presence_available():
+def clear_session_presence(supabase: Client, room_name: str, student_name: str):
+    """특정 학번의 접속/시도 기록을 초기화합니다.
+
+    학생이 장난으로(또는 실수로) 학번을 여러 번 바꿔 입장이 막혔을 때,
+    교사가 해당 학번 관련 기록을 지워 다시 입장할 수 있게 한다.
+    session_presence(점유)뿐 아니라 session_attempts(돌려막기 감지용 시도 기록)도
+    함께 지워야 학번 전환 차단이 실제로 풀린다.
+    방 전체를 한 번에 초기화하는 기능은 오남용 위험이 있어 제공하지 않는다.
+    """
+    if not student_name:
+        return None
+    if session_presence_available():
+        execute_query(
+            supabase.table("session_presence").delete().eq("room_name", room_name).eq("student_name", student_name),
+            fail_message="접속 기록 초기화 실패",
+        )
+    if session_attempts_available():
+        execute_query(
+            supabase.table("session_attempts").delete().eq("room_name", room_name).eq("student_name", student_name),
+            fail_message="접속 시도 기록 초기화 실패",
+        )
+    return True
+
+
+def fetch_session_attempts_by_room(supabase: Client, room_name: str, window_minutes: int = 10) -> list:
+    """이 방의 최근(window_minutes) 접속 시도 기록(session_attempts)을 반환합니다.
+
+    반환 형식: [{"student_name", "session_id", "last_seen"}, ...]
+    find_number_switch_abuse와 같은 시간창을 써서, 실제로 차단 대상인 학번만 보여준다.
+    """
+    if not session_attempts_available():
         return []
+    from datetime import timedelta
+    from utils import get_kst_now
+    cutoff = (get_kst_now() - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
     res = execute_query(
-        supabase.table("session_presence")
+        supabase.table("session_attempts")
         .select("student_name, session_id, last_seen")
-        .eq("room_name", room_name),
-        fail_message="접속 기록 조회 실패",
+        .eq("room_name", room_name)
+        .gte("last_seen", cutoff),
+        fail_message="접속 시도 기록 조회 실패",
     )
     return res.data if res and res.data else []
 
