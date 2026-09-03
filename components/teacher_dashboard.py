@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, set_debate_status, stance_available
+from db import ai_feedback_available, clear_session_presence, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_messages, fetch_live_messages, opinion_changes_available, permanently_delete_message, restore_opinion_message, session_control_available, session_presence_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -283,6 +283,21 @@ def _render_debate_control(supabase, room_name, act_type, current_topic):
                 st.session_state[dashboard_busy_key(room_name)] = True
                 st.session_state[dashboard_pending_action_key(room_name)] = "auto_end"
                 st.rerun(scope="app")
+
+    if session_presence_available():
+        with st.expander("🔓 학번 접속 제한 해제"):
+            st.caption(
+                "학생이 학번을 여러 번 바꿔 입력해 입장이 막혔거나, 다른 기기 접속 경고가 "
+                "잘못 뜨는 경우 해당 학번만 접속 기록을 초기화할 수 있습니다."
+            )
+            target_number = st.text_input(
+                "초기화할 학번",
+                key=f"presence_reset_number_{room_name}",
+                placeholder="예: 10101",
+            )
+            if st.button("🧹 이 학번 접속 기록 초기화", key=f"presence_reset_btn_{room_name}", disabled=not target_number.strip()):
+                clear_session_presence(supabase, room_name, target_number.strip())
+                st.toast(f"✅ '{target_number.strip()}' 학번의 접속 기록을 초기화했습니다.", icon="🧹")
 
 
 def _render_participation_section(supabase, room_name, act_type):
