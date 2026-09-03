@@ -40,7 +40,6 @@ jobs:
           python -m py_compile components/teacher_dashboard.py
           python -m py_compile components/teacher_hint.py
           python -m py_compile components/teacher_summary.py
-          python -m py_compile components/teacher_records.py
           echo "✅ 문법 점검 통과!"
 
   test:
