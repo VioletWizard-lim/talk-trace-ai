@@ -5,6 +5,7 @@
 교사에게 검토용으로 플래그만 남긴다. 제출 경로에는 영향을 주지 않는다.
 """
 import logging
+import time
 
 import streamlit as st
 
@@ -86,6 +87,29 @@ def auto_flag_room_content(supabase, room_name: str) -> bool:
         if res is None:
             ok = False
     return ok
+
+
+_AUTO_SCAN_INTERVAL_SECONDS = 300  # 수업 중 자동 재검수 최소 간격 (5분)
+
+
+def maybe_auto_flag_periodically(supabase, room_name: str, debate_status: str) -> None:
+    """토론/토의가 진행 중일 때, 대시보드가 열려 있는 동안 주기적으로(최소 5분 간격)
+    자동 검수를 실행한다. 종료를 기다리지 않고 수업 중간에도 문제 발언을 조기에
+    발견할 수 있도록 하기 위함. 대시보드의 기존 10초 주기 fragment에 얹혀 동작하며,
+    별도의 새 폴링 루프를 만들지 않는다."""
+    if not content_flags_available() or debate_status == "ended":
+        return
+    key = f"_last_mod_scan_{room_name}"
+    last = st.session_state.get(key, 0)
+    now = time.time()
+    if now - last < _AUTO_SCAN_INTERVAL_SECONDS:
+        return
+    st.session_state[key] = now
+    try:
+        auto_flag_room_content(supabase, room_name)
+        fetch_unreviewed_flags_for_room.clear()
+    except Exception as e:
+        logger.warning("수업 중 자동 유해 발언 검수 실패: %s", e)
 
 
 def render_moderation_review_section(supabase, room_name: str) -> None:
