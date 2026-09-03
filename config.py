@@ -4,7 +4,6 @@ AI_MODEL_NAME = "gemini-2.5-flash"
 AI_MODEL_NAME_PRO = "gemini-pro-latest"
 LIVE_BOARD_FETCH_LIMIT = 100
 DASHBOARD_FETCH_LIMIT = 300
-LIVE_REFRESH_INTERVAL = "20s"
 AI_HINT_ENABLED = str(get_secret("AI_HINT_ENABLED", "true")).lower() not in ("false", "0", "no")
 ROOM_DESTROY_ENABLED = str(get_secret("ROOM_DESTROY_ENABLED", "true")).lower() not in ("false", "0", "no")
 AUTO_JOIN_ON_REFRESH = str(get_secret("AUTO_JOIN_ON_REFRESH", "false")).lower() not in ("false", "0", "no")
