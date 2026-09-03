@@ -284,20 +284,21 @@ def _render_debate_control(supabase, room_name, act_type, current_topic):
                 st.session_state[dashboard_pending_action_key(room_name)] = "auto_end"
                 st.rerun(scope="app")
 
-    if session_presence_available():
-        with st.expander("🔓 학번 접속 제한 해제"):
-            st.caption(
-                "학생이 학번을 여러 번 바꿔 입력해 입장이 막혔거나, 다른 기기 접속 경고가 "
-                "잘못 뜨는 경우 해당 학번만 접속 기록을 초기화할 수 있습니다."
-            )
-            target_number = st.text_input(
-                "초기화할 학번",
-                key=f"presence_reset_number_{room_name}",
-                placeholder="예: 10101",
-            )
-            if st.button("🧹 이 학번 접속 기록 초기화", key=f"presence_reset_btn_{room_name}", disabled=not target_number.strip()):
-                clear_session_presence(supabase, room_name, target_number.strip())
-                st.toast(f"✅ '{target_number.strip()}' 학번의 접속 기록을 초기화했습니다.", icon="🧹")
+
+def _render_presence_reset_section(supabase, room_name):
+    st.markdown("**🔓 학번 접속 제한 해제**")
+    st.caption(
+        "학생이 학번을 여러 번 바꿔 입력해 입장이 막혔거나, 다른 기기 접속 경고가 "
+        "잘못 뜨는 경우 해당 학번만 접속 기록을 초기화할 수 있습니다."
+    )
+    target_number = st.text_input(
+        "초기화할 학번",
+        key=f"presence_reset_number_{room_name}",
+        placeholder="예: 10101",
+    )
+    if st.button("🧹 이 학번 접속 기록 초기화", key=f"presence_reset_btn_{room_name}", disabled=not target_number.strip()):
+        clear_session_presence(supabase, room_name, target_number.strip())
+        st.toast(f"✅ '{target_number.strip()}' 학번의 접속 기록을 초기화했습니다.", icon="🧹")
 
 
 def _render_participation_section(supabase, room_name, act_type):
@@ -497,7 +498,14 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
     if active_tab == _TAB_CONTROL:
         if session_control_available():
             st.subheader("🎛️ 토론 진행 제어")
-            _render_debate_control(supabase, room_name, act_type, current_topic)
+            if session_presence_available():
+                col_control, col_presence = st.columns(2)
+                with col_control:
+                    _render_debate_control(supabase, room_name, act_type, current_topic)
+                with col_presence:
+                    _render_presence_reset_section(supabase, room_name)
+            else:
+                _render_debate_control(supabase, room_name, act_type, current_topic)
             st.divider()
         render_hint_section(supabase, room_name, user_role, student_name, current_topic, act_type, df_all)
         st.divider()
