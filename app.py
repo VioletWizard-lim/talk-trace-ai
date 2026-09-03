@@ -177,6 +177,7 @@ def _poll_debate_status(room_name, student_number):
 def _render_opinion_input(supabase, room_name, user_role, student_name, student_number, current_mode):
     st.subheader("🗣️ 내 의견 작성")
     col_input, col_stt = st.columns([4, 1])
+    _show_template_caption = False
     with col_input:
         _opinion_placeholder = ""
         if current_mode == "⚔️ 찬반 토론":
@@ -188,6 +189,7 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
                 label_visibility="collapsed",
             )
             if _writing_style == "📐 주장-근거-반박 틀 사용":
+                _show_template_caption = True
                 st.caption("**글쓰기 틀** — ① 주장 → ② 근거 → ③ 예상되는 반론에 대한 반박 순서로 써보세요.")
                 _opinion_placeholder = (
                     "① 주장: 나는 ~라고 생각한다.\n"
@@ -206,9 +208,10 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
 
     with col_stt:
         if current_mode == "⚔️ 찬반 토론":
-            # 왼쪽 컬럼의 '글쓰기 방식' 라디오만큼 오른쪽 버튼을 아래로 내려
-            # 텍스트 입력창과 나란히 보이도록 맞춘다.
-            st.markdown("<div style='height:44px'></div>", unsafe_allow_html=True)
+            # 왼쪽 컬럼의 '글쓰기 방식' 라디오(+틀 사용 시 안내 캡션)만큼
+            # 오른쪽 버튼을 아래로 내려 텍스트 입력창과 나란히 보이도록 맞춘다.
+            _spacer_height = 92 if _show_template_caption else 44
+            st.markdown(f"<div style='height:{_spacer_height}px'></div>", unsafe_allow_html=True)
         st.components.v1.html(
             """
             <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer;">🎤 음성 입력 시작</button>
