@@ -113,6 +113,8 @@ if admin_auth:
 if teacher_auth:
     _header_buttons.append(("🏠 방 관리", "room_management"))
 _header_buttons.append(("🚪 대기실로", "lobby"))
+if teacher_auth:
+    _header_buttons.append(("🔓 로그아웃", "__logout__"))
 
 col_title, *_header_cols = st.columns([4] + [1] * len(_header_buttons))
 with col_title:
@@ -121,9 +123,17 @@ with col_title:
 for _col, (_label, _target) in zip(_header_cols, _header_buttons):
     with _col:
         if st.button(_label, use_container_width=True, key=f"header_btn_{_target}"):
-            st.session_state['page'] = _target
-            if _target == "lobby":
+            if _target == "__logout__":
+                st.session_state['teacher_auth'] = False
+                st.session_state['admin_auth'] = False
+                st.session_state['teacher_id'] = ""
                 st.session_state['joined'] = False
+                st.session_state['page'] = "lobby"
+                st.session_state.pop('_admin_redirected', None)
+            else:
+                st.session_state['page'] = _target
+                if _target == "lobby":
+                    st.session_state['joined'] = False
             st.rerun()
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
 _ethics_hint = next(
