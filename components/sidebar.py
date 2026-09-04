@@ -214,7 +214,7 @@ def render_sidebar(supabase) -> dict:
                 help="방 입장 후에는 학번을 변경할 수 없습니다." if _joined else None,
             )
             if all_rooms:
-                room_name = st.selectbox("🏠 접속할 방 선택", all_rooms)
+                room_name = st.selectbox("🏠 접속할 방 선택", all_rooms, key="student_room_select")
             else:
                 st.warning("선생님이 아직 열어둔 방이 없습니다.")
                 room_name = ""
@@ -246,4 +246,5 @@ def render_sidebar(supabase) -> dict:
         'admin_auth': admin_auth,
         'student_name': student_name,
         'student_number': student_number,
+        'available_rooms': all_rooms,
     }

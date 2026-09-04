@@ -10,7 +10,7 @@ def render_home_page(supabase):
     if admin_auth and teacher_auth:
         col_title, col_admin1, col_admin2 = st.columns([4, 1, 1])
         with col_title:
-            st.title("🏠 말자취(Talk-Trace) AI 토론/토의방 홈")
+            st.title("🏠 말자취 AI 홈")
         with col_admin1:
             if st.button("📝 ID 요청 수락", use_container_width=True):
                 st.session_state['page'] = "admin_approval"
@@ -20,7 +20,7 @@ def render_home_page(supabase):
                 st.session_state['page'] = "lobby"
                 st.rerun()
     else:
-        st.title("🏠 말자취(Talk-Trace) AI 토론/토의방 홈")
+        st.title("🏠 말자취 AI 홈")
 
     st.info(
         "## 말자취 AI: 토론·토의 발언 기록 및 사고 변화 분석 시스템\n\n"

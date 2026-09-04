@@ -9,24 +9,29 @@ from validators import validate_student_number
 from config import AUTO_JOIN_ON_REFRESH
 
 
-def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_number):
+def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_number, available_rooms=None):
     admin_auth = st.session_state.get('admin_auth', False)
     if admin_auth and teacher_auth:
         col_title, col_btn1 = st.columns([6, 2])
         with col_title:
-            st.title("🚪 말자취(Talk-Trace) AI 토론/토의방 대기실")
+            st.title("🚪 말자취 AI 대기실")
         with col_btn1:
             if st.button("📝 ID 요청 수락", use_container_width=True):
                 st.session_state['page'] = "admin_approval"
                 st.rerun()
     else:
-        st.title("🚪 말자취(Talk-Trace) AI 토론/토의방 대기실")
+        st.title("🚪 말자취 AI 대기실")
     if user_role == "교사" and not teacher_auth:
         st.warning("🚨 승인된 교사 계정으로 로그인해야 입장할 수 있습니다.")
     elif not room_name.strip():
         st.error("🚨 접속할 방을 먼저 선택해 주세요.")
     else:
         if user_role == "학생":
+            if available_rooms:
+                _picked_room = st.selectbox("🏠 접속할 방 선택", available_rooms, key="lobby_room_picker", index=available_rooms.index(room_name) if room_name in available_rooms else 0)
+                if _picked_room != room_name:
+                    st.session_state['student_room_select'] = _picked_room
+                    st.rerun()
             student_pw = st.text_input("🔒 방 입장 암호 (공개방이면 비워두세요)", type="password")
             number_ok, _, _, number_error_message = validate_student_number(student_number)
             if st.button(f"🚀 '{room_name}' 입장하기", type="primary", use_container_width=True):
