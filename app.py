@@ -135,7 +135,7 @@ for _col, (_label, _target) in zip(_header_cols, _header_buttons):
                 if _target == "lobby":
                     st.session_state['joined'] = False
             st.rerun()
-st.info(f"**현재 주제:** {current_topic} ({current_mode})")
+st.info(f"**이번 {act_type} 주제:** {current_topic} ({current_mode})")
 _ethics_hint = next(
     (t for t in DIGITAL_ETHICS_TOPICS if t["title"] == current_topic and t.get("pro") and t.get("con")),
     None,
