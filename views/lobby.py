@@ -12,6 +12,32 @@ from validators import validate_student_number
 from config import AUTO_JOIN_ON_REFRESH
 from components.teacher_auth import render_teacher_auth
 
+_ROLE_TAB_KEY = "user_role_radio"
+_ROLE_TAB_CSS = f"""
+    <style>
+    div[class*="st-key-{_ROLE_TAB_KEY}"] div[role="radiogroup"] {{
+        gap: 4px;
+    }}
+    div[class*="st-key-{_ROLE_TAB_KEY}"] label {{
+        background: #f0f2f6;
+        border-radius: 8px;
+        padding: 10px 22px !important;
+        margin: 0 !important;
+        transition: background 0.15s, color 0.15s;
+    }}
+    div[class*="st-key-{_ROLE_TAB_KEY}"] label > div:first-child {{
+        display: none !important;
+    }}
+    div[class*="st-key-{_ROLE_TAB_KEY}"] label:has(input:checked) {{
+        background: #ff4b4b;
+    }}
+    div[class*="st-key-{_ROLE_TAB_KEY}"] label:has(input:checked) p {{
+        color: white !important;
+        font-weight: 700;
+    }}
+    </style>
+"""
+
 
 def _reset_joined_state():
     st.session_state['joined'] = False
@@ -45,12 +71,18 @@ def render_lobby_page(supabase):
     else:
         st.title("🚪 말자취 AI 대기실")
 
-    user_role = st.radio(
-        "모드 선택", ["학생", "교사"], on_change=_reset_joined_state,
-        disabled=teacher_auth, key="user_role_radio",
-    )
     if teacher_auth:
-        st.caption("🔒 로그아웃해야 모드를 변경할 수 있습니다.")
+        # 로그인 상태에서는 라디오의 남은 값에 의존하지 않고 역할을 "교사"로
+        # 고정한다. (관리자 화면/방 관리 화면을 거쳐 돌아왔을 때 라디오가
+        # 기본값인 "학생"으로 잘못 표시되던 문제 방지)
+        user_role = "교사"
+        st.caption("🔒 교사로 로그인되어 있습니다. 로그아웃해야 모드를 변경할 수 있습니다.")
+    else:
+        st.markdown(_ROLE_TAB_CSS, unsafe_allow_html=True)
+        user_role = st.radio(
+            "모드 선택", ["학생", "교사"], on_change=_reset_joined_state,
+            key=_ROLE_TAB_KEY, horizontal=True, label_visibility="collapsed",
+        )
     st.divider()
 
     if user_role == "교사":
