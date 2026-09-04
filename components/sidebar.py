@@ -33,7 +33,10 @@ def render_sidebar(supabase) -> dict:
     with st.sidebar:
         st.header("👤 접속 권한")
         _is_joined = st.session_state.get('joined', False)
-        user_role = st.radio("모드 선택", ["학생", "교사"], on_change=_reset_joined_state, disabled=_is_joined)
+        user_role = st.radio(
+            "모드 선택", ["학생", "교사"], on_change=_reset_joined_state, disabled=_is_joined,
+            key="user_role_radio",
+        )
         st.divider()
 
         try:
