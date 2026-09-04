@@ -30,10 +30,11 @@ _ACTION_BTN_CSS = """
     div[class*="st-key-clike_"] button,
     div[class*="st-key-del_"] button,
     div[class*="st-key-cdel_"] button {
-        font-size: clamp(10px, 2.8vw, 14px) !important;
+        font-size: 13px !important;
         padding: 0.2rem 0.3rem !important;
         white-space: nowrap !important;
         overflow: visible !important;
+        width: auto !important;
         min-width: fit-content !important;
     }
     div[class*="st-key-like_"] button p,
