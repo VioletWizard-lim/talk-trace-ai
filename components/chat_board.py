@@ -30,8 +30,18 @@ _ACTION_BTN_CSS = """
     div[class*="st-key-clike_"] button,
     div[class*="st-key-del_"] button,
     div[class*="st-key-cdel_"] button {
-        font-size: clamp(11px, 2.8vw, 14px) !important;
-        padding: 0.2rem 0.4rem !important;
+        font-size: clamp(10px, 2.8vw, 14px) !important;
+        padding: 0.2rem 0.3rem !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        min-width: fit-content !important;
+    }
+    div[class*="st-key-like_"] button p,
+    div[class*="st-key-clike_"] button p,
+    div[class*="st-key-del_"] button p,
+    div[class*="st-key-cdel_"] button p {
+        overflow: visible !important;
+        text-overflow: unset !important;
         white-space: nowrap !important;
     }
     </style>
@@ -213,7 +223,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             )
                         with col_c_actions:
                             if user_role == "교사" and teacher_auth:
-                                c_like, c_del = st.columns([1, 1], gap="small")
+                                c_like, c_del = st.columns([2, 1], gap="small")
                                 with c_like:
                                     st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
                                               type=c_like_type,
@@ -295,7 +305,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                 _id_bits.append(f"세션: {row_session[:8]}")
                             st.caption(" · ".join(_id_bits))
                     with c_actions:
-                        c_like, c_del = st.columns([1, 1], gap="small")
+                        c_like, c_del = st.columns([2, 1], gap="small")
                         with c_like:
                             st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
                                       type=like_type,
