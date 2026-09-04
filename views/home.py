@@ -47,7 +47,8 @@ def render_home_page(supabase):
     if judge_account and judge_account.get("is_active"):
         if st.button("🎓 심사위원으로 입장", use_container_width=True):
             st.session_state['teacher_auth'] = True
-            st.session_state['admin_auth'] = False
+            # 모든 방을 볼 수 있어야 하므로 일반 교사가 아닌 관리자 권한으로 로그인시킨다.
+            st.session_state['admin_auth'] = True
             st.session_state['teacher_id'] = judge_account.get("teacher_id", "")
             st.session_state['page'] = "lobby"
             st.rerun()
