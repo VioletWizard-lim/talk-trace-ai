@@ -83,6 +83,7 @@ teacher_auth = sidebar_ctx['teacher_auth']
 admin_auth = sidebar_ctx['admin_auth']
 student_name = sidebar_ctx['student_name']
 student_number = sidebar_ctx['student_number']
+available_rooms = sidebar_ctx.get('available_rooms', [])
 
 # admin 첫 접속 시 pending 여부에 따라 첫 화면 결정 (최초 1회)
 if admin_auth and not st.session_state.get('_admin_redirected'):
@@ -96,7 +97,7 @@ if st.session_state['page'] == "admin_approval":
     render_admin_page(supabase, user_role, teacher_auth, admin_auth)
 
 if not st.session_state['joined']:
-    render_lobby_page(supabase, user_role, teacher_auth, room_name, student_number)
+    render_lobby_page(supabase, user_role, teacher_auth, room_name, student_number, available_rooms)
 
 # === Joined room view ===
 topic_data = fetch_topic_data(supabase, room_name)
@@ -107,7 +108,7 @@ act_type = "토론" if "토론" in current_mode else "토의"
 if admin_auth:
     col_title, col_btn1, col_btn2 = st.columns([4, 1, 1])
     with col_title:
-        st.title("🎙️ 말자취(Talk-Trace) AI 토론/토의방")
+        st.title("🎙️ 말자취 AI")
         st.caption(f"📌 {room_name}")
     with col_btn1:
         if st.button("📝 ID 요청 수락", use_container_width=True):
@@ -118,7 +119,7 @@ if admin_auth:
             st.session_state['page'] = "lobby"
             st.rerun()
 else:
-    st.title("🎙️ 말자취(Talk-Trace) AI 토론/토의방")
+    st.title("🎙️ 말자취 AI")
     st.caption(f"📌 {room_name}")
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
 _ethics_hint = next(
