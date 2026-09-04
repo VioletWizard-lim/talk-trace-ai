@@ -44,6 +44,10 @@ _ACTION_BTN_CSS = """
         text-overflow: unset !important;
         white-space: nowrap !important;
     }
+    div[class*="st-key-del_"],
+    div[class*="st-key-cdel_"] {
+        margin-left: -0.8rem !important;
+    }
     </style>
 """
 _NEW_MSG_POLL_INTERVAL = 5       # 가벼운 변경 확인 주기(초)
