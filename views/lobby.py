@@ -25,6 +25,9 @@ _ROLE_TAB_CSS = f"""
         margin: 0 !important;
         transition: background 0.15s, color 0.15s;
     }}
+    div[class*="st-key-{_ROLE_TAB_KEY}"] label p {{
+        color: #1a1a1a !important;
+    }}
     div[class*="st-key-{_ROLE_TAB_KEY}"] label > div:first-child {{
         display: none !important;
     }}

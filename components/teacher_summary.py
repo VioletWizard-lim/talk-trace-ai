@@ -407,7 +407,7 @@ _CARD_CSS = """
 <style>
 .report-card {
     border-radius: 10px; padding: 14px 18px; margin: 8px 0;
-    font-size: 16px; line-height: 1.75;
+    font-size: 16px; line-height: 1.75; color: #1a1a1a;
 }
 .rc-summary { background: #dbeafe; border-left: 5px solid #1558a0; }
 .rc-best    { background: #dcfce7; border-left: 5px solid #166534; }
