@@ -6,10 +6,11 @@ from db import (
     fetch_live_messages, fetch_latest_message_id, delete_opinion_message, fetch_room_likes, toggle_like, likes_available, debate_soft_delete_available,
     comments_available, comment_likes_available, fetch_comments_for_room, fetch_comment_likes_for_room,
     create_comment, delete_comment, toggle_comment_like,
-    fetch_debate_status, session_control_available,
+    fetch_debate_status, session_control_available, content_flags_available, fetch_unreviewed_flags_for_room,
 )
 from validators import with_fallback_author_role, mask_ip_for_teacher, validate_opinion_content
 from moderation import find_forbidden_word
+from components.moderation_review import auto_flag_room_content
 from utils import anonymize_ip, format_kst_datetime, get_client_ip, log_audit
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, UI_FONT_FAMILY
@@ -78,9 +79,21 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
     )
     debate_ended = session_control_available() and fetch_debate_status(supabase, room_name) == "ended"
 
-    col_board_title, col_board_ref = st.columns([8, 2])
+    show_flag_button = user_role == "교사" and teacher_auth and content_flags_available()
+    if show_flag_button:
+        col_board_title, col_board_flag, col_board_ref = st.columns([6, 2, 2])
+    else:
+        col_board_title, col_board_ref = st.columns([8, 2])
     with col_board_title:
         st.subheader(f"💬 실시간 {act_type} 보드")
+    if show_flag_button:
+        with col_board_flag:
+            if st.button("🚩 지금 유해 발언 검수 실행", use_container_width=True, key="run_moderation_flag"):
+                with st.spinner("🤖 AI가 발언·답글을 검수하고 있습니다..."):
+                    auto_flag_room_content(supabase, room_name)
+                fetch_unreviewed_flags_for_room.clear()
+                st.toast("검수를 완료했습니다. '삭제 보관소' 탭에서 확인하세요.", icon="🚩")
+                st.rerun(scope="app")
     with col_board_ref:
         if user_role == "교사" and teacher_auth:
             st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
