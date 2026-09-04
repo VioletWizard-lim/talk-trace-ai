@@ -50,6 +50,9 @@ def render_home_page(supabase):
             # 모든 방을 볼 수 있어야 하므로 일반 교사가 아닌 관리자 권한으로 로그인시킨다.
             st.session_state['admin_auth'] = True
             st.session_state['teacher_id'] = judge_account.get("teacher_id", "")
+            # 사이드바의 "모드 선택"이 기본값(학생)으로 남아있으면 위 인증 상태가
+            # 곧바로 초기화되므로, 모드도 함께 "교사"로 강제 전환해준다.
+            st.session_state['user_role_radio'] = "교사"
             st.session_state['page'] = "lobby"
             st.rerun()
 
