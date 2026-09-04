@@ -33,10 +33,14 @@ def render_sidebar(supabase) -> dict:
     with st.sidebar:
         st.header("👤 접속 권한")
         _is_joined = st.session_state.get('joined', False)
+        _is_teacher_logged_in = st.session_state.get('teacher_auth', False)
         user_role = st.radio(
-            "모드 선택", ["학생", "교사"], on_change=_reset_joined_state, disabled=_is_joined,
+            "모드 선택", ["학생", "교사"], on_change=_reset_joined_state,
+            disabled=_is_joined or _is_teacher_logged_in,
             key="user_role_radio",
         )
+        if _is_teacher_logged_in:
+            st.caption("🔒 로그아웃해야 모드를 변경할 수 있습니다.")
         st.divider()
 
         try:
