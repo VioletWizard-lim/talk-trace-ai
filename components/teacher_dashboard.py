@@ -192,7 +192,7 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                 <style>
                 .matrix-card {
                     border-radius: 12px; padding: 14px 16px; margin: 4px 0;
-                    font-size: 15px; line-height: 1.7;
+                    font-size: 15px; line-height: 1.7; color: #1a1a1a;
                 }
                 .card-keep-pro  { background: #dbeafe; border-left: 5px solid #1558a0; }
                 .card-keep-con  { background: #fee2e2; border-left: 5px solid #d62728; }
@@ -463,6 +463,9 @@ _DASHBOARD_TAB_CSS = f"""
         padding: 8px 14px !important;
         margin: 0 !important;
         transition: background 0.15s, color 0.15s;
+    }}
+    div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label p {{
+        color: #1a1a1a !important;
     }}
     div[class*="st-key-{_DASHBOARD_TAB_KEY}"] label > div:first-child {{
         display: none !important;
