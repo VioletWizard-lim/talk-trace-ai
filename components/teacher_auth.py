@@ -105,23 +105,13 @@ def render_teacher_auth(supabase) -> None:
 
     if auth_mode == "로그인" and not already_logged_in:
         with st.form("teacher_login_form"):
-            teacher_id_input = st.text_input("교사 ID", key="teacher_id_input")
-            teacher_pw_input = st.text_input("교사 PW", type="password", key="teacher_pw_input")
+            col_id, col_pw = st.columns(2)
+            with col_id:
+                teacher_id_input = st.text_input("교사 ID", key="teacher_id_input")
+            with col_pw:
+                teacher_pw_input = st.text_input("교사 PW", type="password", key="teacher_pw_input")
             login_submitted = st.form_submit_button("교사 로그인", use_container_width=True)
         if login_submitted:
             _handle_login(supabase, teacher_id_input, teacher_pw_input)
     elif auth_mode == "ID/PW 신청":
         _render_signup(supabase)
-
-    if st.session_state.get('teacher_auth', False):
-        teacher_id = st.session_state.get("teacher_id", "")
-        st.caption(f"🔐 {teacher_id} 로그인 중")
-        if st.button("🚪 로그아웃", use_container_width=True):
-            _reset_auth_state()
-            st.session_state['teacher_id_input'] = ""
-            st.session_state['teacher_pw_input'] = ""
-            st.session_state['joined'] = False
-            st.session_state['page'] = "lobby"
-            st.session_state.pop('_admin_redirected', None)
-            st.rerun()
-        st.divider()

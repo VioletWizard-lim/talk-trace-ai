@@ -59,16 +59,30 @@ def render_lobby_page(supabase):
     admin_auth = st.session_state.get('admin_auth', False)
     teacher_auth = st.session_state.get('teacher_auth', False)
 
+    _header_buttons = []
     if admin_auth and teacher_auth:
-        col_title, col_btn1 = st.columns([6, 2])
-        with col_title:
-            st.title("🚪 말자취 AI 대기실")
-        with col_btn1:
-            if st.button("📝 ID 요청 수락", use_container_width=True):
-                st.session_state['page'] = "admin_approval"
-                st.rerun()
+        _header_buttons.append(("📝 ID 요청 수락", "admin_approval"))
+    if teacher_auth:
+        _header_buttons.append(("🔓 로그아웃", "__logout__"))
+
+    if _header_buttons:
+        col_title, *_header_cols = st.columns([6] + [2] * len(_header_buttons))
     else:
+        col_title, _header_cols = st.container(), []
+    with col_title:
         st.title("🚪 말자취 AI 대기실")
+    for _col, (_label, _target) in zip(_header_cols, _header_buttons):
+        with _col:
+            if st.button(_label, use_container_width=True, key=f"lobby_header_{_target}"):
+                if _target == "__logout__":
+                    st.session_state['teacher_auth'] = False
+                    st.session_state['admin_auth'] = False
+                    st.session_state['teacher_id'] = ""
+                    st.session_state['joined'] = False
+                    st.session_state.pop('_admin_redirected', None)
+                else:
+                    st.session_state['page'] = _target
+                st.rerun()
 
     if teacher_auth:
         # 로그인 상태에서는 라디오의 남은 값에 의존하지 않고 역할을 "교사"로
