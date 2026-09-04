@@ -146,16 +146,19 @@ def render_lobby_page(supabase):
         except Exception:
             all_rooms = []
 
-        student_number = st.text_input(
-            "학번", key="student_number_input",
-            placeholder="예: 10101 (4~5자리 숫자)", max_chars=5,
-        )
         if not all_rooms:
             st.warning("선생님이 아직 열어둔 방이 없습니다.")
             st.stop()
 
         room_name = st.selectbox("🏠 접속할 방 선택", all_rooms, key="student_room_select")
-        student_pw = st.text_input("🔒 방 입장 암호 (공개방이면 비워두세요)", type="password")
+        col_number, col_pw = st.columns(2)
+        with col_number:
+            student_number = st.text_input(
+                "학번", key="student_number_input",
+                placeholder="예: 10101 (4~5자리 숫자)", max_chars=5,
+            )
+        with col_pw:
+            student_pw = st.text_input("🔒 방 입장 암호 (공개방이면 비워두세요)", type="password")
         number_ok, _, _, number_error_message = validate_student_number(student_number)
         if st.button(f"🚀 '{room_name}' 입장하기", type="primary", use_container_width=True):
             real_pw = fetch_room_entry_code(supabase, room_name)
