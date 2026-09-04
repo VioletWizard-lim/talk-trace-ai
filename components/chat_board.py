@@ -30,8 +30,18 @@ _ACTION_BTN_CSS = """
     div[class*="st-key-clike_"] button,
     div[class*="st-key-del_"] button,
     div[class*="st-key-cdel_"] button {
-        font-size: clamp(11px, 2.8vw, 14px) !important;
-        padding: 0.2rem 0.4rem !important;
+        font-size: clamp(10px, 2.8vw, 14px) !important;
+        padding: 0.2rem 0.3rem !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        min-width: fit-content !important;
+    }
+    div[class*="st-key-like_"] button p,
+    div[class*="st-key-clike_"] button p,
+    div[class*="st-key-del_"] button p,
+    div[class*="st-key-cdel_"] button p {
+        overflow: visible !important;
+        text-overflow: unset !important;
         white-space: nowrap !important;
     }
     </style>
@@ -213,13 +223,13 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             )
                         with col_c_actions:
                             if user_role == "교사" and teacher_auth:
-                                c_like, c_del = st.columns([1, 1], gap="small")
+                                c_like, c_del = st.columns([2, 1], gap="small")
                                 with c_like:
                                     st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
                                               type=c_like_type,
                                               on_click=do_toggle_comment_like, args=(c_id,))
                                 with c_del:
-                                    if st.button("🗑️ 삭제", key=f"cdel_{c_id}", help="댓글 삭제"):
+                                    if st.button("🗑️", key=f"cdel_{c_id}", help="댓글 삭제"):
                                         if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
                                             fetch_comments_for_room.clear()
                                             st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
@@ -295,13 +305,13 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                 _id_bits.append(f"세션: {row_session[:8]}")
                             st.caption(" · ".join(_id_bits))
                     with c_actions:
-                        c_like, c_del = st.columns([1, 1], gap="small")
+                        c_like, c_del = st.columns([2, 1], gap="small")
                         with c_like:
                             st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
                                       type=like_type,
                                       on_click=do_toggle_like, args=(msg_id,))
                         with c_del:
-                            if st.button("🗑️ 삭제", key=f"del_{msg_id}", help="강제 삭제"):
+                            if st.button("🗑️", key=f"del_{msg_id}", help="강제 삭제"):
                                 st.session_state[f"confirm_del_msg_{msg_id}"] = True
                     st.info(_escape_md(row['content']))
                     if use_comments:
