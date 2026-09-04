@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_attempts, comments_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, session_control_available, session_attempts_available, set_debate_status, stance_available
+from db import ai_feedback_available, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, session_control_available, session_attempts_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -346,9 +346,6 @@ def _render_participation_section(supabase, room_name, act_type):
 
 
 def _render_archive_section(supabase, room_name):
-    render_moderation_review_section(supabase, room_name)
-    st.divider()
-
     st.subheader("🗑️ 삭제 보관소")
     st.caption("실시간 보드에서 삭제된 발언이 여기 보관됩니다. 복구하거나 완전히 삭제할 수 있습니다.")
 
@@ -450,6 +447,7 @@ _TAB_LEARNING = "🔍 배움 분석"
 _TAB_STANCE = "📊 입장 변화"
 _TAB_DEPTH = "📈 발언 깊이"
 _TAB_SUMMARY = "📝 요약 리포트"
+_TAB_MODERATION = "🚩 AI 검수함"
 _TAB_ARCHIVE = "🗑️ 삭제 보관소"
 _DASHBOARD_TAB_KEY = "teacher_dashboard_active_tab"
 _DASHBOARD_TAB_CSS = f"""
@@ -516,6 +514,9 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
     tabs = [_TAB_CONTROL, _TAB_PARTICIPATION, _TAB_LEARNING, _TAB_STANCE, _TAB_DEPTH]
     if _debate_status == "ended":
         tabs.append(_TAB_SUMMARY)
+    # AI 검수함은 content_flags 테이블이 마련된 경우에만 노출
+    if content_flags_available():
+        tabs.append(_TAB_MODERATION)
     # 삭제 보관소는 DB에 소프트 삭제 컬럼이 마련된 경우에만 노출
     if debate_soft_delete_available():
         tabs.append(_TAB_ARCHIVE)
@@ -632,6 +633,9 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
 
     elif active_tab == _TAB_SUMMARY:
         render_summary_section(supabase, room_name, act_type, current_topic, df_all)
+
+    elif active_tab == _TAB_MODERATION:
+        render_moderation_review_section(supabase, room_name)
 
     elif active_tab == _TAB_ARCHIVE:
         _render_archive_section(supabase, room_name)

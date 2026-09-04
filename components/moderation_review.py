@@ -113,7 +113,7 @@ def maybe_auto_flag_periodically(supabase, room_name: str, debate_status: str) -
 
 
 def render_moderation_review_section(supabase, room_name: str) -> None:
-    """교사 대시보드 삭제 보관소 탭에 삽입되는 AI 유해 발언 검수 섹션."""
+    """교사 대시보드 'AI 검수함' 탭에 삽입되는 AI 유해 발언 검수 섹션."""
     if not content_flags_available():
         return
 

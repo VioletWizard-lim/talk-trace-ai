@@ -81,18 +81,26 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
 
     show_flag_button = user_role == "교사" and teacher_auth and content_flags_available()
     if show_flag_button:
-        col_board_title, col_board_flag, col_board_ref = st.columns([6, 2, 2])
+        col_board_title, col_board_count, col_board_flag, col_board_ref = st.columns([5, 2, 2, 2])
     else:
         col_board_title, col_board_ref = st.columns([8, 2])
     with col_board_title:
         st.subheader(f"💬 실시간 {act_type} 보드")
     if show_flag_button:
+        with col_board_count:
+            _unreviewed_count = len(fetch_unreviewed_flags_for_room(supabase, room_name))
+            if _unreviewed_count > 0:
+                st.markdown(
+                    f"<div style='margin-top:0.6em; text-align:center; color:#c0392b; font-weight:600;'>"
+                    f"🚩 검토 대기 {_unreviewed_count}건</div>",
+                    unsafe_allow_html=True,
+                )
         with col_board_flag:
             if st.button("🚩 지금 유해 발언 검수 실행", use_container_width=True, key="run_moderation_flag"):
                 with st.spinner("🤖 AI가 발언·답글을 검수하고 있습니다..."):
                     auto_flag_room_content(supabase, room_name)
                 fetch_unreviewed_flags_for_room.clear()
-                st.toast("검수를 완료했습니다. '삭제 보관소' 탭에서 확인하세요.", icon="🚩")
+                st.toast("검수를 완료했습니다. 'AI 검수함' 탭에서 확인하세요.", icon="🚩")
                 st.rerun(scope="app")
     with col_board_ref:
         if user_role == "교사" and teacher_auth:
