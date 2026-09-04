@@ -11,6 +11,7 @@ from db import (
     fetch_live_messages,
     fetch_opinion_change,
     fetch_pending_teacher_accounts,
+    fetch_room_names,
     fetch_topic_data,
     init_db,
     is_recent_submission,
@@ -24,12 +25,12 @@ from db import (
 )
 from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS
 from utils import anonymize_ip, get_client_ip, get_kst_now_str, get_or_create_session_uuid, log_audit
-from validators import validate_entry_code, validate_opinion_content, validate_student_number
+from validators import validate_entry_code, validate_opinion_content, validate_student_number, normalize_user_text
 from moderation import find_forbidden_word
 from views.home import render_home_page
 from views.lobby import render_lobby_page
 from components.admin_panel import render_admin_page
-from components.sidebar import render_sidebar
+from components.room_management import render_room_management_page
 
 logger = logging.getLogger("talk_trace_ai")
 if not logger.handlers:
@@ -76,14 +77,12 @@ from components.chat_board import render_chat_board
 from components.teacher_dashboard import render_teacher_dashboard
 from components.opinion_change import render_pre_opinion_form, render_post_opinion_section
 
-sidebar_ctx = render_sidebar(supabase)
-user_role = sidebar_ctx['user_role']
-room_name = sidebar_ctx['room_name']
-teacher_auth = sidebar_ctx['teacher_auth']
-admin_auth = sidebar_ctx['admin_auth']
-student_name = sidebar_ctx['student_name']
-student_number = sidebar_ctx['student_number']
-available_rooms = sidebar_ctx.get('available_rooms', [])
+user_role = st.session_state.get('user_role_radio', '학생')
+teacher_auth = st.session_state.get('teacher_auth', False)
+admin_auth = st.session_state.get('admin_auth', False)
+room_name = st.session_state.get('current_room', '')
+student_number = st.session_state.get('student_number_input', '') if user_role == '학생' else ''
+student_name = normalize_user_text(student_number, max_len=20) if user_role == '학생' else '교사'
 
 # admin 첫 접속 시 pending 여부에 따라 첫 화면 결정 (최초 1회)
 if admin_auth and not st.session_state.get('_admin_redirected'):
@@ -96,8 +95,11 @@ if admin_auth and not st.session_state.get('_admin_redirected'):
 if st.session_state['page'] == "admin_approval":
     render_admin_page(supabase, user_role, teacher_auth, admin_auth)
 
+if st.session_state['page'] == "room_management":
+    render_room_management_page(supabase)
+
 if not st.session_state['joined']:
-    render_lobby_page(supabase, user_role, teacher_auth, room_name, student_number, available_rooms)
+    render_lobby_page(supabase)
 
 # === Joined room view ===
 topic_data = fetch_topic_data(supabase, room_name)
@@ -105,22 +107,24 @@ current_topic = topic_data.get('title', "자유 주제로 대화해 봅시다.")
 current_mode = topic_data.get('mode', "⚔️ 찬반 토론")
 act_type = "토론" if "토론" in current_mode else "토의"
 
+_header_buttons = []
 if admin_auth:
-    col_title, col_btn1, col_btn2 = st.columns([4, 1, 1])
-    with col_title:
-        st.title("🎙️ 말자취 AI")
-        st.caption(f"📌 {room_name}")
-    with col_btn1:
-        if st.button("📝 ID 요청 수락", use_container_width=True):
-            st.session_state['page'] = "admin_approval"
-            st.rerun()
-    with col_btn2:
-        if st.button("🚪 말자취 AI 대기실", use_container_width=True):
-            st.session_state['page'] = "lobby"
-            st.rerun()
-else:
+    _header_buttons.append(("📝 ID 요청 수락", "admin_approval"))
+if teacher_auth:
+    _header_buttons.append(("🏠 방 관리", "room_management"))
+_header_buttons.append(("🚪 대기실로", "lobby"))
+
+col_title, *_header_cols = st.columns([4] + [1] * len(_header_buttons))
+with col_title:
     st.title("🎙️ 말자취 AI")
     st.caption(f"📌 {room_name}")
+for _col, (_label, _target) in zip(_header_cols, _header_buttons):
+    with _col:
+        if st.button(_label, use_container_width=True, key=f"header_btn_{_target}"):
+            st.session_state['page'] = _target
+            if _target == "lobby":
+                st.session_state['joined'] = False
+            st.rerun()
 st.info(f"**현재 주제:** {current_topic} ({current_mode})")
 _ethics_hint = next(
     (t for t in DIGITAL_ETHICS_TOPICS if t["title"] == current_topic and t.get("pro") and t.get("con")),
