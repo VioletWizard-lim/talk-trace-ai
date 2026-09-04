@@ -170,6 +170,8 @@ def check_schema_columns() -> dict:
         ("comments.session_id",            lambda: supabase.table("comments").select("session_id").limit(1).execute()),
         ("comment_likes.comment_id",       lambda: supabase.table("comment_likes").select("comment_id").limit(1).execute()),
         ("content_flags.reason",           lambda: supabase.table("content_flags").select("reason").limit(1).execute()),
+        ("teacher_accounts.is_judge",      lambda: supabase.table("teacher_accounts").select("is_judge").limit(1).execute()),
+        ("teacher_accounts.is_active",     lambda: supabase.table("teacher_accounts").select("is_active").limit(1).execute()),
     ]
 
     def _run_check(item):
@@ -274,6 +276,14 @@ def comments_session_id_column_available() -> bool:
 
 def content_flags_available() -> bool:
     return _schema().get("content_flags.reason", False)
+
+
+def teacher_judge_column_available() -> bool:
+    return _schema().get("teacher_accounts.is_judge", False)
+
+
+def teacher_active_column_available() -> bool:
+    return _schema().get("teacher_accounts.is_active", False)
 
 
 def comment_likes_available() -> bool:
@@ -1188,11 +1198,14 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     if not safe_id:
         return None
 
-    teacher_select = (
-        "id, teacher_id, teacher_pw, is_approved, approved_at, requested_at, is_admin"
-        if teacher_is_admin_column_available()
-        else "id, teacher_id, teacher_pw, is_approved, approved_at, requested_at"
-    )
+    teacher_select_cols = ["id", "teacher_id", "teacher_pw", "is_approved", "approved_at", "requested_at"]
+    if teacher_is_admin_column_available():
+        teacher_select_cols.append("is_admin")
+    if teacher_judge_column_available():
+        teacher_select_cols.append("is_judge")
+    if teacher_active_column_available():
+        teacher_select_cols.append("is_active")
+    teacher_select = ", ".join(teacher_select_cols)
 
     res = execute_query(
         supabase.table("teacher_accounts")
@@ -1253,6 +1266,42 @@ def reject_teacher_account(supabase: Client, account_id: int):
     return execute_query(
         supabase.table("teacher_accounts").delete().eq("id", account_id),
         fail_message="교사 계정 거절 실패",
+    )
+
+
+def fetch_judge_account(supabase: Client):
+    """미리 만들어둔 심사용 계정을 조회합니다 (is_judge=true인 첫 번째 승인된 계정)."""
+    if not (teacher_judge_column_available() and teacher_active_column_available()):
+        return None
+    res = execute_query(
+        supabase.table("teacher_accounts")
+        .select("id, teacher_id, is_approved, is_active")
+        .eq("is_judge", True)
+        .eq("is_approved", True)
+        .limit(1),
+        fail_message="심사용 계정 조회 실패",
+    )
+    return res.data[0] if res and res.data else None
+
+
+def fetch_judge_accounts(supabase: Client) -> list:
+    """관리자 화면에 표시할 심사용 계정 전체 목록을 조회합니다."""
+    if not teacher_judge_column_available():
+        return []
+    res = execute_query(
+        supabase.table("teacher_accounts")
+        .select("id, teacher_id, is_active")
+        .eq("is_judge", True)
+        .order("id"),
+        fail_message="심사용 계정 목록 조회 실패",
+    )
+    return res.data if res and res.data else []
+
+
+def set_teacher_active(supabase: Client, account_id: int, active: bool):
+    return execute_query(
+        supabase.table("teacher_accounts").update({"is_active": active}).eq("id", account_id),
+        fail_message="계정 활성화 상태 변경 실패",
     )
 
 

@@ -69,7 +69,7 @@ if st.session_state['page'] != "home":
             st.rerun()
 
 if st.session_state['page'] == "home":
-    render_home_page()
+    render_home_page(supabase)
 
 # plotly / google.generativeai 임포트는 홈 화면에서 불필요 — st.stop() 이후에 로드
 from components.chat_board import render_chat_board

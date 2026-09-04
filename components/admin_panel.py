@@ -1,5 +1,8 @@
 import streamlit as st
-from db import fetch_pending_teacher_accounts, approve_teacher_account, reject_teacher_account
+from db import (
+    fetch_pending_teacher_accounts, approve_teacher_account, reject_teacher_account,
+    fetch_judge_accounts, set_teacher_active, teacher_judge_column_available,
+)
 from utils import format_kst_datetime, get_kst_now_str
 
 
@@ -32,6 +35,36 @@ def render_admin_approval_panel(supabase):
                     st.rerun()
 
 
+def render_judge_accounts_panel(supabase):
+    if not teacher_judge_column_available():
+        return
+    st.subheader("🎓 심사용 계정 관리")
+    judge_accounts = fetch_judge_accounts(supabase)
+    if not judge_accounts:
+        st.info("등록된 심사용 계정이 없습니다.")
+        return
+    for judge in judge_accounts:
+        acc_id = judge.get("id")
+        judge_teacher_id = judge.get("teacher_id", "")
+        is_active = bool(judge.get("is_active"))
+        c_id, c_status, c_toggle = st.columns([3, 2, 2])
+        with c_id:
+            st.write(f"ID: {judge_teacher_id}")
+        with c_status:
+            st.success("🟢 활성화됨") if is_active else st.warning("⚪ 비활성화됨")
+        with c_toggle:
+            if is_active:
+                if st.button("비활성화", key=f"judge_deactivate_{acc_id}", use_container_width=True):
+                    if set_teacher_active(supabase, acc_id, False) is not None:
+                        st.toast(f"{judge_teacher_id} 계정을 비활성화했습니다.", icon="⚪")
+                        st.rerun()
+            else:
+                if st.button("활성화", key=f"judge_activate_{acc_id}", use_container_width=True, type="primary"):
+                    if set_teacher_active(supabase, acc_id, True) is not None:
+                        st.toast(f"{judge_teacher_id} 계정을 활성화했습니다.", icon="🟢")
+                        st.rerun()
+
+
 def render_admin_page(supabase, user_role, teacher_auth, admin_auth):
     if not (user_role == "교사" and teacher_auth and admin_auth):
         st.session_state['page'] = "lobby"
@@ -49,4 +82,6 @@ def render_admin_page(supabase, user_role, teacher_auth, admin_auth):
             st.session_state['page'] = "lobby"
             st.rerun()
     render_admin_approval_panel(supabase)
+    st.divider()
+    render_judge_accounts_panel(supabase)
     st.stop()
