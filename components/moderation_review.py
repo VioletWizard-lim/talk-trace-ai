@@ -15,7 +15,7 @@ from db import (
     delete_opinion_message, delete_comment, fetch_live_messages, fetch_comments_for_room,
 )
 from env import get_secret
-from config import AI_MODEL_NAME, AI_MODEL_NAME_PRO
+from config import AI_MODEL_NAME
 from services.ai import build_moderation_flag_prompt, generate_ai_response, parse_moderation_flags
 
 logger = logging.getLogger("talk_trace_ai")
@@ -29,15 +29,12 @@ def _scan_in_batches(items: list, api_key: str) -> dict:
     for i in range(0, len(items), _BATCH_SIZE):
         batch = items[i: i + _BATCH_SIZE]
         prompt = build_moderation_flag_prompt(batch)
+        # 유해 발언 검수는 항상 Flash 모델만 사용한다 (Pro 대비 충분히 빠르고
+        # 저렴하며, 단순 분류 작업이라 Pro까지는 필요하지 않다고 판단).
         response = generate_ai_response(
-            prompt=prompt, model_name=AI_MODEL_NAME_PRO, api_key=api_key,
-            log_message="moderation_flag_batch (Pro)", fallback="",
+            prompt=prompt, model_name=AI_MODEL_NAME, api_key=api_key,
+            log_message="moderation_flag_batch (Flash)", fallback="",
         )
-        if not response:
-            response = generate_ai_response(
-                prompt=prompt, model_name=AI_MODEL_NAME, api_key=api_key,
-                log_message="moderation_flag_batch (Flash 재시도)", fallback="",
-            )
         if response:
             batch_keys = {k for k, _ in batch}
             all_results.update(parse_moderation_flags(response, batch_keys))

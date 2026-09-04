@@ -89,12 +89,12 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
     if show_flag_button:
         with col_board_count:
             _unreviewed_count = len(fetch_unreviewed_flags_for_room(supabase, room_name))
-            if _unreviewed_count > 0:
-                st.markdown(
-                    f"<div style='margin-top:0.6em; text-align:center; color:#c0392b; font-weight:600;'>"
-                    f"🚩 검토 대기 {_unreviewed_count}건</div>",
-                    unsafe_allow_html=True,
-                )
+            _count_color = "#c0392b" if _unreviewed_count > 0 else "#888"
+            st.markdown(
+                f"<div style='margin-top:0.6em; text-align:center; color:{_count_color}; font-weight:600;'>"
+                f"🚩 검토 대기 {_unreviewed_count}건</div>",
+                unsafe_allow_html=True,
+            )
         with col_board_flag:
             if st.button("🚩 지금 유해 발언 검수 실행", use_container_width=True, key="run_moderation_flag"):
                 with st.spinner("🤖 AI가 발언·답글을 검수하고 있습니다..."):
