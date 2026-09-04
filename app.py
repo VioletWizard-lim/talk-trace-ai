@@ -77,8 +77,8 @@ from components.chat_board import render_chat_board
 from components.teacher_dashboard import render_teacher_dashboard
 from components.opinion_change import render_pre_opinion_form, render_post_opinion_section
 
-user_role = st.session_state.get('user_role_radio', '학생')
 teacher_auth = st.session_state.get('teacher_auth', False)
+user_role = "교사" if teacher_auth else st.session_state.get('user_role_radio', '학생')
 admin_auth = st.session_state.get('admin_auth', False)
 room_name = st.session_state.get('current_room', '')
 student_number = st.session_state.get('student_number_input', '') if user_role == '학생' else ''

@@ -15,68 +15,59 @@ from validators import (
 )
 from config import MAX_ROOM_NAME_LEN, MAX_TOPIC_LEN, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS
 
+_VIEW_KEY = "_room_mgmt_view"
+_ROOMS_PER_ROW = 4
 
-def render_room_management_page(supabase):
-    teacher_auth = st.session_state.get('teacher_auth', False)
-    if not teacher_auth:
-        st.session_state['page'] = "lobby"
-        st.toast("교사 로그인이 필요합니다.", icon="ℹ️")
-        st.rerun()
 
-    teacher_id_for_scope = st.session_state.get('teacher_id', '')
+def _render_visibility_section(supabase):
+    if not topic_is_hidden_available():
+        st.info("이 기능을 사용하려면 topic.is_hidden 컬럼이 필요합니다.")
+        return
+    all_rooms_for_manage = fetch_room_names(supabase, include_hidden=True)
+    if not all_rooms_for_manage:
+        st.info("아직 개설된 방이 없습니다. '✨ 새 방 만들기'에서 첫 번째 방을 만들어보세요.")
+        return
 
-    col_title, col_btn = st.columns([6, 2])
-    with col_title:
-        st.title("🏠 방 관리")
-    with col_btn:
-        if st.button("🚪 대기실로", use_container_width=True):
-            st.session_state['page'] = "lobby"
-            st.session_state['joined'] = False
-            st.rerun()
-
-    room_opt = st.radio("방 관리", ["방 공개/숨김 관리", "새 방 만들기"])
-
-    if '_bulk_create_msg' in st.session_state:
-        st.success(st.session_state['_bulk_create_msg'])
-        st.session_state['_bulk_create_msg_ttl'] = st.session_state.get('_bulk_create_msg_ttl', 0) + 1
-        if st.session_state['_bulk_create_msg_ttl'] >= 8:
-            del st.session_state['_bulk_create_msg']
-            del st.session_state['_bulk_create_msg_ttl']
-
-    if room_opt == "방 공개/숨김 관리":
-        if not topic_is_hidden_available():
-            st.info("이 기능을 사용하려면 topic.is_hidden 컬럼이 필요합니다.")
-            st.stop()
-        all_rooms_for_manage = fetch_room_names(supabase, include_hidden=True)
-        if not all_rooms_for_manage:
-            st.info("아직 개설된 방이 없습니다. '새 방 만들기'를 선택해 첫 번째 방을 만들어보세요.")
-            st.stop()
-        st.caption("✅ 체크 = 학생에게 보임 / ☐ 해제 = 숨김 (변경 즉시 자동 저장)")
-        _hidden_status = fetch_all_rooms_hidden_status(supabase)
-        _hidden_changed = False
-        for _r in all_rooms_for_manage:
+    st.caption("✅ 체크 = 학생에게 보임 / ☐ 해제 = 숨김 (변경 즉시 자동 저장)")
+    _hidden_status = fetch_all_rooms_hidden_status(supabase)
+    _hidden_changed = False
+    _cols = st.columns(_ROOMS_PER_ROW)
+    for i, _r in enumerate(all_rooms_for_manage):
+        with _cols[i % _ROOMS_PER_ROW]:
             _cur_hidden = _hidden_status.get(_r, False)
             _checked = st.checkbox(_r, value=not _cur_hidden, key=f"vis_{_r}")
             _want_hidden = not _checked
             if _want_hidden != _cur_hidden:
                 toggle_room_visibility(supabase, _r, _want_hidden)
                 _hidden_changed = True
-        if _hidden_changed:
-            st.rerun()
-        st.stop()
+    if _hidden_changed:
+        st.rerun()
 
-    # ── 새 방 만들기 ──
+
+def _render_create_section(supabase, teacher_id_for_scope):
+    if '_bulk_create_msg' in st.session_state:
+        st.success(st.session_state['_bulk_create_msg'])
+        st.session_state['_bulk_create_msg_ttl'] = st.session_state.get('_bulk_create_msg_ttl', 0) + 1
+        if st.session_state['_bulk_create_msg_ttl'] >= 8:
+            del st.session_state['_bulk_create_msg']
+            del st.session_state['_bulk_create_msg_ttl']
+    if '_single_create_msg' in st.session_state:
+        st.success(st.session_state.pop('_single_create_msg'))
+
     _bulk_mode = st.checkbox("📋 여러 반 한번에 만들기")
-    if _bulk_mode:
-        _class_prefix = st.text_input("반 이름 공통 앞부분 (예: 1학년)", value="1학년")
-        _class_nums = st.text_input("반 번호/구분 문구 (쉼표로 구분, 예: 1,2,3 또는 가,나,다)", value="1,2,3")
-    else:
-        new_room = st.text_input("새로 만들 방 이름 (예: 1학년 3반)")
+    col_name, col_topic = st.columns(2)
+    with col_name:
+        if _bulk_mode:
+            _class_prefix = st.text_input("반 이름 공통 앞부분", value="1학년")
+            _class_nums = st.text_input("반 번호/구분 (쉼표로 구분)", value="1,2,3", help="예: 1,2,3 또는 가,나,다")
+        else:
+            new_room = st.text_input("새로 만들 방 이름", placeholder="예: 1학년 3반")
+    with col_topic:
+        _preset_labels = ["직접 입력"] + [t["label"] for t in DIGITAL_ETHICS_TOPICS]
+        _topic_choice = st.selectbox("📚 정보윤리 추천 주제", _preset_labels, index=0)
 
-    _preset_labels = ["직접 입력"] + [t["label"] for t in DIGITAL_ETHICS_TOPICS]
-    _topic_choice = st.selectbox("📚 정보윤리 추천 주제", _preset_labels, index=0)
     if _topic_choice == "직접 입력":
-        new_title = st.text_input("주제 직접 입력 (예: 인공지능 윤리)")
+        new_title = st.text_input("주제 직접 입력", placeholder="예: 인공지능 윤리")
         _preset_mode_idx = 0
     else:
         _preset = next(t for t in DIGITAL_ETHICS_TOPICS if t["label"] == _topic_choice)
@@ -95,18 +86,18 @@ def render_room_management_page(supabase):
                 with st.expander("💡 찬성/반대 핵심 논점 보기", expanded=False):
                     st.markdown(f"**🔵 찬성:** {_preset['pro']}")
                     st.markdown(f"**🔴 반대:** {_preset['con']}")
-            if st.button("✏️ 주제 수정", key=f"edit_{_topic_choice}", use_container_width=True):
+            if st.button("✏️ 주제 수정", key=f"edit_{_topic_choice}"):
                 st.session_state[f"editing_{_topic_choice}"] = True
                 st.rerun()
 
-    new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"],
-                        index=_preset_mode_idx, horizontal=True)
-    new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
-    st.warning("⚠️ 방 이름은 개설 후 변경할 수 없습니다. 신중하게 입력해 주세요.")
-    _create_clicked = st.button("새 방 개설하기", type="primary")
-    if '_single_create_msg' in st.session_state:
-        st.success(st.session_state['_single_create_msg'])
-    if _create_clicked:
+    col_mode, col_pw = st.columns(2)
+    with col_mode:
+        new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"], index=_preset_mode_idx, horizontal=True)
+    with col_pw:
+        new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
+
+    st.caption("⚠️ 방 이름은 개설 후 변경할 수 없습니다. 신중하게 입력해 주세요.")
+    if st.button("새 방 개설하기", type="primary", use_container_width=True):
         entry_ok, safe_new_pw, _, entry_error_message = validate_entry_code(new_pw, max_len=MAX_ENTRY_CODE_LEN)
         title_ok, safe_new_title, _, title_error_message = validate_opinion_content(new_title, max_len=MAX_TOPIC_LEN)
         can_store_room_pw = topic_entry_code_column_available()
@@ -156,4 +147,40 @@ def render_room_management_page(supabase):
                     st.session_state['_single_create_msg'] = f"✅ '{safe_new_room}' 방 생성이 완료되었습니다!"
                     st.toast(f"'{safe_new_room}' 방이 개설되었습니다!", icon="🎉")
                     st.rerun()
+
+
+def render_room_management_page(supabase):
+    teacher_auth = st.session_state.get('teacher_auth', False)
+    if not teacher_auth:
+        st.session_state['page'] = "lobby"
+        st.toast("교사 로그인이 필요합니다.", icon="ℹ️")
+        st.rerun()
+
+    teacher_id_for_scope = st.session_state.get('teacher_id', '')
+
+    col_title, col_btn = st.columns([6, 2])
+    with col_title:
+        st.title("🏠 방 관리")
+    with col_btn:
+        if st.button("🚪 대기실로", use_container_width=True):
+            st.session_state['page'] = "lobby"
+            st.session_state['joined'] = False
+            st.rerun()
+
+    view = st.session_state.get(_VIEW_KEY, "create")
+    col_v1, col_v2 = st.columns(2)
+    with col_v1:
+        if st.button("✨ 새 방 만들기", use_container_width=True, type="primary" if view == "create" else "secondary"):
+            st.session_state[_VIEW_KEY] = "create"
+            st.rerun()
+    with col_v2:
+        if st.button("👁️ 방 공개/숨김 관리", use_container_width=True, type="primary" if view == "visibility" else "secondary"):
+            st.session_state[_VIEW_KEY] = "visibility"
+            st.rerun()
+
+    with st.container(border=True):
+        if view == "visibility":
+            _render_visibility_section(supabase)
+        else:
+            _render_create_section(supabase, teacher_id_for_scope)
     st.stop()
