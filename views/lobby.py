@@ -63,6 +63,8 @@ def render_lobby_page(supabase):
     teacher_auth = st.session_state.get('teacher_auth', False)
 
     _header_buttons = []
+    if teacher_auth:
+        _header_buttons.append(("🏠 방 관리", "room_management"))
     if admin_auth and teacher_auth:
         _header_buttons.append(("📝 ID 요청 수락", "admin_approval"))
     if teacher_auth:
@@ -120,22 +122,22 @@ def render_lobby_page(supabase):
         if not admin_auth and not topic_owner_column_available():
             st.warning("교사별 방 조회를 위해 topic.created_by_teacher_id(권장) 또는 topic.created_by 컬럼이 필요합니다.")
 
-        if st.button("🏠 방 관리 (개설 / 공개 설정)", use_container_width=True):
-            st.session_state['page'] = "room_management"
-            st.rerun()
-
         if not existing_rooms:
             st.info("아직 개설된 방이 없습니다. '🏠 방 관리'에서 첫 번째 방을 만들어보세요.")
             st.stop()
 
         current = st.session_state.get('current_room', '')
         default_idx = existing_rooms.index(current) if current in existing_rooms else 0
-        room_name = st.selectbox("토론/토의방 목록", existing_rooms, index=default_idx, key="teacher_room_select")
+        col_room, col_enter = st.columns(2)
+        with col_room:
+            room_name = st.selectbox("토론/토의방 목록", existing_rooms, index=default_idx, key="teacher_room_select")
 
         if AUTO_JOIN_ON_REFRESH and not admin_auth:
             _enter_room(room_name)
-        if st.button(f"🚀 '{room_name}' 관리자 권한으로 입장", type="primary", use_container_width=True):
-            _enter_room(room_name)
+        with col_enter:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            if st.button(f"🚀 '{room_name}' 관리자 권한으로 입장", type="primary", use_container_width=True):
+                _enter_room(room_name)
 
     else:
         st.session_state['teacher_auth'] = False
