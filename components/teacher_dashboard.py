@@ -285,13 +285,13 @@ def _render_debate_control(supabase, room_name, act_type, current_topic):
                 st.session_state[dashboard_pending_action_key(room_name)] = "auto_end"
                 st.rerun(scope="app")
 
-        if content_flags_available():
-            if st.button("🚩 지금 유해 발언 검수 실행", use_container_width=True):
-                with st.spinner("🤖 AI가 발언·답글을 검수하고 있습니다..."):
-                    auto_flag_room_content(supabase, room_name)
-                fetch_unreviewed_flags_for_room.clear()
-                st.toast("검수를 완료했습니다. '삭제 보관소' 탭에서 확인하세요.", icon="🚩")
-                st.rerun(scope="app")
+    if content_flags_available():
+        if st.button("🚩 지금 유해 발언 검수 실행", use_container_width=True):
+            with st.spinner("🤖 AI가 발언·답글을 검수하고 있습니다..."):
+                auto_flag_room_content(supabase, room_name)
+            fetch_unreviewed_flags_for_room.clear()
+            st.toast("검수를 완료했습니다. '삭제 보관소' 탭에서 확인하세요.", icon="🚩")
+            st.rerun(scope="app")
 
 
 def _render_presence_reset_section(supabase, room_name):
@@ -549,7 +549,6 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
                 fetch_live_messages.clear()
                 fresh_df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
                 auto_classify_all_opinions(supabase, room_name)
-                auto_flag_room_content(supabase, room_name)
                 if auto_generate_summary_report(supabase, room_name, act_type, current_topic, fresh_df_all):
                     auto_build_pdf_cache(supabase, room_name, act_type, current_topic)
         elif _pending_action == "manual_summary":
