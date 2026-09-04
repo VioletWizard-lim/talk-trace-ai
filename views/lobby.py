@@ -51,7 +51,6 @@ def _enter_room(room_name: str):
     st.session_state['current_room'] = room_name
     st.session_state['ai_hint_text'] = ""
     st.session_state['ai_report_text'] = ""
-    st.session_state.pop('_admin_redirected', None)
     st.session_state['joined'] = True
     st.rerun()
 

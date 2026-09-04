@@ -55,23 +55,29 @@ def _render_create_section(supabase, teacher_id_for_scope):
         st.success(st.session_state.pop('_single_create_msg'))
 
     _bulk_mode = st.checkbox("📋 여러 반 한번에 만들기")
-    col_name, col_topic = st.columns(2)
+    col_name, col_pw = st.columns(2)
     with col_name:
         if _bulk_mode:
             _class_prefix = st.text_input("반 이름 공통 앞부분", value="1학년")
             _class_nums = st.text_input("반 번호/구분 (쉼표로 구분)", value="1,2,3", help="예: 1,2,3 또는 가,나,다")
         else:
             new_room = st.text_input("새로 만들 방 이름", placeholder="예: 1학년 3반")
+    with col_pw:
+        new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
+
+    _preset_labels = ["직접 입력"] + [t["label"] for t in DIGITAL_ETHICS_TOPICS]
+    col_topic, col_mode = st.columns(2)
     with col_topic:
-        _preset_labels = ["직접 입력"] + [t["label"] for t in DIGITAL_ETHICS_TOPICS]
         _topic_choice = st.selectbox("📚 정보윤리 추천 주제", _preset_labels, index=0)
 
-    if _topic_choice == "직접 입력":
+    _preset = None if _topic_choice == "직접 입력" else next(t for t in DIGITAL_ETHICS_TOPICS if t["label"] == _topic_choice)
+    _preset_mode_idx = 0 if (_preset is None or _preset["mode"] == "⚔️ 찬반 토론") else 1
+    with col_mode:
+        new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"], index=_preset_mode_idx, horizontal=True)
+
+    if _preset is None:
         new_title = st.text_input("주제 직접 입력", placeholder="예: 인공지능 윤리")
-        _preset_mode_idx = 0
     else:
-        _preset = next(t for t in DIGITAL_ETHICS_TOPICS if t["label"] == _topic_choice)
-        _preset_mode_idx = 0 if _preset["mode"] == "⚔️ 찬반 토론" else 1
         _edit_title_key = f"edit_preset_title_{_topic_choice}"
         _editing = st.session_state.get(f"editing_{_topic_choice}", False)
         if _editing:
@@ -89,12 +95,6 @@ def _render_create_section(supabase, teacher_id_for_scope):
             if st.button("✏️ 주제 수정", key=f"edit_{_topic_choice}"):
                 st.session_state[f"editing_{_topic_choice}"] = True
                 st.rerun()
-
-    col_mode, col_pw = st.columns(2)
-    with col_mode:
-        new_mode = st.radio("진행 방식", ["⚔️ 찬반 토론", "💡 자유 토의"], index=_preset_mode_idx, horizontal=True)
-    with col_pw:
-        new_pw = st.text_input("🔒 학생 입장용 암호 (비워두면 공개방)")
 
     st.caption("⚠️ 방 이름은 개설 후 변경할 수 없습니다. 신중하게 입력해 주세요.")
     if st.button("새 방 개설하기", type="primary", use_container_width=True):
