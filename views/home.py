@@ -1,7 +1,9 @@
 import streamlit as st
 
+from db import fetch_judge_account
 
-def render_home_page():
+
+def render_home_page(supabase):
     admin_auth = st.session_state.get('admin_auth', False)
     teacher_auth = st.session_state.get('teacher_auth', False)
 
@@ -40,4 +42,14 @@ def render_home_page():
     if st.button("🚀 대기실로 이동", type="primary", use_container_width=True):
         st.session_state['page'] = "lobby"
         st.rerun()
+
+    judge_account = None if teacher_auth else fetch_judge_account(supabase)
+    if judge_account and judge_account.get("is_active"):
+        if st.button("🎓 심사위원으로 입장", use_container_width=True):
+            st.session_state['teacher_auth'] = True
+            st.session_state['admin_auth'] = False
+            st.session_state['teacher_id'] = judge_account.get("teacher_id", "")
+            st.session_state['page'] = "lobby"
+            st.rerun()
+
     st.stop()

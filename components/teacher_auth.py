@@ -52,6 +52,10 @@ def _handle_login(supabase, teacher_id_input, teacher_pw_input):
         _reset_auth_state()
         _redirect_from_admin_if_needed()
         st.warning("⏳ 최고관리자 승인 후 로그인할 수 있습니다.")
+    elif account.get("is_judge") and not account.get("is_active", True):
+        _reset_auth_state()
+        _redirect_from_admin_if_needed()
+        st.error("🚨 등록되지 않은 교사 ID입니다.")
     else:
         st.session_state['teacher_auth'] = True
         st.session_state['admin_auth'] = to_bool_flag(account.get("is_admin", False))
