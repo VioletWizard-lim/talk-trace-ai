@@ -219,7 +219,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                               type=c_like_type,
                                               on_click=do_toggle_comment_like, args=(c_id,))
                                 with c_del:
-                                    if st.button("🗑️ 삭제", key=f"cdel_{c_id}", help="댓글 삭제"):
+                                    if st.button("🗑️", key=f"cdel_{c_id}", help="댓글 삭제"):
                                         if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
                                             fetch_comments_for_room.clear()
                                             st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
@@ -301,7 +301,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                       type=like_type,
                                       on_click=do_toggle_like, args=(msg_id,))
                         with c_del:
-                            if st.button("🗑️ 삭제", key=f"del_{msg_id}", help="강제 삭제"):
+                            if st.button("🗑️", key=f"del_{msg_id}", help="강제 삭제"):
                                 st.session_state[f"confirm_del_msg_{msg_id}"] = True
                     st.info(_escape_md(row['content']))
                     if use_comments:
