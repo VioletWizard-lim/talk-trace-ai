@@ -498,7 +498,18 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
             fetch_live_messages.clear()
             st.rerun()
 
+    _auto_flag_watcher(supabase, room_name)
     _render_dashboard_tabs(supabase, room_name, user_role, student_name, current_topic, act_type)
+
+
+@st.fragment(run_every=60)
+def _auto_flag_watcher(supabase, room_name):
+    """수업 중 자동 유해 발언 검수를 탭 전환용 fragment와 완전히 분리된
+    별도 fragment에서 실행한다. AI 호출은 수 초가 걸릴 수 있는데, 탭 전환
+    fragment 안에서 같이 돌리면 그 몇 초 동안 탭 전환이 멈춰 이전/새 탭
+    내용이 겹쳐 보이는 문제가 생기기 때문."""
+    _debate_status = fetch_debate_status(supabase, room_name) if session_control_available() else "ended"
+    maybe_auto_flag_periodically(supabase, room_name, _debate_status)
 
 
 @st.fragment(run_every=10)
@@ -508,7 +519,6 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
     잠깐 그대로 남아있다가 뒤늦게 바뀌는 지연/잔상 없이 즉시 전환된다."""
     df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
     _debate_status = fetch_debate_status(supabase, room_name) if session_control_available() else "ended"
-    maybe_auto_flag_periodically(supabase, room_name, _debate_status)
 
     # 요약 리포트는 토론/토의 종료 전에는 탭 자체를 숨김
     tabs = [_TAB_CONTROL, _TAB_PARTICIPATION, _TAB_LEARNING, _TAB_STANCE, _TAB_DEPTH]
