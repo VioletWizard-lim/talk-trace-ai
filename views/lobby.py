@@ -9,6 +9,10 @@ from validators import validate_student_number
 from config import AUTO_JOIN_ON_REFRESH
 
 
+def _apply_lobby_room_pick():
+    st.session_state['student_room_select'] = st.session_state['lobby_room_picker']
+
+
 def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_number, available_rooms=None):
     admin_auth = st.session_state.get('admin_auth', False)
     if admin_auth and teacher_auth:
@@ -28,10 +32,11 @@ def render_lobby_page(supabase, user_role, teacher_auth, room_name, student_numb
     else:
         if user_role == "학생":
             if available_rooms:
-                _picked_room = st.selectbox("🏠 접속할 방 선택", available_rooms, key="lobby_room_picker", index=available_rooms.index(room_name) if room_name in available_rooms else 0)
-                if _picked_room != room_name:
-                    st.session_state['student_room_select'] = _picked_room
-                    st.rerun()
+                st.selectbox(
+                    "🏠 접속할 방 선택", available_rooms, key="lobby_room_picker",
+                    index=available_rooms.index(room_name) if room_name in available_rooms else 0,
+                    on_change=_apply_lobby_room_pick,
+                )
             student_pw = st.text_input("🔒 방 입장 암호 (공개방이면 비워두세요)", type="password")
             number_ok, _, _, number_error_message = validate_student_number(student_number)
             if st.button(f"🚀 '{room_name}' 입장하기", type="primary", use_container_width=True):
