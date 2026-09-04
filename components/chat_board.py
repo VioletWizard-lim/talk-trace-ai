@@ -20,6 +20,22 @@ _RANK_BADGES = {1: "🥇", 2: "🥈", 3: "🥉"}
 _LIKE_COOLDOWN = 3
 _COMMENT_TYPES = ["🤔 반박", "➕ 보충"]
 _COMMENT_MAX_LEN = 300
+
+# 좁은 화면에서 좋아요/삭제 버튼의 이모지·텍스트가 잘리거나 줄바꿈되어
+# 틀어져 보이던 문제 방지: 글자 크기를 화면 폭에 맞춰 유동적으로 줄이고
+# 줄바꿈 없이 한 줄로 유지한다.
+_ACTION_BTN_CSS = """
+    <style>
+    div[class*="st-key-like_"] button,
+    div[class*="st-key-clike_"] button,
+    div[class*="st-key-del_"] button,
+    div[class*="st-key-cdel_"] button {
+        font-size: clamp(11px, 2.8vw, 14px) !important;
+        padding: 0.2rem 0.4rem !important;
+        white-space: nowrap !important;
+    }
+    </style>
+"""
 _NEW_MSG_POLL_INTERVAL = 5       # 가벼운 변경 확인 주기(초)
 _HEAVY_REFRESH_MIN_INTERVAL = 15  # 무거운 재렌더링 최소 간격(초) — 폭주 시 안전장치
 
@@ -74,6 +90,7 @@ def _cached_pie_chart_json(sentiment_tuple: tuple) -> str:
 
 @st.fragment
 def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
+    st.markdown(_ACTION_BTN_CSS, unsafe_allow_html=True)
     opinion_df = with_fallback_author_role(
         fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
     )
@@ -202,7 +219,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                               type=c_like_type,
                                               on_click=do_toggle_comment_like, args=(c_id,))
                                 with c_del:
-                                    if st.button("❌", key=f"cdel_{c_id}", help="댓글 삭제"):
+                                    if st.button("🗑️ 삭제", key=f"cdel_{c_id}", help="댓글 삭제"):
                                         if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
                                             fetch_comments_for_room.clear()
                                             st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
@@ -284,7 +301,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                       type=like_type,
                                       on_click=do_toggle_like, args=(msg_id,))
                         with c_del:
-                            if st.button("❌", key=f"del_{msg_id}", help="강제 삭제"):
+                            if st.button("🗑️ 삭제", key=f"del_{msg_id}", help="강제 삭제"):
                                 st.session_state[f"confirm_del_msg_{msg_id}"] = True
                     st.info(_escape_md(row['content']))
                     if use_comments:
