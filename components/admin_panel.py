@@ -80,6 +80,7 @@ def render_admin_page(supabase, user_role, teacher_auth, admin_auth):
     with col_btn2:
         if st.button("🚪 말자취 AI 대기실", use_container_width=True):
             st.session_state['page'] = "lobby"
+            st.session_state['joined'] = False
             st.rerun()
     render_admin_approval_panel(supabase)
     st.divider()
