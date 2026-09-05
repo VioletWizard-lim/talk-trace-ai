@@ -5,6 +5,7 @@ import plotly.express as px
 import streamlit as st
 
 from db import ai_feedback_available, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_teacher_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available, teacher_feedback_available
+from achievement import ACHIEVEMENT_LABELS, STARS as ACHIEVEMENT_STARS, compute_room_achievements, format_achievement_lines
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -124,6 +125,10 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
         depth_summary = _build_student_depth_summary(supabase, room_name, selected)
         if depth_summary:
             st.caption(f"📈 발언 깊이: {depth_summary}")
+
+        achievement = compute_room_achievements(supabase, room_name, df_all).get(selected, {})
+        achievement_summary = "\n".join(format_achievement_lines(achievement)) if achievement else ""
+
         st.caption("🤖 AI 배움 분석")
         st.markdown(ai.replace("\n", "\n\n"))
         _render_image_download(
@@ -133,6 +138,7 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
             depth_summary=depth_summary,
             ai_feedback=ai_feedback,
             teacher_feedback=teacher_feedback,
+            achievement_summary=achievement_summary,
         )
     else:
         st.caption("AI 분석이 아직 없습니다.")
@@ -276,6 +282,38 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                     st.caption(f"✅ 제출한 학생 ({len(_submitted_names)}명): {', '.join(_submitted_names)}")
                 else:
                     st.info("아직 제출된 결론이 없습니다.")
+
+
+def _render_achievement_table_section(supabase, room_name, df_all):
+    st.subheader("🏆 학생별 성취도 테이블")
+    st.caption(
+        "참여도·발언 깊이·사고 성장·공감도·상호작용 5개 요소를 3점 만점으로 채점해 "
+        "총점(x/15)으로 보여줍니다. '사고 성장'은 토론 전/후 생각을 모두 기록한 "
+        "학생만 채점되며, 기록이 없으면 '-'로 표시됩니다."
+    )
+
+    achievements = compute_room_achievements(supabase, room_name, df_all)
+    if not achievements:
+        st.info("아직 학생 발언 데이터가 없습니다.")
+        return
+
+    def _cell(score):
+        return f"{ACHIEVEMENT_STARS[score]} ({score})" if score is not None else "-"
+
+    table_rows = [
+        {
+            "학생": name,
+            **{label: _cell(a.get(label)) for label in ACHIEVEMENT_LABELS},
+            "총점": f"{a['총점']}/{a['만점']}",
+            "_sort_key": a["총점"],
+        }
+        for name, a in achievements.items()
+    ]
+    table_rows.sort(key=lambda r: r["_sort_key"], reverse=True)
+    for r in table_rows:
+        del r["_sort_key"]
+
+    st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
 
 
 def _render_debate_control(supabase, room_name, act_type, current_topic):
@@ -461,6 +499,7 @@ def _render_deleted_comments(supabase, deleted_comments):
 _TAB_CONTROL = "🎛️ 토론 제어"
 _TAB_PARTICIPATION = "📊 참여도"
 _TAB_LEARNING = "🔍 배움 분석"
+_TAB_ACHIEVEMENT = "🏆 성취도"
 _TAB_STANCE = "📊 입장 변화"
 _TAB_DEPTH = "📈 발언 깊이"
 _TAB_SUMMARY = "📝 요약 리포트"
@@ -531,7 +570,7 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
     _debate_status = fetch_debate_status(supabase, room_name) if session_control_available() else "ended"
 
     # 요약 리포트는 토론/토의 종료 전에는 탭 자체를 숨김
-    tabs = [_TAB_CONTROL, _TAB_PARTICIPATION, _TAB_LEARNING, _TAB_STANCE, _TAB_DEPTH]
+    tabs = [_TAB_CONTROL, _TAB_PARTICIPATION, _TAB_LEARNING, _TAB_ACHIEVEMENT, _TAB_STANCE, _TAB_DEPTH]
     if _debate_status == "ended":
         tabs.append(_TAB_SUMMARY)
     # AI 검수함은 content_flags 테이블이 마련된 경우에만 노출
@@ -644,6 +683,9 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
 
     elif active_tab == _TAB_LEARNING:
         _render_learning_analysis_section(supabase, room_name, act_type, current_topic, df_all)
+
+    elif active_tab == _TAB_ACHIEVEMENT:
+        _render_achievement_table_section(supabase, room_name, df_all)
 
     elif active_tab == _TAB_STANCE:
         _render_stance_section(supabase, room_name, act_type, current_topic, df_all)

@@ -22,6 +22,8 @@ from db import (
 from env import get_secret
 from services.ai import build_feedback_prompt, build_opinion_change_prompt, generate_ai_response
 from components.depth_analysis import _DEPTH_LABELS
+from validators import with_fallback_author_role
+from achievement import ACHIEVEMENT_LABELS, STARS as ACHIEVEMENT_STARS, compute_room_achievements, format_achievement_lines
 
 
 _STANCE_OPTIONS = ["🔵 찬성", "🔴 반대"]
@@ -247,6 +249,18 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
             depth_summary = _build_student_depth_summary(supabase, room_name, student_name)
             if depth_summary:
                 st.info(f"📈 **나의 발언 깊이:** {depth_summary}")
+
+            achievement = _get_student_achievement(supabase, room_name, student_name)
+            achievement_summary = ""
+            if achievement:
+                st.markdown("### 🏆 나의 성취도")
+                cols = st.columns(len(ACHIEVEMENT_LABELS) + 1)
+                for col, label in zip(cols, ACHIEVEMENT_LABELS):
+                    score = achievement.get(label)
+                    col.metric(label, ACHIEVEMENT_STARS.get(score, "-") if score is not None else "-")
+                cols[-1].metric("총점", f"{achievement['총점']}/{achievement['만점']}")
+                achievement_summary = "\n".join(format_achievement_lines(achievement))
+
             st.info("🤖 **AI 배움 분석**")
             st.markdown(ai_analysis.replace("\n", "\n\n"))
             _render_image_download(
@@ -256,6 +270,7 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
                 ai_feedback=ai_feedback,
                 depth_summary=depth_summary,
                 teacher_feedback=teacher_feedback,
+                achievement_summary=achievement_summary,
             )
         else:
             if st.button("🤖 AI 배움 분석 받기", use_container_width=True):
@@ -263,16 +278,28 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
                 st.rerun()
 
 
+def _get_student_achievement(supabase, room_name, student_name) -> dict:
+    """이 학생의 성취도 점수 딕셔너리를 반환합니다(데이터가 없으면 빈 dict)."""
+    df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT))
+    achievements = compute_room_achievements(supabase, room_name, df_all)
+    return achievements.get(student_name, {})
+
+
 def _render_image_download(student_name, topic, pre_opinion, post_opinion, ai_analysis,
-                           session_key, btn_key, ai_feedback="", depth_summary="", teacher_feedback=""):
+                           session_key, btn_key, ai_feedback="", depth_summary="", teacher_feedback="",
+                           achievement_summary=""):
     """이미지를 base64 데이터 URI 링크로 렌더링 — rerun 없이 즉시 다운로드."""
     import base64
-    cache_key = f"{session_key}_{len(ai_analysis)}_{len(ai_feedback)}_{len(depth_summary)}_{len(teacher_feedback)}_b64"
+    cache_key = (
+        f"{session_key}_{len(ai_analysis)}_{len(ai_feedback)}_{len(depth_summary)}"
+        f"_{len(teacher_feedback)}_{len(achievement_summary)}_b64"
+    )
     if cache_key not in st.session_state:
         try:
             img_bytes = create_analysis_image(
                 student_name, topic, pre_opinion, post_opinion, ai_analysis, ai_feedback,
                 depth_summary=depth_summary, teacher_feedback=teacher_feedback,
+                achievement_summary=achievement_summary,
             )
             st.session_state[cache_key] = base64.b64encode(img_bytes).decode()
         except Exception:

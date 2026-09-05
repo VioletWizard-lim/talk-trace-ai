@@ -263,6 +263,7 @@ def create_analysis_image(
     ai_feedback: str = "",
     depth_summary: str = "",
     teacher_feedback: str = "",
+    achievement_summary: str = "",
 ) -> bytes:
     """AI 배움 분석 결과를 PNG 이미지 bytes로 반환합니다."""
     from PIL import Image, ImageDraw
@@ -334,9 +335,10 @@ def create_analysis_image(
         + section_h(pre_opinion)
         + section_h(post_opinion)
         + (section_h(depth_summary) if depth_summary else 0)
+        + (DIV_H + section_h(achievement_summary) if achievement_summary else 0)
+        + (DIV_H + section_h(teacher_feedback) if teacher_feedback else 0)
         + DIV_H
         + ai_section_h(ai_analysis)
-        + (DIV_H + section_h(teacher_feedback) if teacher_feedback else 0)
         + (DIV_H + section_h(ai_feedback) if ai_feedback else 0)
         + FOOTER_H
     )
@@ -397,6 +399,9 @@ def create_analysis_image(
     section("토론 후 생각", post_opinion or "(없음)")
     if depth_summary:
         section("나의 발언 깊이", depth_summary)
+    if achievement_summary:
+        divider()
+        section("나의 성취도", achievement_summary)
     if teacher_feedback:
         divider()
         section("선생님 의견", teacher_feedback)
