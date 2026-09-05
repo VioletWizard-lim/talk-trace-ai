@@ -4,7 +4,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_attempts, comment_likes_available, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, depth_level_available, destroy_room_data, fetch_all_opinion_changes, fetch_comment_likes_for_room, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_room_likes, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, likes_available, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_teacher_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available, teacher_feedback_available
+from db import ai_feedback_available, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_teacher_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available, teacher_feedback_available
+from achievement import ACHIEVEMENT_LABELS, STARS as ACHIEVEMENT_STARS, compute_room_achievements, format_achievement_lines
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -124,6 +125,10 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
         depth_summary = _build_student_depth_summary(supabase, room_name, selected)
         if depth_summary:
             st.caption(f"📈 발언 깊이: {depth_summary}")
+
+        achievement = compute_room_achievements(supabase, room_name, df_all).get(selected, {})
+        achievement_summary = "\n".join(format_achievement_lines(achievement)) if achievement else ""
+
         st.caption("🤖 AI 배움 분석")
         st.markdown(ai.replace("\n", "\n\n"))
         _render_image_download(
@@ -133,6 +138,7 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
             depth_summary=depth_summary,
             ai_feedback=ai_feedback,
             teacher_feedback=teacher_feedback,
+            achievement_summary=achievement_summary,
         )
     else:
         st.caption("AI 분석이 아직 없습니다.")
@@ -278,59 +284,6 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                     st.info("아직 제출된 결론이 없습니다.")
 
 
-_ACHIEVEMENT_STARS = {3: "⭐⭐⭐", 2: "⭐⭐", 1: "⭐"}
-
-
-def _score_participation(count: int) -> int:
-    if count >= 5:
-        return 3
-    if count >= 2:
-        return 2
-    return 1
-
-
-def _score_depth(avg_depth) -> int:
-    if avg_depth is None:
-        return 1
-    if avg_depth >= 3.0:
-        return 3
-    if avg_depth >= 2.0:
-        return 2
-    return 1
-
-
-def _score_growth(pre_opinion: str, post_opinion: str, initial_stance: str, final_stance: str):
-    """사고 성장 점수. opinion_changes 기록 자체가 없으면 None('-' 표시)을 반환한다."""
-    pre_opinion = (pre_opinion or "").strip()
-    if not pre_opinion:
-        return None
-    post_opinion = (post_opinion or "").strip()
-    if not post_opinion:
-        return 1  # 토론 전 생각만 있고 참여가 저조함
-    stance_changed = bool(initial_stance) and bool(final_stance) and initial_stance != final_stance
-    reasoning_deepened = len(post_opinion) > len(pre_opinion)
-    if stance_changed or reasoning_deepened:
-        return 3
-    return 2
-
-
-def _score_empathy(likes_received: int) -> int:
-    if likes_received >= 3:
-        return 3
-    if likes_received >= 1:
-        return 2
-    return 1
-
-
-def _score_interaction(comments_given: int, comment_likes_given: int) -> int:
-    total = comments_given + comment_likes_given
-    if total >= 3:
-        return 3
-    if total >= 1:
-        return 2
-    return 1
-
-
 def _render_achievement_table_section(supabase, room_name, df_all):
     st.subheader("🏆 학생별 성취도 테이블")
     st.caption(
@@ -339,90 +292,23 @@ def _render_achievement_table_section(supabase, room_name, df_all):
         "학생만 채점되며, 기록이 없으면 '-'로 표시됩니다."
     )
 
-    if df_all.empty:
-        st.info("아직 발언 데이터가 없습니다.")
-        return
-
-    student_rows = df_all[df_all.get("author_role", "학생") == "학생"] if "author_role" in df_all.columns else df_all
-    if student_rows.empty:
+    achievements = compute_room_achievements(supabase, room_name, df_all)
+    if not achievements:
         st.info("아직 학생 발언 데이터가 없습니다.")
         return
 
-    students = sorted(student_rows["student_name"].dropna().unique().tolist())
+    def _cell(score):
+        return f"{ACHIEVEMENT_STARS[score]} ({score})" if score is not None else "-"
 
-    # 공감(좋아요) 받은 수: opinion_id → 발언 작성자 매핑 후 집계
-    owner_by_opinion_id = dict(zip(student_rows["id"], student_rows["student_name"])) if "id" in student_rows.columns else {}
-    likes_received_by_student = {}
-    if likes_available():
-        for like_row in fetch_room_likes(supabase, room_name):
-            owner = owner_by_opinion_id.get(like_row.get("opinion_id"))
-            if owner:
-                likes_received_by_student[owner] = likes_received_by_student.get(owner, 0) + 1
-
-    # 상호작용: 댓글 작성 수 + 준 댓글 공감 수
-    comments_given_by_student = {}
-    if comments_available():
-        for c in fetch_comments_for_room(supabase, room_name):
-            name = c.get("student_name")
-            if name:
-                comments_given_by_student[name] = comments_given_by_student.get(name, 0) + 1
-    comment_likes_given_by_student = {}
-    if comment_likes_available():
-        for cl in fetch_comment_likes_for_room(supabase, room_name):
-            name = cl.get("student_name")
-            if name:
-                comment_likes_given_by_student[name] = comment_likes_given_by_student.get(name, 0) + 1
-
-    # 발언 깊이 평균
-    avg_depth_by_student = {}
-    if depth_level_available() and "depth_level" in student_rows.columns:
-        depth_df = student_rows.copy()
-        depth_df["depth_level"] = pd.to_numeric(depth_df["depth_level"], errors="coerce")
-        depth_df = depth_df.dropna(subset=["depth_level"])
-        if not depth_df.empty:
-            avg_depth_by_student = depth_df.groupby("student_name")["depth_level"].mean().to_dict()
-
-    # 사고 성장: opinion_changes 기록
-    growth_by_student = {}
-    if opinion_changes_available():
-        df_oc = fetch_all_opinion_changes(supabase, room_name)
-        for _, oc_row in df_oc.iterrows():
-            growth_by_student[oc_row["student_name"]] = _score_growth(
-                oc_row.get("pre_opinion"), oc_row.get("post_opinion"),
-                oc_row.get("initial_stance") if stance_available() else None,
-                oc_row.get("final_stance") if stance_available() else None,
-            )
-
-    participation_counts = student_rows["student_name"].value_counts().to_dict()
-
-    table_rows = []
-    for name in students:
-        p_score = _score_participation(participation_counts.get(name, 0))
-        d_score = _score_depth(avg_depth_by_student.get(name)) if depth_level_available() else None
-        g_score = growth_by_student.get(name) if opinion_changes_available() else None
-        e_score = _score_empathy(likes_received_by_student.get(name, 0)) if likes_available() else None
-        i_score = (
-            _score_interaction(comments_given_by_student.get(name, 0), comment_likes_given_by_student.get(name, 0))
-            if (comments_available() or comment_likes_available()) else None
-        )
-        scores = [s for s in (p_score, d_score, g_score, e_score, i_score) if s is not None]
-        max_possible = len(scores) * 3
-        total = sum(scores)
-
-        def _cell(score):
-            return f"{_ACHIEVEMENT_STARS[score]} ({score})" if score is not None else "-"
-
-        table_rows.append({
+    table_rows = [
+        {
             "학생": name,
-            "참여도": _cell(p_score),
-            "발언 깊이": _cell(d_score),
-            "사고 성장": _cell(g_score),
-            "공감도": _cell(e_score),
-            "상호작용": _cell(i_score),
-            "총점": f"{total}/{max_possible}",
-            "_sort_key": total,
-        })
-
+            **{label: _cell(a.get(label)) for label in ACHIEVEMENT_LABELS},
+            "총점": f"{a['총점']}/{a['만점']}",
+            "_sort_key": a["총점"],
+        }
+        for name, a in achievements.items()
+    ]
     table_rows.sort(key=lambda r: r["_sort_key"], reverse=True)
     for r in table_rows:
         del r["_sort_key"]
