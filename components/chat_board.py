@@ -27,27 +27,27 @@ _COMMENT_MAX_LEN = 300
 # 줄바꿈 없이 한 줄로 유지한다.
 _ACTION_BTN_CSS = """
     <style>
-    div[class*="st-key-like_"] button,
-    div[class*="st-key-clike_"] button,
-    div[class*="st-key-del_"] button,
-    div[class*="st-key-cdel_"] button {
+    div[class*="st-key-cbact_like_"] button,
+    div[class*="st-key-cbact_clike_"] button,
+    div[class*="st-key-cbact_del_"] button,
+    div[class*="st-key-cbact_cdel_"] button {
         font-size: clamp(10px, 2.8vw, 14px) !important;
         padding: 0.45rem 1.3rem !important;
         white-space: nowrap !important;
         overflow: visible !important;
         min-width: fit-content !important;
     }
-    div[class*="st-key-like_"] button p,
-    div[class*="st-key-clike_"] button p,
-    div[class*="st-key-del_"] button p,
-    div[class*="st-key-cdel_"] button p {
+    div[class*="st-key-cbact_like_"] button p,
+    div[class*="st-key-cbact_clike_"] button p,
+    div[class*="st-key-cbact_del_"] button p,
+    div[class*="st-key-cbact_cdel_"] button p {
         overflow: visible !important;
         text-overflow: unset !important;
         white-space: nowrap !important;
     }
-    div[class*="st-key-del_"],
-    div[class*="st-key-cdel_"] {
-        margin-left: -2.4rem !important;
+    div[class*="st-key-cbact_del_"],
+    div[class*="st-key-cbact_cdel_"] {
+        margin-left: -1.2rem !important;
     }
     </style>
 """
@@ -292,17 +292,17 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             if user_role == "교사" and teacher_auth:
                                 c_like, c_del = st.columns([2, 1], gap="small")
                                 with c_like:
-                                    st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
+                                    st.button(c_like_label, key=f"cbact_clike_{c_id}", disabled=c_like_disabled,
                                               type=c_like_type,
                                               on_click=do_toggle_comment_like, args=(c_id,))
                                 with c_del:
-                                    if st.button("🗑️", key=f"cdel_{c_id}", help="댓글 삭제"):
+                                    if st.button("🗑️", key=f"cbact_cdel_{c_id}", help="댓글 삭제"):
                                         if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
                                             fetch_comments_for_room.clear()
                                             st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
                                             st.rerun(scope="app")
                             else:
-                                st.button(c_like_label, key=f"clike_{c_id}", disabled=c_like_disabled,
+                                st.button(c_like_label, key=f"cbact_clike_{c_id}", disabled=c_like_disabled,
                                           type=c_like_type, use_container_width=True,
                                           on_click=do_toggle_comment_like, args=(c_id,))
 
@@ -374,11 +374,11 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                     with c_actions:
                         c_like, c_del = st.columns([2, 1], gap="small")
                         with c_like:
-                            st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
+                            st.button(like_label, key=f"cbact_like_{msg_id}", disabled=like_disabled,
                                       type=like_type,
                                       on_click=do_toggle_like, args=(msg_id,))
                         with c_del:
-                            if st.button("🗑️", key=f"del_{msg_id}", help="강제 삭제"):
+                            if st.button("🗑️", key=f"cbact_del_{msg_id}", help="강제 삭제"):
                                 st.session_state[f"confirm_del_msg_{msg_id}"] = True
                     _render_content_box(row['content'], row.get('sentiment', ''))
                     if use_comments:
@@ -423,7 +423,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             unsafe_allow_html=True,
                         )
                     with c_actions:
-                        st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
+                        st.button(like_label, key=f"cbact_like_{msg_id}", disabled=like_disabled,
                                   type=like_type, use_container_width=True,
                                   on_click=do_toggle_like, args=(msg_id,))
                     _render_content_box(row['content'], row.get('sentiment', ''))
