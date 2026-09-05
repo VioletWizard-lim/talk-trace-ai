@@ -1,3 +1,4 @@
+import html
 import time
 import streamlit as st
 import plotly.io as pio
@@ -64,6 +65,27 @@ _SENTIMENT_COLORS = {
 _PRO_PALETTE  = ["#0D47A1", "#1565C0", "#1976D2", "#1E88E5", "#42A5F5"]
 _CON_PALETTE  = ["#B71C1C", "#C62828", "#D32F2F", "#E53935", "#EF5350"]
 _FREE_PALETTE = ["#00695C", "#0077B6", "#0B3D91", "#1F8EFA", "#A3CFE2"]
+
+# 찬성/반대 등 의견 성격에 따라 발언 내용 박스 배경색을 다르게 줘서
+# 찬반 보드를 스캔하기 쉽게 한다 (기존에는 양쪽 다 동일한 파란색 박스였음).
+_SENTIMENT_BG = {
+    "🔵 찬성": "#e3f2fd",
+    "🔴 반대": "#fdecea",
+    "💡 아이디어": "#fff8e1",
+    "➕ 보충": "#e8f5e9",
+    "❓ 질문": "#f3e5f5",
+}
+
+
+def _render_content_box(content: str, sentiment: str) -> None:
+    bg = _SENTIMENT_BG.get(sentiment, "#eef2f6")
+    safe_content = html.escape(str(content or ""))
+    st.markdown(
+        f"<div style='background:{bg}; color:#1a1a1a; border-radius:0.5rem; "
+        f"padding:0.75rem 1rem; margin:0.3rem 0; line-height:1.7; font-size:16px; "
+        f"white-space:pre-wrap;'>{safe_content}</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _escape_md(text: str) -> str:
@@ -319,7 +341,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                         with c_del:
                             if st.button("🗑️", key=f"del_{msg_id}", help="강제 삭제"):
                                 st.session_state[f"confirm_del_msg_{msg_id}"] = True
-                    st.info(_escape_md(row['content']))
+                    _render_content_box(row['content'], row.get('sentiment', ''))
                     if use_comments:
                         render_reply_thread(msg_id)
 
@@ -365,7 +387,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                         st.button(like_label, key=f"like_{msg_id}", disabled=like_disabled,
                                   type=like_type, use_container_width=True,
                                   on_click=do_toggle_like, args=(msg_id,))
-                    st.info(_escape_md(row['content']))
+                    _render_content_box(row['content'], row.get('sentiment', ''))
                     if use_comments:
                         render_reply_thread(msg_id)
             st.write("")
@@ -374,17 +396,17 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             col_pro, col_con = st.columns(2)
             with col_pro:
                 st.markdown("### 🔵 찬성 측")
-                with st.container(height=450):
+                with st.container(height=700):
                     for _, row in student_df[student_df['sentiment'] == '🔵 찬성'].iterrows():
                         render_msg(row)
             with col_con:
                 st.markdown("### 🔴 반대 측")
-                with st.container(height=450):
+                with st.container(height=700):
                     for _, row in student_df[student_df['sentiment'] == '🔴 반대'].iterrows():
                         render_msg(row)
         else:
             st.markdown("### 💬 아이디어 · 보충 · 질문")
-            with st.container(height=450):
+            with st.container(height=700):
                 _discuss_df = student_df[
                     student_df['sentiment'].isin(['💡 아이디어', '➕ 보충', '❓ 질문'])
                 ]
