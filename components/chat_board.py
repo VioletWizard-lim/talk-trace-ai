@@ -48,9 +48,10 @@ _ACTION_BTN_CSS = """
     div[class*="st-key-cdel_"] {
         margin-left: -0.8rem !important;
     }
-    /* "지금 유해 발언 검수 실행" 버튼: 좁은 화면에서 "..."로 잘리지 않도록
-       줄바꿈을 허용하고 글자 크기를 화면 폭에 맞춰 줄인다. */
-    div[class*="st-key-run_moderation_flag"] button {
+    /* "지금 유해 발언 검수 실행" / "실시간 보드 새로고침" 버튼: 좁은 화면에서
+       "..."로 잘리지 않도록 줄바꿈을 허용하고 글자 크기를 화면 폭에 맞춰 줄인다. */
+    div[class*="st-key-run_moderation_flag"] button,
+    div[class*="st-key-refresh_chat_board"] button {
         font-size: clamp(11px, 2.6vw, 14px) !important;
         white-space: normal !important;
         overflow: visible !important;
@@ -58,7 +59,8 @@ _ACTION_BTN_CSS = """
         height: auto !important;
         line-height: 1.3 !important;
     }
-    div[class*="st-key-run_moderation_flag"] button p {
+    div[class*="st-key-run_moderation_flag"] button p,
+    div[class*="st-key-refresh_chat_board"] button p {
         overflow: visible !important;
         text-overflow: unset !important;
         white-space: normal !important;
