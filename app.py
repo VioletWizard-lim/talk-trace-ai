@@ -225,11 +225,14 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         )
 
     with col_stt:
+        # 왼쪽 컬럼의 '의견 성격'(+토론 모드일 때 '글쓰기 방식' 라디오, 틀 사용 시
+        # 안내 캡션까지) 만큼 오른쪽 버튼을 아래로 내려 텍스트 입력창과 나란히
+        # 보이도록 맞춘다.
         if current_mode == "⚔️ 찬반 토론":
-            # 왼쪽 컬럼의 '의견 성격'+'글쓰기 방식' 라디오(+틀 사용 시 안내 캡션)
-            # 만큼 오른쪽 버튼을 아래로 내려 텍스트 입력창과 나란히 보이도록 맞춘다.
             _spacer_height = 178 if _show_template_caption else 130
-            st.markdown(f"<div style='height:{_spacer_height}px'></div>", unsafe_allow_html=True)
+        else:
+            _spacer_height = 86
+        st.markdown(f"<div style='height:{_spacer_height}px'></div>", unsafe_allow_html=True)
         st.components.v1.html(
             """
             <button id="stt-btn" style="width:100%; height:80px; font-weight:bold; border-radius:10px; background-color:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; cursor:pointer;">🎤 음성 입력 시작</button>
