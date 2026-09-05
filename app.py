@@ -196,6 +196,9 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
     col_input, col_stt = st.columns([4, 1])
     _show_template_caption = False
     with col_input:
+        opts = ["🔵 찬성", "🔴 반대"] if current_mode == "⚔️ 찬반 토론" else ["💡 아이디어", "➕ 보충", "❓ 질문"]
+        sentiment = st.radio("의견 성격", opts, horizontal=True)
+
         _opinion_placeholder = ""
         if current_mode == "⚔️ 찬반 토론":
             _writing_style = st.radio(
@@ -220,14 +223,12 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
             label_visibility="collapsed",
             placeholder=_opinion_placeholder,
         )
-        opts = ["🔵 찬성", "🔴 반대"] if current_mode == "⚔️ 찬반 토론" else ["💡 아이디어", "➕ 보충", "❓ 질문"]
-        sentiment = st.radio("의견 성격", opts, horizontal=True)
 
     with col_stt:
         if current_mode == "⚔️ 찬반 토론":
-            # 왼쪽 컬럼의 '글쓰기 방식' 라디오(+틀 사용 시 안내 캡션)만큼
-            # 오른쪽 버튼을 아래로 내려 텍스트 입력창과 나란히 보이도록 맞춘다.
-            _spacer_height = 92 if _show_template_caption else 44
+            # 왼쪽 컬럼의 '의견 성격'+'글쓰기 방식' 라디오(+틀 사용 시 안내 캡션)
+            # 만큼 오른쪽 버튼을 아래로 내려 텍스트 입력창과 나란히 보이도록 맞춘다.
+            _spacer_height = 158 if _show_template_caption else 110
             st.markdown(f"<div style='height:{_spacer_height}px'></div>", unsafe_allow_html=True)
         st.components.v1.html(
             """
