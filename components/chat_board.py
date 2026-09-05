@@ -74,6 +74,7 @@ _SENTIMENT_BG = {
     "💡 아이디어": "#fff8e1",
     "➕ 보충": "#e8f5e9",
     "❓ 질문": "#f3e5f5",
+    "🤔 반박": "#fff3e0",
 }
 
 
@@ -96,6 +97,7 @@ _SENTIMENT_SLUG = {
     "💡 아이디어": "idea",
     "➕ 보충": "supp",
     "❓ 질문": "ques",
+    "🤔 반박": "reb",
 }
 _SENTIMENT_CARD_BG = {
     "pro": "#f3f9fe",
@@ -103,9 +105,11 @@ _SENTIMENT_CARD_BG = {
     "idea": "#fffcf2",
     "supp": "#f4faf4",
     "ques": "#faf6fb",
+    "reb": "#fffaf3",
 }
 _CARD_BG_CSS = "<style>" + "".join(
-    f'div[class*="st-key-msgcard_{slug}_"] {{ background: {color} !important; }}\n'
+    f'div[class*="st-key-{prefix}_{slug}_"] {{ background: {color} !important; }}\n'
+    for prefix in ("msgcard", "commentcard")
     for slug, color in _SENTIMENT_CARD_BG.items()
 ) + "</style>"
 
@@ -253,11 +257,12 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                     c_like_label = f"👍 {c_count}" if c_count > 0 else "👍"
                     c_like_type = "primary" if c_is_liked else "secondary"
 
-                    with st.container(border=True):
+                    c_type = c.get('comment_type', '')
+                    with st.container(border=True, key=_msg_card_key("commentcard", c_type, c_id)):
                         col_c_text, col_c_actions = st.columns([6, 2])
                         with col_c_text:
                             _header_html = (
-                                f"`{c.get('comment_type', '')}` **{c.get('student_name', '')}** "
+                                f"`{c_type}` **{c.get('student_name', '')}** "
                                 f"<span style='color:gray; font-size:12px;'>{format_kst_datetime(c.get('timestamp', ''))}</span>"
                             )
                             _id_html = ""
@@ -274,9 +279,10 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                         f"<span style='color:gray; font-size:12px;'>{line}</span>" for line in _id_lines
                                     )
                             st.markdown(
-                                "<br>".join(filter(None, [_header_html, _id_html, _escape_md(c.get('content', ''))])),
+                                "<br>".join(filter(None, [_header_html, _id_html])),
                                 unsafe_allow_html=True,
                             )
+                            _render_content_box(c.get('content', ''), c_type)
                         with col_c_actions:
                             if user_role == "교사" and teacher_auth:
                                 c_like, c_del = st.columns([2, 1], gap="small")
