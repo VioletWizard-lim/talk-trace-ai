@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, session_control_available, session_attempts_available, set_debate_status, stance_available
+from db import ai_feedback_available, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_opinion_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -103,6 +103,15 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
     if ai_feedback and ai_feedback_available():
         st.caption("🌟 AI 피드백 카드")
         render_feedback_card(ai_feedback)
+        with st.expander("✏️ 피드백 수정", expanded=False):
+            _edited_feedback = st.text_area(
+                "AI 피드백 내용을 직접 고칠 수 있습니다", value=ai_feedback,
+                height=150, key=f"edit_feedback_{room_name}_{selected}",
+            )
+            if st.button("💾 수정 내용 저장", key=f"save_feedback_{room_name}_{selected}", use_container_width=True):
+                if save_opinion_feedback(supabase, room_name, selected, _edited_feedback) is not None:
+                    st.toast("✅ 피드백을 수정했습니다.", icon="✏️")
+                    st.rerun()
 
     if ai:
         depth_summary = _build_student_depth_summary(supabase, room_name, selected)
