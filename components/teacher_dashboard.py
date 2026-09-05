@@ -449,7 +449,7 @@ def _render_deleted_messages(supabase, deleted_df):
                     if restore_opinion_message(supabase, msg_id) is not None:
                         fetch_live_messages.clear()
                         st.toast("발언을 복구했습니다.", icon="↩️")
-                        st.rerun(scope="app")
+                        st.rerun()
             with col_purge:
                 if st.button("❌ 완전 삭제", key=f"archive_purge_{msg_id}", use_container_width=True):
                     st.session_state[f"confirm_purge_{msg_id}"] = True
@@ -462,7 +462,7 @@ def _render_deleted_messages(supabase, deleted_df):
                         if permanently_delete_message(supabase, msg_id) is not None:
                             st.session_state.pop(f"confirm_purge_{msg_id}", None)
                             st.toast("완전히 삭제했습니다.", icon="🗑️")
-                            st.rerun(scope="app")
+                            st.rerun()
                 with col_no:
                     if st.button("취소", key=f"confirm_purge_no_{msg_id}", use_container_width=True):
                         st.session_state.pop(f"confirm_purge_{msg_id}", None)
@@ -487,7 +487,7 @@ def _render_deleted_comments(supabase, deleted_comments):
                     if restore_comment(supabase, c_id) is not None:
                         fetch_comments_for_room.clear()
                         st.toast("답글을 복구했습니다.", icon="↩️")
-                        st.rerun(scope="app")
+                        st.rerun()
             with col_purge:
                 if st.button("❌ 완전 삭제", key=f"carchive_purge_{c_id}", use_container_width=True):
                     st.session_state[f"confirm_cpurge_{c_id}"] = True
@@ -500,7 +500,7 @@ def _render_deleted_comments(supabase, deleted_comments):
                         if permanently_delete_comment(supabase, c_id) is not None:
                             st.session_state.pop(f"confirm_cpurge_{c_id}", None)
                             st.toast("완전히 삭제했습니다.", icon="🗑️")
-                            st.rerun(scope="app")
+                            st.rerun()
                 with col_no:
                     if st.button("취소", key=f"confirm_cpurge_no_{c_id}", use_container_width=True):
                         st.session_state.pop(f"confirm_cpurge_{c_id}", None)
