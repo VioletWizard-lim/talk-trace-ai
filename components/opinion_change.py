@@ -222,6 +222,7 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
         final_stance_val = (row or {}).get("final_stance") or ""
         discussion_conclusion_val = (row or {}).get("discussion_conclusion") or ""
         ai_feedback = (row or {}).get("ai_feedback") or ""
+        teacher_feedback = (row or {}).get("teacher_feedback") or ""
         if act_type == "토론" and final_stance_val:
             st.success(f"✅ **최종 입장:** {final_stance_val}")
         if act_type == "토의" and discussion_conclusion_val:
@@ -231,6 +232,9 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
 
         # AI 피드백 카드
         if ai_feedback and ai_feedback_available():
+            if teacher_feedback:
+                st.markdown("### 👩‍🏫 선생님 의견")
+                st.success(teacher_feedback)
             st.markdown("### 🌟 나의 AI 피드백 카드")
             render_feedback_card(ai_feedback)
             st.divider()
@@ -251,6 +255,7 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
                 btn_key="dl_analysis_student",
                 ai_feedback=ai_feedback,
                 depth_summary=depth_summary,
+                teacher_feedback=teacher_feedback,
             )
         else:
             if st.button("🤖 AI 배움 분석 받기", use_container_width=True):
@@ -259,15 +264,15 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
 
 
 def _render_image_download(student_name, topic, pre_opinion, post_opinion, ai_analysis,
-                           session_key, btn_key, ai_feedback="", depth_summary=""):
+                           session_key, btn_key, ai_feedback="", depth_summary="", teacher_feedback=""):
     """이미지를 base64 데이터 URI 링크로 렌더링 — rerun 없이 즉시 다운로드."""
     import base64
-    cache_key = f"{session_key}_{len(ai_analysis)}_{len(ai_feedback)}_{len(depth_summary)}_b64"
+    cache_key = f"{session_key}_{len(ai_analysis)}_{len(ai_feedback)}_{len(depth_summary)}_{len(teacher_feedback)}_b64"
     if cache_key not in st.session_state:
         try:
             img_bytes = create_analysis_image(
                 student_name, topic, pre_opinion, post_opinion, ai_analysis, ai_feedback,
-                depth_summary=depth_summary,
+                depth_summary=depth_summary, teacher_feedback=teacher_feedback,
             )
             st.session_state[cache_key] = base64.b64encode(img_bytes).decode()
         except Exception:

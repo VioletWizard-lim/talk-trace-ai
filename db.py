@@ -162,6 +162,7 @@ def check_schema_columns() -> dict:
         ("likes.opinion_id",               lambda: supabase.table("likes").select("opinion_id").limit(1).execute()),
         ("debate.depth_level",             lambda: supabase.table("debate").select("depth_level").limit(1).execute()),
         ("opinion_changes.ai_feedback",    lambda: supabase.table("opinion_changes").select("ai_feedback").limit(1).execute()),
+        ("opinion_changes.teacher_feedback", lambda: supabase.table("opinion_changes").select("teacher_feedback").limit(1).execute()),
         ("topic.ai_report",                lambda: supabase.table("topic").select("ai_report").limit(1).execute()),
         ("topic.is_hidden",                lambda: supabase.table("topic").select("is_hidden").limit(1).execute()),
         ("session_attempts.session_id",    lambda: supabase.table("session_attempts").select("session_id").limit(1).execute()),
@@ -261,6 +262,9 @@ def depth_level_available() -> bool:
 
 def ai_feedback_available() -> bool:
     return _schema().get("opinion_changes.ai_feedback", False)
+
+def teacher_feedback_available() -> bool:
+    return _schema().get("opinion_changes.teacher_feedback", False)
 
 def session_attempts_available() -> bool:
     return _schema().get("session_attempts.session_id", False)
@@ -1120,6 +1124,19 @@ def save_opinion_feedback(supabase: Client, room_name: str, student_name: str, a
         .eq("room_name", room_name)
         .eq("student_name", student_name),
         fail_message="AI 피드백 저장 실패",
+    )
+
+
+def save_teacher_feedback(supabase: Client, room_name: str, student_name: str, teacher_feedback: str):
+    """AI 피드백과 별개로, 교사가 직접 남기는 의견을 저장합니다."""
+    if not teacher_feedback_available():
+        return None
+    return execute_query(
+        supabase.table("opinion_changes")
+        .update({"teacher_feedback": teacher_feedback})
+        .eq("room_name", room_name)
+        .eq("student_name", student_name),
+        fail_message="교사 의견 저장 실패",
     )
 
 

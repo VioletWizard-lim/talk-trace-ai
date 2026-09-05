@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, session_control_available, session_attempts_available, set_debate_status, stance_available
+from db import ai_feedback_available, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_teacher_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available, teacher_feedback_available
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -60,6 +60,7 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
     post        = _s(row.get("post_opinion"), "(없음)")
     ai          = _s(row.get("ai_analysis"),  "")
     ai_feedback = _s(row.get("ai_feedback"),  "")
+    teacher_feedback = _s(row.get("teacher_feedback"), "")
 
     ip_raw = _s(row.get("ip_address"))
     student_ip = ip_raw.replace(".0.0.", ".X.X.") if ip_raw else ""
@@ -101,6 +102,21 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
         st.caption("🔄 토론 후 생각")
         st.info(post)
     if ai_feedback and ai_feedback_available():
+        if teacher_feedback_available():
+            if teacher_feedback:
+                st.caption("👩‍🏫 선생님 의견")
+                st.success(teacher_feedback)
+            with st.expander("✏️ 선생님 의견 추가/수정", expanded=False):
+                st.caption("AI 피드백은 그대로 두고, 선생님 의견을 별도로 덧붙일 수 있습니다.")
+                _edited_teacher_feedback = st.text_area(
+                    "선생님 의견", value=teacher_feedback,
+                    height=100, key=f"edit_teacher_feedback_{room_name}_{selected}",
+                    label_visibility="collapsed",
+                )
+                if st.button("💾 저장", key=f"save_teacher_feedback_{room_name}_{selected}", use_container_width=True):
+                    if save_teacher_feedback(supabase, room_name, selected, _edited_teacher_feedback) is not None:
+                        st.toast("✅ 선생님 의견을 저장했습니다.", icon="✏️")
+                        st.rerun()
         st.caption("🌟 AI 피드백 카드")
         render_feedback_card(ai_feedback)
 
@@ -116,6 +132,7 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
             btn_key="dl_analysis_teacher",
             depth_summary=depth_summary,
             ai_feedback=ai_feedback,
+            teacher_feedback=teacher_feedback,
         )
     else:
         st.caption("AI 분석이 아직 없습니다.")
