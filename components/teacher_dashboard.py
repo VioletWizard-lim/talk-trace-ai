@@ -37,7 +37,7 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
     with col_select:
         selected = st.selectbox("학생 선택", students, key="oc_student_select")
     with col_del_btn:
-        st.write("")
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         if st.button("🗑️ 삭제", key=f"del_btn_{selected}", use_container_width=True, help="이 학생의 배움 분석 기록을 삭제합니다."):
             st.session_state[f"confirm_del_{selected}"] = True
 
