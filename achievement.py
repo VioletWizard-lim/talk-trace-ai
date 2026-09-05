@@ -50,14 +50,23 @@ def score_depth(avg_depth) -> int:
     return 1
 
 
+def _clean_text(val) -> str:
+    """pandas DataFrame에서 값이 없을 때 나오는 NaN(float)을 빈 문자열로 정리한다."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    return str(val).strip()
+
+
 def score_growth(pre_opinion: str, post_opinion: str, initial_stance: str, final_stance: str):
     """사고 성장 점수. opinion_changes 기록 자체가 없으면 None('-' 표시)을 반환한다."""
-    pre_opinion = (pre_opinion or "").strip()
+    pre_opinion = _clean_text(pre_opinion)
     if not pre_opinion:
         return None
-    post_opinion = (post_opinion or "").strip()
+    post_opinion = _clean_text(post_opinion)
     if not post_opinion:
         return 1  # 토론 전 생각만 있고 참여가 저조함
+    initial_stance = _clean_text(initial_stance)
+    final_stance = _clean_text(final_stance)
     stance_changed = bool(initial_stance) and bool(final_stance) and initial_stance != final_stance
     reasoning_deepened = len(post_opinion) > len(pre_opinion)
     if stance_changed or reasoning_deepened:
