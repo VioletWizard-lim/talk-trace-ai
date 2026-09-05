@@ -16,6 +16,7 @@ from db import (
     init_db,
     is_recent_submission,
     opinion_changes_available,
+    session_control_available,
     submit_opinion,
     topic_entry_code_column_available,
     update_room_entry_code,
@@ -359,6 +360,8 @@ if user_role == "학생" and opinion_changes_available():
             st.caption("💡 위에서 토론 전 생각을 제출하면 의견 작성이 활성화됩니다.")
         else:
             _render_opinion_input(supabase, room_name, user_role, student_name, student_number, current_mode)
+elif user_role == "교사" and session_control_available() and fetch_debate_status(supabase, room_name) == "ended":
+    st.info(f"🔴 **{act_type} 종료** — 학생들이 '{act_type} 후 생각 변화'를 작성 중입니다. 새 발언 작성은 비활성화됩니다.")
 else:
     _render_opinion_input(supabase, room_name, user_role, student_name, student_number, current_mode)
 
