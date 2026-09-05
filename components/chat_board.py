@@ -98,7 +98,9 @@ def _cached_pie_chart_json(sentiment_tuple: tuple) -> str:
                  category_orders={
                      "sentiment": ["🔴 반대", "🔵 찬성", "💡 아이디어", "➕ 보충", "❓ 질문"]
                  })
-    fig.update_layout(font={"family": UI_FONT_FAMILY})
+    # 찬성/반대 라벨을 차트 밖 범례가 아니라 각 조각 안에 직접 표시
+    fig.update_traces(textinfo="label+percent", textposition="inside", insidetextorientation="horizontal")
+    fig.update_layout(font={"family": UI_FONT_FAMILY}, showlegend=False)
     return fig.to_json()
 
 
