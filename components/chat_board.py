@@ -28,11 +28,17 @@ _COMMENT_MAX_LEN = 300
 _ACTION_BTN_CSS = """
     <style>
     div[class*="st-key-cbact_like_"] button,
-    div[class*="st-key-cbact_clike_"] button,
+    div[class*="st-key-cbact_clike_"] button {
+        font-size: clamp(10px, 2.8vw, 14px) !important;
+        padding: 0.45rem 1rem !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        min-width: fit-content !important;
+    }
     div[class*="st-key-cbact_del_"] button,
     div[class*="st-key-cbact_cdel_"] button {
         font-size: clamp(10px, 2.8vw, 14px) !important;
-        padding: 0.45rem 1.3rem !important;
+        padding: 0.45rem 0.6rem !important;
         white-space: nowrap !important;
         overflow: visible !important;
         min-width: fit-content !important;
@@ -44,10 +50,6 @@ _ACTION_BTN_CSS = """
         overflow: visible !important;
         text-overflow: unset !important;
         white-space: nowrap !important;
-    }
-    div[class*="st-key-cbact_del_"],
-    div[class*="st-key-cbact_cdel_"] {
-        margin-left: -1.2rem !important;
     }
     </style>
 """
@@ -290,7 +292,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             _render_content_box(c.get('content', ''), c_type)
                         with col_c_actions:
                             if user_role == "교사" and teacher_auth:
-                                c_like, c_del = st.columns([2, 1], gap="small")
+                                c_like, c_del = st.columns([3, 1], gap="small")
                                 with c_like:
                                     st.button(c_like_label, key=f"cbact_clike_{c_id}", disabled=c_like_disabled,
                                               type=c_like_type,
@@ -372,7 +374,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                 _id_bits.append(f"세션: {row_session[:8]}")
                             st.caption(" · ".join(_id_bits))
                     with c_actions:
-                        c_like, c_del = st.columns([2, 1], gap="small")
+                        c_like, c_del = st.columns([3, 1], gap="small")
                         with c_like:
                             st.button(like_label, key=f"cbact_like_{msg_id}", disabled=like_disabled,
                                       type=like_type,
