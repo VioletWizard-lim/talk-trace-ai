@@ -26,6 +26,21 @@ APP_CSS = """
     .stTextArea textarea, .stTextInput input, .stSelectbox, .stRadio label,
     .stMarkdown p, div[data-testid="stChatMessageContent"] { font-size: 18px !important; }
     .stAlert p { font-size: 20px !important; font-weight: bold; }
+    /* 버튼 라벨이 좁은 화면(모바일)에서 "..."로 잘리는 문제 전체 방지:
+       줄바꿈을 허용하고 글자 크기를 화면 폭에 맞춰 유동적으로 줄인다. */
+    .stButton button, div[data-testid="stFormSubmitButton"] button {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        height: auto !important;
+        line-height: 1.3 !important;
+        font-size: clamp(11px, 2.6vw, 14px) !important;
+    }
+    .stButton button p, div[data-testid="stFormSubmitButton"] button p {
+        overflow: visible !important;
+        text-overflow: unset !important;
+        white-space: normal !important;
+    }
     </style>
 """
 
