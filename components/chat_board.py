@@ -32,7 +32,7 @@ _ACTION_BTN_CSS = """
     div[class*="st-key-del_"] button,
     div[class*="st-key-cdel_"] button {
         font-size: clamp(10px, 2.8vw, 14px) !important;
-        padding: 0.35rem 0.9rem !important;
+        padding: 0.45rem 1.3rem !important;
         white-space: nowrap !important;
         overflow: visible !important;
         min-width: fit-content !important;
@@ -47,7 +47,7 @@ _ACTION_BTN_CSS = """
     }
     div[class*="st-key-del_"],
     div[class*="st-key-cdel_"] {
-        margin-left: -1.4rem !important;
+        margin-left: -2.4rem !important;
     }
     </style>
 """
