@@ -522,7 +522,7 @@ def _auto_flag_watcher(supabase, room_name):
     maybe_auto_flag_periodically(supabase, room_name, _debate_status)
 
 
-@st.fragment(run_every=10)
+@st.fragment
 def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current_topic, act_type):
     """탭 선택 + 내용 렌더링을 fragment로 분리해, 탭 전환이 앱 전체가 아니라
     이 부분만 다시 그리도록 함. 이렇게 하면 탭을 눌렀을 때 이전 탭 내용이
