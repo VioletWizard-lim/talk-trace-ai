@@ -157,11 +157,11 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                                     "🔴 반대": "#d62728",
                                 },
                             )
+                            fig.update_traces(textinfo="label+percent", textposition="inside")
                             fig.update_layout(
                                 margin=dict(t=10, b=10, l=10, r=10),
                                 font={"family": UI_FONT_FAMILY},
-                                showlegend=True,
-                                legend=dict(orientation="h"),
+                                showlegend=False,
                             )
                             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"stance_chart_{col_name}_{room_name}")
                             # 입장별 학생 이름 목록
