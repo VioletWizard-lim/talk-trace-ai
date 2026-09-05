@@ -88,6 +88,33 @@ def _render_content_box(content: str, sentiment: str) -> None:
     )
 
 
+# 발언 카드 전체(테두리 상자) 배경도 의견 성격에 따라 옅게 물들여, 발언 내용
+# 박스뿐 아니라 카드 자체로도 누가 어느 편인지 한눈에 구분되게 한다.
+_SENTIMENT_SLUG = {
+    "🔵 찬성": "pro",
+    "🔴 반대": "con",
+    "💡 아이디어": "idea",
+    "➕ 보충": "supp",
+    "❓ 질문": "ques",
+}
+_SENTIMENT_CARD_BG = {
+    "pro": "#f3f9fe",
+    "con": "#fef6f5",
+    "idea": "#fffcf2",
+    "supp": "#f4faf4",
+    "ques": "#faf6fb",
+}
+_CARD_BG_CSS = "<style>" + "".join(
+    f'div[class*="st-key-msgcard_{slug}_"] {{ background: {color} !important; }}\n'
+    for slug, color in _SENTIMENT_CARD_BG.items()
+) + "</style>"
+
+
+def _msg_card_key(prefix: str, sentiment: str, msg_id) -> str:
+    slug = _SENTIMENT_SLUG.get(sentiment, "etc")
+    return f"{prefix}_{slug}_{msg_id}"
+
+
 def _escape_md(text: str) -> str:
     s = str(text or "")
     for ch in ('\\', '`', '*', '_', '~'):
@@ -129,6 +156,7 @@ def _cached_pie_chart_json(sentiment_tuple: tuple) -> str:
 @st.fragment
 def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
     st.markdown(_ACTION_BTN_CSS, unsafe_allow_html=True)
+    st.markdown(_CARD_BG_CSS, unsafe_allow_html=True)
     opinion_df = with_fallback_author_role(
         fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
     )
@@ -317,7 +345,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             sentiment_tag = f"`{row.get('sentiment', '')}` " if show_sentiment_tag else ""
 
             if user_role == "교사" and teacher_auth:
-                with st.container(border=True):
+                with st.container(border=True, key=_msg_card_key("msgcard", row.get('sentiment', ''), msg_id)):
                     c_name, c_actions = st.columns([7, 2])
                     with c_name:
                         st.markdown(
@@ -375,7 +403,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             st.session_state.pop(f"confirm_del_msg_{msg_id}", None)
                             st.rerun()
             else:
-                with st.container(border=True):
+                with st.container(border=True, key=_msg_card_key("msgcard", row.get('sentiment', ''), msg_id)):
                     c_name, c_actions = st.columns([7, 2])
                     with c_name:
                         st.markdown(
