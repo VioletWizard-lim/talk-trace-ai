@@ -80,15 +80,16 @@ _SENTIMENT_BG = {
 
 def _render_content_box(content: str, sentiment: str) -> None:
     bg = _SENTIMENT_BG.get(sentiment, "#eef2f6")
-    # html.escape만으로는 "**"/"_" 같은 마크다운 특수문자가 그대로 남아,
-    # 학생이 강조하려고 별표를 쓴 부분만 실제 markdown bold로 렌더링되어
-    # 나머지와 두께가 달라 보이는 문제가 있었다. _escape_md로 마크다운
-    # 특수문자도 무력화해 전체가 균일한 두께로 보이도록 한다.
-    safe_content = _escape_md(html.escape(str(content or "")))
+    # 내용에 빈 줄(단락 구분)이 있으면, 그 지점에서 CommonMark가 우리 <div>를
+    # "raw HTML 블록"에서 벗어난 것으로 보고 그 뒤 텍스트를 다시 markdown으로
+    # 해석해버린다 — 그 결과 "**"가 실제 markdown bold로 바뀌어 문단마다
+    # 두께가 달라 보였다. 줄바꿈을 <br>로 직접 치환해 문자열 전체를 한 줄로
+    # 만들면 빈 줄이 사라져 이 문제가 근본적으로 생기지 않는다.
+    safe_content = _escape_md(html.escape(str(content or ""))).replace("\n", "<br>")
     st.markdown(
         f"<div style='background:{bg}; color:#000000; font-weight:600; border-radius:0.5rem; "
-        f"padding:0.75rem 1rem; margin:0.3rem 0; line-height:1.7; font-size:16px; "
-        f"white-space:pre-wrap;'>{safe_content}</div>",
+        f"padding:0.75rem 1rem; margin:0.3rem 0; line-height:1.7; font-size:16px;'>"
+        f"{safe_content}</div>",
         unsafe_allow_html=True,
     )
 
