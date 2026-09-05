@@ -396,12 +396,12 @@ def create_analysis_image(
     section("토론 전 생각", pre_opinion or "(없음)")
     section("토론 후 생각", post_opinion or "(없음)")
     if depth_summary:
-        section("📈 나의 발언 깊이", depth_summary)
-    divider()
-    ai_section(ai_analysis)
+        section("나의 발언 깊이", depth_summary)
     if teacher_feedback:
         divider()
-        section("👩‍🏫 선생님 의견", teacher_feedback)
+        section("선생님 의견", teacher_feedback)
+    divider()
+    ai_section(ai_analysis)
     if ai_feedback:
         divider()
         section("AI 피드백 카드 (잘한 점 / 발전할 점)", ai_feedback)
