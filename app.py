@@ -101,6 +101,10 @@ if st.session_state['page'] == "room_management":
 if not st.session_state['joined']:
     render_lobby_page(supabase)
 
+_welcome_name = st.session_state.pop('_show_welcome_toast', "")
+if _welcome_name:
+    st.toast(f"👋 {_welcome_name} 학생님, 입장하셨습니다!", icon="🎉")
+
 # === Joined room view ===
 topic_data = fetch_topic_data(supabase, room_name)
 current_topic = topic_data.get('title', "자유 주제로 대화해 봅시다.")
