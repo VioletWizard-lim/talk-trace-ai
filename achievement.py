@@ -174,12 +174,21 @@ def compute_room_achievements(supabase, room_name: str, df_all: pd.DataFrame) ->
     return result
 
 
-def format_achievement_lines(achievement: dict) -> list:
-    """{"참여도": 3, ...} 형태의 점수 딕셔너리를 사람이 읽는 텍스트 줄 목록으로 변환."""
-    lines = []
+def _format_achievement_items(achievement: dict) -> list:
+    items = []
     for label in ACHIEVEMENT_LABELS:
         score = achievement.get(label)
         stars = STARS.get(score, "-") if score is not None else "-"
-        lines.append(f"{label}: {stars}" + (f" ({score}점)" if score is not None else ""))
-    lines.append(f"총점: {achievement.get('총점', 0)}/{achievement.get('만점', 0)}")
-    return lines
+        items.append(f"{label}: {stars}" + (f" ({score}점)" if score is not None else ""))
+    items.append(f"총점: {achievement.get('총점', 0)}/{achievement.get('만점', 0)}")
+    return items
+
+
+def format_achievement_lines(achievement: dict) -> list:
+    """{"참여도": 3, ...} 형태의 점수 딕셔너리를 사람이 읽는 텍스트 줄 목록으로 변환."""
+    return _format_achievement_items(achievement)
+
+
+def format_achievement_line(achievement: dict) -> str:
+    """위 항목들을 한 줄로(가로로) 이어붙인 문자열로 변환 — 다운로드 이미지용."""
+    return "   ·   ".join(_format_achievement_items(achievement))

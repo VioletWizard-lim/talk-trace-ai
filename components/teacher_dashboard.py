@@ -5,7 +5,7 @@ import plotly.express as px
 import streamlit as st
 
 from db import ai_feedback_available, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_teacher_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available, teacher_feedback_available
-from achievement import ACHIEVEMENT_LABELS, STARS as ACHIEVEMENT_STARS, compute_room_achievements, format_achievement_lines
+from achievement import ACHIEVEMENT_LABELS, STARS as ACHIEVEMENT_STARS, compute_room_achievements, format_achievement_line
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
@@ -127,7 +127,7 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
             st.caption(f"📈 발언 깊이: {depth_summary}")
 
         achievement = compute_room_achievements(supabase, room_name, df_all).get(selected, {})
-        achievement_summary = "\n".join(format_achievement_lines(achievement)) if achievement else ""
+        achievement_summary = format_achievement_line(achievement) if achievement else ""
 
         st.caption("🤖 AI 배움 분석")
         st.markdown(ai.replace("\n", "\n\n"))
@@ -291,6 +291,17 @@ def _render_achievement_table_section(supabase, room_name, df_all):
         "총점(x/15)으로 보여줍니다. '사고 성장'은 토론 전/후 생각을 모두 기록한 "
         "학생만 채점되며, 기록이 없으면 '-'로 표시됩니다."
     )
+    with st.expander("ℹ️ 채점 기준 자세히 보기", expanded=False):
+        st.markdown(
+            "| 평가 요소 | 데이터 출처 | 우수(3) | 보통(2) | 미흡(1) |\n"
+            "|---|---|---|---|---|\n"
+            "| 참여도 | 발언 횟수 | 5회 이상 | 2~4회 | 1회 이하 |\n"
+            "| 발언 깊이 | 발언 깊이(depth_level) 평균 | 3.0 이상 | 2.0~2.9 | 2.0 미만 |\n"
+            "| 사고 성장 | 토론 전/후 생각 + 입장 변화 | 입장 변화 또는 근거 강화 | 생각 유지 | 토론 후 생각 미입력 |\n"
+            "| 공감도 | 받은 좋아요 수 | 3개 이상 | 1~2개 | 0개 |\n"
+            "| 상호작용 | 댓글 수 + 준 댓글 공감 수 | 3회 이상 | 1~2회 | 0회 |\n"
+        )
+        st.caption("'사고 성장'은 토론 전 생각 자체를 기록하지 않은 학생은 채점 대상에서 제외되어 '-'로 표시되며, 총점 분모(15)에서도 제외됩니다.")
 
     achievements = compute_room_achievements(supabase, room_name, df_all)
     if not achievements:

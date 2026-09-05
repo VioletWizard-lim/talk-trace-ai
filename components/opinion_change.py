@@ -23,7 +23,7 @@ from env import get_secret
 from services.ai import build_feedback_prompt, build_opinion_change_prompt, generate_ai_response
 from components.depth_analysis import _DEPTH_LABELS
 from validators import with_fallback_author_role
-from achievement import ACHIEVEMENT_LABELS, STARS as ACHIEVEMENT_STARS, compute_room_achievements, format_achievement_lines
+from achievement import ACHIEVEMENT_LABELS, STARS as ACHIEVEMENT_STARS, compute_room_achievements, format_achievement_line
 
 
 _STANCE_OPTIONS = ["🔵 찬성", "🔴 반대"]
@@ -259,7 +259,7 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
                     score = achievement.get(label)
                     col.metric(label, ACHIEVEMENT_STARS.get(score, "-") if score is not None else "-")
                 cols[-1].metric("총점", f"{achievement['총점']}/{achievement['만점']}")
-                achievement_summary = "\n".join(format_achievement_lines(achievement))
+                achievement_summary = format_achievement_line(achievement)
 
             st.info("🤖 **AI 배움 분석**")
             st.markdown(ai_analysis.replace("\n", "\n\n"))
