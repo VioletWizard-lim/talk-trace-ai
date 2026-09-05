@@ -231,7 +231,7 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         if current_mode == "⚔️ 찬반 토론":
             _spacer_height = 178 if _show_template_caption else 130
         else:
-            _spacer_height = 106
+            _spacer_height = 94
         st.markdown(f"<div style='height:{_spacer_height}px'></div>", unsafe_allow_html=True)
         st.components.v1.html(
             """
