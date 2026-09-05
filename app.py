@@ -340,6 +340,13 @@ if user_role == "학생" and opinion_changes_available():
     else:
         st.success(f"🟢 **{act_type} 진행 중** — 자유롭게 의견을 나눠보세요.")
     row = fetch_opinion_change(supabase, room_name, student_name)
+    if not row and not st.session_state.get('_opinion_fetch_retried'):
+        # 접속 직후 첫 조회에서 드물게 빈 값이 돌아오는 경우가 있어(캐시를
+        # 비워도 재현됨 — 원인 불명의 1회성 조회 실패로 추정), 세션당 1회
+        # 즉시 재조회해 기존 학번의 기록을 놓치지 않도록 한다.
+        st.session_state['_opinion_fetch_retried'] = True
+        fetch_opinion_change.clear()
+        row = fetch_opinion_change(supabase, room_name, student_name)
     has_pre_opinion = bool((row or {}).get("pre_opinion"))
     if debate_status == "ended":
         if has_pre_opinion:

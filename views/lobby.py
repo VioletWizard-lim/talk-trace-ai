@@ -59,6 +59,7 @@ def _enter_room(room_name: str, welcome_name: str = ""):
     # 입장 시점에 캐시를 비워, 기존에 저장된 학번임에도 최근 캐시(최대 10초)에
     # "기록 없음"으로 남아있어 토론 전/후 생각이 잠깐 안 보이던 문제를 방지.
     fetch_opinion_change.clear()
+    st.session_state.pop('_opinion_fetch_retried', None)
     if welcome_name:
         st.session_state['_show_welcome_toast'] = welcome_name
     st.rerun()
