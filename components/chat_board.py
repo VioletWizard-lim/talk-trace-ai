@@ -32,7 +32,7 @@ _ACTION_BTN_CSS = """
     div[class*="st-key-del_"] button,
     div[class*="st-key-cdel_"] button {
         font-size: clamp(10px, 2.8vw, 14px) !important;
-        padding: 0.2rem 0.3rem !important;
+        padding: 0.35rem 0.9rem !important;
         white-space: nowrap !important;
         overflow: visible !important;
         min-width: fit-content !important;
@@ -47,7 +47,7 @@ _ACTION_BTN_CSS = """
     }
     div[class*="st-key-del_"],
     div[class*="st-key-cdel_"] {
-        margin-left: -0.8rem !important;
+        margin-left: -1.4rem !important;
     }
     </style>
 """
@@ -80,7 +80,11 @@ _SENTIMENT_BG = {
 
 def _render_content_box(content: str, sentiment: str) -> None:
     bg = _SENTIMENT_BG.get(sentiment, "#eef2f6")
-    safe_content = html.escape(str(content or ""))
+    # html.escape만으로는 "**"/"_" 같은 마크다운 특수문자가 그대로 남아,
+    # 학생이 강조하려고 별표를 쓴 부분만 실제 markdown bold로 렌더링되어
+    # 나머지와 두께가 달라 보이는 문제가 있었다. _escape_md로 마크다운
+    # 특수문자도 무력화해 전체가 균일한 두께로 보이도록 한다.
+    safe_content = _escape_md(html.escape(str(content or "")))
     st.markdown(
         f"<div style='background:{bg}; color:#000000; font-weight:600; border-radius:0.5rem; "
         f"padding:0.75rem 1rem; margin:0.3rem 0; line-height:1.7; font-size:16px; "
