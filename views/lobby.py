@@ -7,6 +7,7 @@ from db import (
     fetch_room_names,
     fetch_room_names_by_owner,
     topic_owner_column_available,
+    fetch_opinion_change,
 )
 from validators import validate_student_number
 from config import AUTO_JOIN_ON_REFRESH
@@ -50,11 +51,16 @@ def _reset_joined_state():
     st.session_state.pop('_admin_redirected', None)
 
 
-def _enter_room(room_name: str):
+def _enter_room(room_name: str, welcome_name: str = ""):
     st.session_state['current_room'] = room_name
     st.session_state['ai_hint_text'] = ""
     st.session_state['ai_report_text'] = ""
     st.session_state['joined'] = True
+    # 입장 시점에 캐시를 비워, 기존에 저장된 학번임에도 최근 캐시(최대 10초)에
+    # "기록 없음"으로 남아있어 토론 전/후 생각이 잠깐 안 보이던 문제를 방지.
+    fetch_opinion_change.clear()
+    if welcome_name:
+        st.session_state['_show_welcome_toast'] = welcome_name
     st.rerun()
 
 
@@ -191,5 +197,5 @@ def render_lobby_page(supabase):
                             "⚠️ 이 학번은 다른 기기/브라우저에서 이미 접속 중인 것 같습니다. 본인이 맞는지 확인해 주세요.",
                             icon="⚠️",
                         )
-                    _enter_room(room_name)
+                    _enter_room(room_name, welcome_name=student_number)
     st.stop()
