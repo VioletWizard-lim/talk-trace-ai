@@ -81,7 +81,7 @@ teacher_auth = st.session_state.get('teacher_auth', False)
 user_role = "교사" if teacher_auth else st.session_state.get('user_role_radio', '학생')
 admin_auth = st.session_state.get('admin_auth', False)
 room_name = st.session_state.get('current_room', '')
-student_number = st.session_state.get('student_number_input', '') if user_role == '학생' else ''
+student_number = st.session_state.get('active_student_number', '') if user_role == '학생' else ''
 student_name = normalize_user_text(student_number, max_len=20) if user_role == '학생' else '교사'
 
 # admin 첫 접속 시 pending 여부에 따라 첫 화면 결정 (최초 1회)

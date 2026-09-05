@@ -1028,7 +1028,6 @@ def destroy_room_data(supabase: Client, room_name: str, deleted_by: str = ""):
 @st.cache_data(ttl=10)
 def fetch_opinion_change(_supabase: Client, room_name: str, student_name: str):
     if not opinion_changes_available():
-        logger.warning("OPINION_CHANGE_LOOKUP: opinion_changes_available()=False room=%r student=%r", room_name, student_name)
         return None
     res = execute_query(
         _supabase.table("opinion_changes")
@@ -1039,18 +1038,6 @@ def fetch_opinion_change(_supabase: Client, room_name: str, student_name: str):
         fail_message="생각 변화 조회 실패",
     )
     if not res or not res.data:
-        # 원인 조사용 임시 로그: 같은 학번/방인데 결과가 없다고 나오는 사례를
-        # 좁히기 위해, 어떤 값으로 조회했는지와 실제 DB에 저장된 room_name
-        # 값들을 함께 남긴다.
-        try:
-            _sample = _supabase.table("opinion_changes").select("room_name,student_name").eq("student_name", student_name).limit(5).execute()
-            _sample_rows = _sample.data if _sample else []
-        except Exception as e:
-            _sample_rows = f"sample query failed: {e}"
-        logger.warning(
-            "OPINION_CHANGE_NOT_FOUND room=%r student=%r res=%r existing_rows_for_student=%r",
-            room_name, student_name, (res.data if res else None), _sample_rows,
-        )
         return None
     return res.data[0]
 
