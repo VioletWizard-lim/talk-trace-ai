@@ -107,7 +107,7 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
             if teacher_feedback:
                 st.caption("👩‍🏫 선생님 의견")
                 st.success(teacher_feedback)
-            with st.expander("✏️ 선생님 의견 추가/수정", expanded=False):
+            with st.expander("✏️ 선생님 의견 추가/수정", expanded=True):
                 st.caption("AI 피드백은 그대로 두고, 선생님 의견을 별도로 덧붙일 수 있습니다.")
                 _edited_teacher_feedback = st.text_area(
                     "선생님 의견", value=teacher_feedback,
