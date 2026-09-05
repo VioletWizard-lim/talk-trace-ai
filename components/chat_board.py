@@ -81,7 +81,7 @@ def _render_content_box(content: str, sentiment: str) -> None:
     bg = _SENTIMENT_BG.get(sentiment, "#eef2f6")
     safe_content = html.escape(str(content or ""))
     st.markdown(
-        f"<div style='background:{bg}; color:#1a1a1a; border-radius:0.5rem; "
+        f"<div style='background:{bg}; color:#000000; font-weight:600; border-radius:0.5rem; "
         f"padding:0.75rem 1rem; margin:0.3rem 0; line-height:1.7; font-size:16px; "
         f"white-space:pre-wrap;'>{safe_content}</div>",
         unsafe_allow_html=True,
