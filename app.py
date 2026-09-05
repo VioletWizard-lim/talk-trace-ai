@@ -228,7 +228,7 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         if current_mode == "⚔️ 찬반 토론":
             # 왼쪽 컬럼의 '의견 성격'+'글쓰기 방식' 라디오(+틀 사용 시 안내 캡션)
             # 만큼 오른쪽 버튼을 아래로 내려 텍스트 입력창과 나란히 보이도록 맞춘다.
-            _spacer_height = 158 if _show_template_caption else 110
+            _spacer_height = 178 if _show_template_caption else 130
             st.markdown(f"<div style='height:{_spacer_height}px'></div>", unsafe_allow_html=True)
         st.components.v1.html(
             """
