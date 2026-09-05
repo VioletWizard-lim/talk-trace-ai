@@ -134,6 +134,33 @@ def get_or_create_session_uuid():
         st.query_params["sid"] = sid
 
     st.session_state["session_uuid"] = sid
+
+    # 브라우저 "뒤로가기"를 누르면 sid 쿼리 파라미터가 없던 이전 히스토리
+    # 항목으로 주소가 바뀐다. 그 상태에서 새로고침(F5)하면 sid가 없으니
+    # 완전히 새 세션이 발급되어 로그인/방 입장이 풀려버린다. popstate 시
+    # 곧바로 URL에 sid를 다시 채워 넣어(replaceState, 새로고침 없이) 이
+    # 위험을 막는다.
+    import streamlit.components.v1 as _components
+    _components.html(
+        f"""
+        <script>
+        (function() {{
+            const sid = {sid!r};
+            const win = window.parent;
+            win.addEventListener('popstate', function() {{
+                const params = new URLSearchParams(win.location.search);
+                if (params.get('sid') !== sid) {{
+                    params.set('sid', sid);
+                    const newUrl = win.location.pathname + '?' + params.toString();
+                    win.history.replaceState(null, '', newUrl);
+                }}
+            }});
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+
     return sid
 
 
