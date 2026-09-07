@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_teacher_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available, teacher_feedback_available
+from db import ai_feedback_available, clear_comments_cache, clear_live_messages_cache, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_teacher_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available, teacher_feedback_available
 from achievement import ACHIEVEMENT_LABELS, STARS as ACHIEVEMENT_STARS, compute_room_achievements, format_achievement_line
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
@@ -386,7 +386,7 @@ def _render_participation_section(supabase, room_name, act_type):
         st.subheader("📊 학생 참여도 현황")
     with col_pref:
         if st.button("🔄 새로고침", key="refresh_participation", use_container_width=True):
-            fetch_live_messages.clear()
+            clear_live_messages_cache(supabase, room_name)
             st.rerun()
     df = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
     student_df = (
@@ -419,7 +419,7 @@ def _render_archive_section(supabase, room_name):
     if deleted_df.empty:
         st.info("삭제된 발언이 없습니다.")
     else:
-        _render_deleted_messages(supabase, deleted_df)
+        _render_deleted_messages(supabase, room_name, deleted_df)
 
     if comments_available():
         st.divider()
@@ -428,10 +428,10 @@ def _render_archive_section(supabase, room_name):
         if not deleted_comments:
             st.info("삭제된 답글이 없습니다.")
         else:
-            _render_deleted_comments(supabase, deleted_comments)
+            _render_deleted_comments(supabase, room_name, deleted_comments)
 
 
-def _render_deleted_messages(supabase, deleted_df):
+def _render_deleted_messages(supabase, room_name, deleted_df):
     for _, row in deleted_df.iterrows():
         msg_id = row["id"]
         deleted_at = _s(row.get("deleted_at"))
@@ -447,7 +447,7 @@ def _render_deleted_messages(supabase, deleted_df):
             with col_restore:
                 if st.button("↩️ 복구", key=f"archive_restore_{msg_id}", use_container_width=True):
                     if restore_opinion_message(supabase, msg_id) is not None:
-                        fetch_live_messages.clear()
+                        clear_live_messages_cache(supabase, room_name)
                         st.toast("발언을 복구했습니다.", icon="↩️")
                         st.rerun()
             with col_purge:
@@ -469,7 +469,7 @@ def _render_deleted_messages(supabase, deleted_df):
                         st.rerun()
 
 
-def _render_deleted_comments(supabase, deleted_comments):
+def _render_deleted_comments(supabase, room_name, deleted_comments):
     for c in deleted_comments:
         c_id = c["id"]
         deleted_at = _s(c.get("deleted_at"))
@@ -485,7 +485,7 @@ def _render_deleted_comments(supabase, deleted_comments):
             with col_restore:
                 if st.button("↩️ 복구", key=f"carchive_restore_{c_id}", use_container_width=True):
                     if restore_comment(supabase, c_id) is not None:
-                        fetch_comments_for_room.clear()
+                        clear_comments_cache(supabase, room_name)
                         st.toast("답글을 복구했습니다.", icon="↩️")
                         st.rerun()
             with col_purge:
@@ -555,7 +555,7 @@ def render_teacher_dashboard(supabase, room_name, user_role, student_name, curre
         st.header("👨‍🏫 교사 관리 대시보드")
     with col_dash_refresh:
         if st.button("🔄 대시보드 수동 새로고침", use_container_width=True):
-            fetch_live_messages.clear()
+            clear_live_messages_cache(supabase, room_name)
             st.rerun()
 
     _auto_flag_watcher(supabase, room_name)
@@ -619,7 +619,7 @@ def _render_dashboard_tabs(supabase, room_name, user_role, student_name, current
         st.session_state[dashboard_pending_action_key(room_name)] = None
         if _pending_action == "auto_end":
             with st.spinner("🤖 발언 깊이 분석과 요약 리포트를 자동으로 준비하고 있습니다..."):
-                fetch_live_messages.clear()
+                clear_live_messages_cache(supabase, room_name)
                 fresh_df_all = with_fallback_author_role(fetch_live_messages(supabase, room_name, DASHBOARD_FETCH_LIMIT))
                 auto_classify_all_opinions(supabase, room_name)
                 if auto_generate_summary_report(supabase, room_name, act_type, current_topic, fresh_df_all):

@@ -6,6 +6,7 @@ import streamlit as st
 from supabase import Client, create_client
 
 from auth import _hash_password, _is_hashed, _verify_password  # noqa: F401
+from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT
 from env import get_secret
 from utils import get_kst_now_str
 
@@ -538,6 +539,18 @@ def fetch_live_messages(_supabase: Client, room_name, limit):
     return pd.DataFrame(res.data)
 
 
+def clear_live_messages_cache(supabase: Client, room_name: str):
+    """이 방의 fetch_live_messages 캐시만 비웁니다.
+
+    fetch_live_messages.clear()를 인자 없이 부르면 이 함수가 캐싱한
+    "모든 방"의 데이터가 한꺼번에 지워진다. 여러 반이 동시에 수업 중이면
+    한 반의 새 발언이 다른 반 캐시까지 지워 불필요한 재조회를 유발하므로,
+    이 방 것만(그리고 LIVE_BOARD/DASHBOARD 두 조회 한도 변형 모두) 비운다.
+    """
+    fetch_live_messages.clear(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
+    fetch_live_messages.clear(supabase, room_name, DASHBOARD_FETCH_LIMIT)
+
+
 def fetch_latest_message_id(supabase: Client, room_name: str):
     """이 방의 가장 최근 발언 id만 가볍게 조회합니다 (변경 감지 전용, 캐시 없음).
 
@@ -869,6 +882,11 @@ def fetch_comments_for_room(_supabase: Client, room_name: str) -> list:
     return res.data if res and res.data else []
 
 
+def clear_comments_cache(supabase: Client, room_name: str):
+    """이 방의 fetch_comments_for_room 캐시만 비웁니다(전체 방 대상 clear() 대신)."""
+    fetch_comments_for_room.clear(supabase, room_name)
+
+
 def create_comment(
     supabase: Client, room_name: str, debate_id: int, student_name: str, comment_type: str, content: str,
     ip_address: str = None, session_id: str = None,
@@ -945,6 +963,11 @@ def fetch_comment_likes_for_room(_supabase: Client, room_name: str) -> list:
         fail_message="댓글 공감 조회 실패",
     )
     return res.data if res and res.data else []
+
+
+def clear_comment_likes_cache(supabase: Client, room_name: str):
+    """이 방의 fetch_comment_likes_for_room 캐시만 비웁니다(전체 방 대상 clear() 대신)."""
+    fetch_comment_likes_for_room.clear(supabase, room_name)
 
 
 def toggle_comment_like(supabase: Client, comment_id: int, room_name: str, student_name: str) -> bool:
@@ -1334,6 +1357,11 @@ def fetch_room_likes(_supabase: Client, room_name: str):
         fail_message="공감 데이터 조회 실패",
     )
     return res.data if res and res.data else []
+
+
+def clear_room_likes_cache(supabase: Client, room_name: str):
+    """이 방의 fetch_room_likes 캐시만 비웁니다(전체 방 대상 clear() 대신)."""
+    fetch_room_likes.clear(supabase, room_name)
 
 
 # ==========================================
