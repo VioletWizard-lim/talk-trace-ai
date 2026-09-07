@@ -1,6 +1,6 @@
 import streamlit as st
 
-from db import create_teacher_hint, fetch_live_messages
+from db import create_teacher_hint, clear_live_messages_cache
 from env import get_secret
 from services.ai import generate_ai_response, build_hint_prompt
 from utils import get_kst_now_str, log_audit
@@ -24,7 +24,7 @@ def render_hint_section(supabase, room_name, user_role, student_name, current_to
                 })
                 if res is None:
                     return
-                fetch_live_messages.clear()
+                clear_live_messages_cache(supabase, room_name)
                 log_audit("teacher_hint_sent", room_name=room_name, actor_name=student_name, role=user_role)
                 st.session_state['hint_input_widget'] = ""
             except Exception as e:

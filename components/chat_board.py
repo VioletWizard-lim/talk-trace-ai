@@ -9,6 +9,7 @@ from db import (
     comments_available, comment_likes_available, fetch_comments_for_room, fetch_comment_likes_for_room,
     create_comment, delete_comment, toggle_comment_like,
     fetch_debate_status, session_control_available, content_flags_available, fetch_unreviewed_flags_for_room,
+    clear_live_messages_cache, clear_room_likes_cache, clear_comments_cache, clear_comment_likes_cache,
 )
 from validators import with_fallback_author_role, mask_ip_for_teacher, validate_opinion_content
 from moderation import find_forbidden_word
@@ -248,12 +249,12 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
 
         def do_toggle_comment_like(comment_id):
             toggle_comment_like(supabase, comment_id, room_name, student_name)
-            fetch_comment_likes_for_room.clear()
+            clear_comment_likes_cache(supabase, room_name)
             st.session_state['_last_comment_like_ts'] = time.time()
 
         def do_toggle_like(msg_id):
             toggle_like(supabase, msg_id, room_name, student_name)
-            fetch_room_likes.clear()
+            clear_room_likes_cache(supabase, room_name)
             st.session_state['_last_like_ts'] = time.time()
 
         def render_reply_thread(msg_id):
@@ -304,7 +305,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                 with c_del:
                                     if st.button("🗑️", key=f"cbact_cdel_{c_id}", help="댓글 삭제"):
                                         if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
-                                            fetch_comments_for_room.clear()
+                                            clear_comments_cache(supabase, room_name)
                                             st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
                                             st.rerun(scope="app")
                             else:
@@ -341,7 +342,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                 supabase, room_name, msg_id, student_name, comment_type, safe_content,
                                 ip_address=_anon_ip, session_id=_session_id,
                             ) is not None:
-                                fetch_comments_for_room.clear()
+                                clear_comments_cache(supabase, room_name)
                                 st.session_state[f"comment_reset_{msg_id}"] = _comment_reset_n + 1
                                 st.toast("✅ 답글이 등록되었습니다.", icon="💬")
                                 st.rerun(scope="app")
@@ -402,8 +403,8 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                         if st.button("✅ 삭제 확인", key=f"del_yes_{msg_id}", type="primary", use_container_width=True):
                             try:
                                 if delete_opinion_message(supabase, msg_id, deleted_by=student_name) is not None:
-                                    fetch_live_messages.clear()
-                                    fetch_room_likes.clear()
+                                    clear_live_messages_cache(supabase, room_name)
+                                    clear_room_likes_cache(supabase, room_name)
                                     _cached_wordcloud.clear()
                                     log_audit("chat_deleted", room_name=room_name, actor_name=student_name,
                                               role=user_role, message_id=msg_id)
@@ -560,11 +561,11 @@ def _poll_new_messages(supabase, room_name):
 
     st.session_state[last_seen_key] = latest_id
     st.session_state[last_render_key] = time.time()
-    fetch_live_messages.clear()
-    fetch_room_likes.clear()
+    clear_live_messages_cache(supabase, room_name)
+    clear_room_likes_cache(supabase, room_name)
     if comments_available():
-        fetch_comments_for_room.clear()
-        fetch_comment_likes_for_room.clear()
+        clear_comments_cache(supabase, room_name)
+        clear_comment_likes_cache(supabase, room_name)
     st.rerun(scope="app")
 
 

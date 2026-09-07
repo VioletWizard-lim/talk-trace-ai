@@ -12,7 +12,8 @@ import streamlit as st
 from db import (
     fetch_flaggable_content, fetch_flagged_source_keys, create_content_flag,
     fetch_unreviewed_flags_for_room, mark_flag_reviewed, content_flags_available,
-    delete_opinion_message, delete_comment, fetch_live_messages, fetch_comments_for_room,
+    delete_opinion_message, delete_comment,
+    clear_live_messages_cache, clear_comments_cache,
 )
 from env import get_secret
 from config import AI_MODEL_NAME
@@ -141,10 +142,10 @@ def render_moderation_review_section(supabase, room_name: str) -> None:
                 if st.button("🗑️ 발언 삭제", key=f"flag_del_{flag_id}", use_container_width=True):
                     if source_table == "debate":
                         res = delete_opinion_message(supabase, source_id, deleted_by="교사")
-                        fetch_live_messages.clear()
+                        clear_live_messages_cache(supabase, room_name)
                     else:
                         res = delete_comment(supabase, source_id, deleted_by="교사")
-                        fetch_comments_for_room.clear()
+                        clear_comments_cache(supabase, room_name)
                     if res is not None:
                         mark_flag_reviewed(supabase, flag_id, reviewed_by="교사")
                         fetch_unreviewed_flags_for_room.clear()

@@ -7,6 +7,7 @@ from db import (
     debate_ip_column_available,
     debate_session_id_column_available,
     ensure_db_login,
+    clear_live_messages_cache,
     fetch_debate_status,
     fetch_live_messages,
     fetch_opinion_change,
@@ -312,7 +313,7 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
                     st.stop()
                 st.session_state['last_submit_ts'] = time.time()
                 st.session_state['is_working'] = False
-                fetch_live_messages.clear()
+                clear_live_messages_cache(supabase, room_name)
                 log_audit(
                     "opinion_submitted",
                     room_name=room_name, actor_name=safe_student_name,
