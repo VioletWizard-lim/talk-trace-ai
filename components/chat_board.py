@@ -1,4 +1,5 @@
 import html
+import random
 import time
 import streamlit as st
 import plotly.io as pio
@@ -55,6 +56,9 @@ _ACTION_BTN_CSS = """
 """
 _NEW_MSG_POLL_INTERVAL = 5       # 가벼운 변경 확인 주기(초)
 _HEAVY_REFRESH_MIN_INTERVAL = 15  # 무거운 재렌더링 최소 간격(초) — 폭주 시 안전장치
+_HEAVY_REFRESH_JITTER = 2.0       # 새 발언 감지 시 전체 재렌더링을 이 범위(초) 안에서
+                                  # 학생마다 랜덤하게 지연시켜, 다같이 동시에 새 발언을
+                                  # 확인하고 한꺼번에 전체 페이지를 다시 그리는 "몰림"을 분산
 
 _SENTIMENT_COLORS = {
     "🔵 찬성": "#1565C0",
@@ -548,6 +552,11 @@ def _poll_new_messages(supabase, room_name):
     last_render_ts = st.session_state.get(last_render_key, 0)
     if time.time() - last_render_ts < _HEAVY_REFRESH_MIN_INTERVAL:
         return  # 새 발언은 있지만 안전장치 간격 전 — 다음 틱에 다시 확인
+
+    # 여러 학생이 거의 동시에 새 발언을 감지해 한꺼번에 캐시를 비우고 전체
+    # 페이지를 다시 그리면 순간적으로 부하가 몰린다. 학생마다 무작위로 짧게
+    # 지연시켜 이 "몰림"을 시간축으로 흩어놓는다.
+    time.sleep(random.uniform(0, _HEAVY_REFRESH_JITTER))
 
     st.session_state[last_seen_key] = latest_id
     st.session_state[last_render_key] = time.time()
