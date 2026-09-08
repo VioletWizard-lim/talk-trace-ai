@@ -273,5 +273,11 @@ def render_depth_analysis_section(supabase, room_name: str, act_type: str, is_en
                 max_value=4,
                 format="%.2f",
             ),
+            "발언 수": st.column_config.ProgressColumn(
+                "발언 수",
+                min_value=0,
+                max_value=int(student_summary["발언 수"].max()),
+                format="%d",
+            ),
         },
     )
