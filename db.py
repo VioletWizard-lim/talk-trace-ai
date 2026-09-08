@@ -1516,7 +1516,12 @@ def fetch_flaggable_content(supabase: Client, room_name: str) -> list:
     """AI 유해 발언 검수 대상 전체 조회 (학생 발언 + 답글).
 
     반환: [{"source_table": "debate"|"comments", "source_id": int,
-            "student_name": str, "content": str}, ...]
+            "student_name": str, "content": str, "parent_content": str}, ...]
+
+    답글(comments)에는 원 발언(parent_content)을 함께 담는다. "응 니얼굴"처럼
+    짧게 되받아치는 조롱은 답글 내용만 따로 떼어놓고 보면 무슨 뜻인지도
+    알기 어려워 AI가 문제 발언으로 판단하지 못했다 — 어떤 발언에 대한
+    반응인지 맥락을 함께 줘야 정확히 판단할 수 있다.
     """
     items = []
     debate_res = execute_query(
@@ -1527,12 +1532,18 @@ def fetch_flaggable_content(supabase: Client, room_name: str) -> list:
         .or_("is_deleted.is.null,is_deleted.eq.false"),
         fail_message="유해 발언 검수용 발언 조회 실패",
     )
-    for row in (debate_res.data if debate_res and debate_res.data else []):
+    debate_rows = debate_res.data if debate_res and debate_res.data else []
+    content_by_debate_id = {row["id"]: row.get("content", "") for row in debate_rows}
+    for row in debate_rows:
         items.append({"source_table": "debate", "source_id": row["id"], "student_name": row.get("student_name", ""), "content": row.get("content", "")})
 
     if comments_available():
         for c in fetch_comments_for_room(supabase, room_name):
-            items.append({"source_table": "comments", "source_id": c["id"], "student_name": c.get("student_name", ""), "content": c.get("content", "")})
+            items.append({
+                "source_table": "comments", "source_id": c["id"], "student_name": c.get("student_name", ""),
+                "content": c.get("content", ""),
+                "parent_content": content_by_debate_id.get(c.get("debate_id"), ""),
+            })
     return items
 
 

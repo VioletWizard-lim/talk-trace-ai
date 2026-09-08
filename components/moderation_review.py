@@ -25,7 +25,7 @@ _BATCH_SIZE = 30
 
 
 def _scan_in_batches(items: list, api_key: str) -> dict:
-    """items: list of (key, content). Returns {key: reason} for flagged items only."""
+    """items: list of (key, content, parent_content) tuples. Returns {key: reason} for flagged items only."""
     all_results = {}
     for i in range(0, len(items), _BATCH_SIZE):
         batch = items[i: i + _BATCH_SIZE]
@@ -37,7 +37,7 @@ def _scan_in_batches(items: list, api_key: str) -> dict:
             log_message="moderation_flag_batch (Flash)", fallback="",
         )
         if response:
-            batch_keys = {k for k, _ in batch}
+            batch_keys = {k for k, _, _ in batch}
             all_results.update(parse_moderation_flags(response, batch_keys))
         # AI 실패 시 해당 배치는 조용히 건너뜀 (플래그 누락 < 제출 흐름 방해 방지 우선)
     return all_results
@@ -61,7 +61,7 @@ def auto_flag_room_content(supabase, room_name: str) -> bool:
 
     already_flagged = fetch_flagged_source_keys(supabase, room_name)
     to_scan = [
-        (f"{it['source_table']}:{it['source_id']}", it["content"])
+        (f"{it['source_table']}:{it['source_id']}", it["content"], it.get("parent_content", ""))
         for it in all_items
         if (it["source_table"], it["source_id"]) not in already_flagged and it["content"]
     ]
