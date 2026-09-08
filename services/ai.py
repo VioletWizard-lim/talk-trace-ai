@@ -122,12 +122,23 @@ def parse_depth_levels(response_text: str, opinion_ids: set) -> dict:
 
 def build_moderation_flag_prompt(items: list) -> str:
     """
-    items: list of (key, content) tuples. key는 "표key" 형태의 임의 문자열 식별자.
+    items: list of (key, content, parent_content) tuples. key는 "표key" 형태의
+    임의 문자열 식별자. parent_content는 답글이 달린 원 발언(없으면 빈 문자열).
     명백한 욕설(이미 별도 키워드 필터로 차단됨)이 아니라, 그 필터를 우회했거나
     맥락상 문제되는 발언(인신공격/혐오·차별 표현/따돌림/노골적 성적 표현/자해·폭력 암시 등)만
     골라내기 위한 2차(AI) 검수용 프롬프트.
+
+    답글은 원 발언과 함께 보여준다 — "응 니얼굴"처럼 짧게 되받아치는 조롱은
+    답글 텍스트만 따로 떼어놓으면 무슨 뜻인지조차 알기 어려워 AI가 문제
+    발언으로 판단하지 못하는 경우가 있었다.
     """
-    lines = "\n".join([f"key={key}: \"{content}\"" for key, content in items])
+    lines = []
+    for key, content, parent_content in items:
+        if parent_content:
+            lines.append(f'key={key}: "{content}" (이 발언에 대한 답글: "{parent_content}")')
+        else:
+            lines.append(f'key={key}: "{content}"')
+    lines = "\n".join(lines)
     return (
         "다음은 고등학생 토론/토의 게시판의 발언·답글 목록입니다. "
         "이 중 교사가 반드시 확인해야 할 문제 발언만 골라내세요.\n\n"
@@ -138,6 +149,9 @@ def build_moderation_flag_prompt(items: list) -> str:
         "- 노골적인 성적 표현\n"
         "- 자해, 폭력을 암시하거나 위협하는 발언\n"
         "- 특정인을 향한 무시하는 반말·비아냥(예: '니말', '너나 잘해')\n"
+        "- 짧게 되받아치는 조롱(예: '응 니얼굴')도 답글 대상 발언과 이어서 보면 "
+        "외모/특징을 겨냥한 모욕인 경우가 많으니, 답글만 따로 보고 뜻이 애매하더라도 "
+        "옆에 표시된 원 발언과 함께 맥락을 판단하세요\n"
         "- 욕설/비속어를 일부러 이상하게 표기하거나 관련 없는 글자를 섞어 필터를 "
         "우회하려는 것으로 보이는 발언(예: 뜻 없는 글자 나열 속에 조롱성 단어가 섞임)\n"
         "정상적인 토론 발언(단순 반박, 의견 차이, 강한 어조의 논쟁 등)은 문제 발언이 아닙니다. "
