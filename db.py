@@ -467,6 +467,11 @@ def _resolve_topic_order_col(_supabase: Client):
             if order_col and _is_undefined_column_error(e, order_col):
                 logger.info("topic.%s 컬럼이 없어 정렬 기준에서 제외합니다.", order_col)
                 continue
+            if _is_connection_error(e):
+                logger.error("CONNECTION_ERROR topic 정렬 기준 조회 실패: %s", e)
+                init_db.clear()
+                check_schema_columns.clear()
+                _resolve_topic_order_col.clear()
             return None
     return None
 
@@ -496,6 +501,15 @@ def fetch_room_entry_code(supabase: Client, room_name):
         if _is_undefined_column_error(e, "entry_code"):
             logger.warning("topic.entry_code 컬럼이 없어 공개방으로 처리합니다.")
             return ""
+        if _is_connection_error(e):
+            logger.error("CONNECTION_ERROR 방 입장 암호 조회 실패: %s", e)
+            init_db.clear()
+            check_schema_columns.clear()
+            st.warning(
+                "🌐 Supabase 연결이 일시적으로 끊어졌습니다. "
+                "**페이지를 새로고침(F5)하면 자동으로 재연결됩니다.**"
+            )
+            return None
         st.error(f"방 입장 암호 조회 실패: {e}")
         logger.exception("방 입장 암호 조회 실패: %s", e)
         return None
@@ -504,16 +518,11 @@ def fetch_room_entry_code(supabase: Client, room_name):
 @st.cache_data(ttl=45)
 def fetch_topic_data(_supabase: Client, room_name):
     order_col = _resolve_topic_order_col(_supabase)
-    try:
-        query = _supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
-        if order_col:
-            query = query.order(order_col, desc=True)
-        res = query.execute()
-        return res.data[0] if res and res.data else {}
-    except Exception as e:
-        st.error(f"주제 조회 실패: {e}")
-        logger.exception("주제 조회 실패: %s", e)
-        return {}
+    query = _supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
+    if order_col:
+        query = query.order(order_col, desc=True)
+    res = execute_query(query, fail_message="주제 조회 실패")
+    return res.data[0] if res and res.data else {}
 
 
 # ==========================================
