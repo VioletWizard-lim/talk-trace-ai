@@ -221,6 +221,8 @@ def _schema() -> dict:
         return check_schema_columns()
     except Exception as e:
         logger.warning("스키마 체크 실패, 기능 플래그를 기본값(False)으로 처리합니다: %s", e)
+        if _is_connection_error(e):
+            init_db.clear()
         return {}
 
 
@@ -419,12 +421,12 @@ def save_ai_report(supabase: Client, room_name: str, report_text: str):
 
 
 def fetch_ai_report(supabase: Client, room_name: str) -> str:
-    try:
-        res = supabase.table("topic").select("ai_report").eq("room_name", room_name).limit(1).execute()
-        if res and res.data:
-            return str(res.data[0].get("ai_report") or "")
-    except Exception as e:
-        logger.warning("AI 리포트 불러오기 실패: %s", e)
+    res = execute_query(
+        supabase.table("topic").select("ai_report").eq("room_name", room_name).limit(1),
+        fail_message="AI 리포트 불러오기 실패",
+    )
+    if res and res.data:
+        return str(res.data[0].get("ai_report") or "")
     return ""
 
 
