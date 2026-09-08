@@ -55,11 +55,11 @@ _ACTION_BTN_CSS = """
     }
     </style>
 """
-_NEW_MSG_POLL_INTERVAL = 9       # 가벼운 변경 확인 주기(초) — 다수 동시 접속 시
-                                 # Supabase/Cloudflare 요청량 부담을 줄이기 위해
-                                 # 5초에서 늘림 (30명 규모 수업 중 순간 폭주로
-                                 # 전체 요청이 일시 차단된 사례 있음)
-_HEAVY_REFRESH_MIN_INTERVAL = 15  # 무거운 재렌더링 최소 간격(초) — 폭주 시 안전장치
+_NEW_MSG_POLL_INTERVAL = 15      # 가벼운 변경 확인 주기(초) — 다수 동시 접속 시
+                                 # Supabase 앞단 Cloudflare가 서버 IP발 요청을
+                                 # 한꺼번에 몰리는 트래픽으로 보고 차단한 사례가
+                                 # 반복되어(유료 플랜에서도 발생) 계속 늘림
+_HEAVY_REFRESH_MIN_INTERVAL = 20  # 무거운 재렌더링 최소 간격(초) — 폭주 시 안전장치
 _HEAVY_REFRESH_JITTER = 2.0       # 새 발언 감지 시 전체 재렌더링을 이 범위(초) 안에서
                                   # 학생마다 랜덤하게 지연시켜, 다같이 동시에 새 발언을
                                   # 확인하고 한꺼번에 전체 페이지를 다시 그리는 "몰림"을 분산
@@ -98,7 +98,7 @@ def _render_content_box(content: str, sentiment: str) -> None:
     safe_content = _escape_md(html.escape(str(content or ""))).replace("\n", "<br>")
     st.markdown(
         f"<div style='background:{bg}; color:#000000; font-weight:600; border-radius:0.5rem; "
-        f"padding:0.75rem 1rem; margin:0.3rem 0; line-height:1.7; font-size:16px;'>"
+        f"padding:0.85rem 1rem 1.1rem 1rem; margin:0.3rem 0; line-height:1.7; font-size:16px;'>"
         f"{safe_content}</div>",
         unsafe_allow_html=True,
     )
@@ -454,9 +454,11 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
         st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
 
-@st.fragment(run_every=60)
+@st.fragment(run_every=90)
 def _render_stats_section(supabase, room_name, current_mode):
-    """통계(파이차트 + 워드클라우드)를 60초 주기로 갱신 — CPU 집약적 렌더링 분리."""
+    """통계(파이차트 + 워드클라우드)를 주기적으로 갱신 — CPU 집약적 렌더링 분리.
+
+    다수 동시 접속 시 Cloudflare 트래픽 차단 재발을 막기 위해 60초에서 늘림."""
     df = with_fallback_author_role(fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT))
     if df.empty:
         with st.expander("📊 실시간 의견 통계", expanded=False):
@@ -561,9 +563,21 @@ def _poll_new_messages(supabase, room_name):
     st.rerun(scope="app")
 
 
+def _has_draft_opinion() -> bool:
+    """학생이 의견 입력창에 아직 제출하지 않은 글을 쓰고 있는지 확인.
+
+    새 발언 감지 시 st.rerun(scope="app")로 전체 페이지를 다시 그리는데,
+    이때 다른 학생이 한창 글을 쓰고 있으면 아직 서버로 동기화되지 않은
+    입력 내용이 화면에서 사라져 버리는 문제가 있었다. 입력창에 글이
+    있는 동안에는 이 전체 재렌더링을 잠시 미뤄 글이 날아가지 않게 한다.
+    """
+    draft_key = f"input_{st.session_state.get('reset_key', 0)}"
+    return bool(str(st.session_state.get(draft_key, "")).strip())
+
+
 def render_chat_board(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
     _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type)
-    if not st.session_state.get('is_working', False):
+    if not st.session_state.get('is_working', False) and not _has_draft_opinion():
         _poll_new_messages(supabase, room_name)
     # 통계 섹션은 별도 60초 fragment — 메시지 보드와 독립적으로 갱신
     _render_stats_section(supabase, room_name, current_mode)
