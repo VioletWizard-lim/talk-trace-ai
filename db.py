@@ -1,9 +1,10 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
+import httpx
 import pandas as pd
 import streamlit as st
-from supabase import Client, create_client
+from supabase import Client, ClientOptions, create_client
 
 from auth import _hash_password, _is_hashed, _verify_password  # noqa: F401
 from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT
@@ -33,7 +34,19 @@ def init_db() -> Client:
         get_secret("SUPABASE_SERVICE_ROLE_KEY")
         or get_secret("SUPABASE_KEY")
     )
-    return create_client(supabase_url, supabase_key)
+    # 이 클라이언트(및 내부 연결)는 프로세스 전체(모든 학생 세션)가 공유한다.
+    # HTTP/2는 하나의 연결 위에서 여러 요청을 멀티플렉싱하는데, 다수 동시
+    # 접속 상황에서 연결이 끊기면(Broken pipe 등) httpcore의 HTTP/2 스트림
+    # 상태가 꼬이면서 관련 없는 다른 요청까지 KeyError로 깨지는 문제가
+    # 있었다. HTTP/1.1로 강제하면 연결마다 스트림이 독립적이라 이런 연쇄
+    # 오류를 피할 수 있고, 동시 접속 규모에 맞춰 연결 풀도 넉넉히 잡는다.
+    httpx_client = httpx.Client(
+        http2=False,
+        timeout=httpx.Timeout(30.0, connect=10.0),
+        limits=httpx.Limits(max_connections=100, max_keepalive_connections=40),
+    )
+    options = ClientOptions(httpx_client=httpx_client)
+    return create_client(supabase_url, supabase_key, options=options)
 
 
 def using_service_role_key() -> bool:
@@ -467,6 +480,11 @@ def _resolve_topic_order_col(_supabase: Client):
             if order_col and _is_undefined_column_error(e, order_col):
                 logger.info("topic.%s 컬럼이 없어 정렬 기준에서 제외합니다.", order_col)
                 continue
+            if _is_connection_error(e):
+                logger.error("CONNECTION_ERROR topic 정렬 기준 조회 실패: %s", e)
+                init_db.clear()
+                check_schema_columns.clear()
+                _resolve_topic_order_col.clear()
             return None
     return None
 
@@ -496,6 +514,15 @@ def fetch_room_entry_code(supabase: Client, room_name):
         if _is_undefined_column_error(e, "entry_code"):
             logger.warning("topic.entry_code 컬럼이 없어 공개방으로 처리합니다.")
             return ""
+        if _is_connection_error(e):
+            logger.error("CONNECTION_ERROR 방 입장 암호 조회 실패: %s", e)
+            init_db.clear()
+            check_schema_columns.clear()
+            st.warning(
+                "🌐 Supabase 연결이 일시적으로 끊어졌습니다. "
+                "**페이지를 새로고침(F5)하면 자동으로 재연결됩니다.**"
+            )
+            return None
         st.error(f"방 입장 암호 조회 실패: {e}")
         logger.exception("방 입장 암호 조회 실패: %s", e)
         return None
@@ -504,16 +531,11 @@ def fetch_room_entry_code(supabase: Client, room_name):
 @st.cache_data(ttl=45)
 def fetch_topic_data(_supabase: Client, room_name):
     order_col = _resolve_topic_order_col(_supabase)
-    try:
-        query = _supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
-        if order_col:
-            query = query.order(order_col, desc=True)
-        res = query.execute()
-        return res.data[0] if res and res.data else {}
-    except Exception as e:
-        st.error(f"주제 조회 실패: {e}")
-        logger.exception("주제 조회 실패: %s", e)
-        return {}
+    query = _supabase.table("topic").select("title, mode").eq("room_name", room_name).limit(1)
+    if order_col:
+        query = query.order(order_col, desc=True)
+    res = execute_query(query, fail_message="주제 조회 실패")
+    return res.data[0] if res and res.data else {}
 
 
 # ==========================================
