@@ -63,25 +63,13 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
     ai_feedback = _s(row.get("ai_feedback"),  "")
     teacher_feedback = _s(row.get("teacher_feedback"), "")
 
-    ip_raw = _s(row.get("ip_address"))
-    student_ip = ip_raw.replace(".0.0.", ".X.X.") if ip_raw else ""
     session_uuid = _s(row.get("session_id"))
-    if (not student_ip or not session_uuid) and not df_all.empty:
+    if not session_uuid and not df_all.empty:
         student_msgs = df_all[df_all["student_name"] == selected]
-        if not student_msgs.empty:
-            if not student_ip and "ip_address" in df_all.columns:
-                ip_val = _s(student_msgs.iloc[0].get("ip_address"))
-                student_ip = ip_val.replace(".0.0.", ".X.X.") if ip_val else ""
-            if not session_uuid and "session_id" in df_all.columns:
-                session_uuid = _s(student_msgs.iloc[0].get("session_id"))
-    id_parts = []
-    if student_ip:
-        id_parts.append(f"🌐 IP: `{student_ip}`")
+        if not student_msgs.empty and "session_id" in df_all.columns:
+            session_uuid = _s(student_msgs.iloc[0].get("session_id"))
     if session_uuid:
-        # 같은 IP(NAT)라도 기기를 구분할 수 있도록 세션 UUID 앞 8자리만 표시
-        id_parts.append(f"🔑 세션: `{session_uuid[:8]}`")
-    if id_parts:
-        st.caption(" · ".join(id_parts))
+        st.caption(f"🔑 세션: `{session_uuid[:8]}`")
 
     if stance_available() and act_type == "토론":
         init_s = _s(row.get("initial_stance"))

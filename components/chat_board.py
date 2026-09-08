@@ -11,10 +11,10 @@ from db import (
     fetch_debate_status, session_control_available, content_flags_available, fetch_unreviewed_flags_for_room,
     clear_live_messages_cache, clear_room_likes_cache, clear_comments_cache, clear_comment_likes_cache,
 )
-from validators import with_fallback_author_role, mask_ip_for_teacher, validate_opinion_content
+from validators import with_fallback_author_role, validate_opinion_content
 from moderation import find_forbidden_word
 from components.moderation_review import auto_flag_room_content
-from utils import anonymize_ip, format_kst_datetime, get_client_ip, log_audit
+from utils import format_kst_datetime, log_audit
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, UI_FONT_FAMILY
 
@@ -279,11 +279,8 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             )
                             _id_html = ""
                             if user_role == "교사" and teacher_auth:
-                                c_ip = str(c.get("ip_address") or "").strip()
                                 c_session = str(c.get("session_id") or "").strip()
                                 _id_lines = []
-                                if c_ip:
-                                    _id_lines.append(f"IP: {mask_ip_for_teacher(c_ip)}")
                                 if c_session:
                                     _id_lines.append(f"세션: {c_session[:8]}")
                                 if _id_lines:
@@ -335,12 +332,10 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                         elif debate_ended:
                             st.warning(f"🔒 {act_type}이(가) 종료되어 답글을 작성할 수 없습니다.")
                         else:
-                            _client_ip = get_client_ip()
-                            _anon_ip = anonymize_ip(_client_ip) if _client_ip else None
                             _session_id = st.session_state.get("session_uuid")
                             if create_comment(
                                 supabase, room_name, msg_id, student_name, comment_type, safe_content,
-                                ip_address=_anon_ip, session_id=_session_id,
+                                session_id=_session_id,
                             ) is not None:
                                 clear_comments_cache(supabase, room_name)
                                 st.session_state[f"comment_reset_{msg_id}"] = _comment_reset_n + 1
@@ -358,7 +353,6 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
             like_label = f"👍 {count}" if count > 0 else "👍"
             like_type = "primary" if is_liked else "secondary"
             name_badge = f"{badge} " if badge else ""
-            row_ip = str(row.get("ip_address") or "").strip() if hasattr(row, "get") else ""
             row_session = str(row.get("session_id") or "").strip() if hasattr(row, "get") else ""
             sentiment_tag = f"`{row.get('sentiment', '')}` " if show_sentiment_tag else ""
 
@@ -371,13 +365,8 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
                             unsafe_allow_html=True,
                         )
-                        if row_ip or row_session:
-                            _id_bits = []
-                            if row_ip:
-                                _id_bits.append(f"IP: {mask_ip_for_teacher(row_ip)}")
-                            if row_session:
-                                _id_bits.append(f"세션: {row_session[:8]}")
-                            st.caption(" · ".join(_id_bits))
+                        if row_session:
+                            st.caption(f"세션: {row_session[:8]}")
                     with c_actions:
                         c_like, c_del = st.columns([3, 1], gap="small")
                         with c_like:
