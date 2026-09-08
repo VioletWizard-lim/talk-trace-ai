@@ -1084,6 +1084,22 @@ def fetch_opinion_change(_supabase: Client, room_name: str, student_name: str):
     return res.data[0]
 
 
+def clear_opinion_change_cache(supabase: Client, room_name: str, student_name: str):
+    """이 학생의 fetch_opinion_change 캐시만 비웁니다.
+
+    fetch_opinion_change.clear()를 인자 없이 부르면 모든 방·모든 학생의
+    캐시가 한꺼번에 지워진다. 방 입장, 토론 전/후 생각 제출은 학생 전원이
+    거의 동시에 하는 행동이라, 오늘 장애의 원인이었던 "몰림 시점의 블랭킷
+    캐시 clear" 패턴과 동일하다 — 이 학생 것만 비운다.
+    """
+    fetch_opinion_change.clear(supabase, room_name, student_name)
+
+
+def clear_opinion_changes_cache(supabase: Client, room_name: str):
+    """이 방의 fetch_all_opinion_changes 캐시만 비웁니다(교사 대시보드용, 전체 방 대상 clear() 대신)."""
+    fetch_all_opinion_changes.clear(supabase, room_name)
+
+
 def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_opinion: str, initial_stance: str = None, session_id: str = None):
     if not opinion_changes_available():
         return None
@@ -1102,7 +1118,7 @@ def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_
             fail_message="토론 전 생각 저장 실패",
         )
     if res is not None:
-        fetch_opinion_change.clear()
+        clear_opinion_change_cache(supabase, room_name, student_name)
     # 세션ID는 별도 업데이트 — 컬럼 미존재 시 실패해도 메인 저장에 영향 없음
     if session_id and res is not None:
         try:
@@ -1132,7 +1148,7 @@ def upsert_post_opinion(supabase: Client, room_name: str, student_name: str, pos
             fail_message="토론 후 생각 저장 실패",
         )
     if res is not None:
-        fetch_opinion_change.clear()
+        clear_opinion_change_cache(supabase, room_name, student_name)
     return res
 
 
@@ -1155,50 +1171,71 @@ def fetch_all_opinion_changes(_supabase: Client, room_name: str):
 def save_opinion_feedback(supabase: Client, room_name: str, student_name: str, ai_feedback: str):
     if not ai_feedback_available():
         return None
-    return execute_query(
+    res = execute_query(
         supabase.table("opinion_changes")
         .update({"ai_feedback": ai_feedback})
         .eq("room_name", room_name)
         .eq("student_name", student_name),
         fail_message="AI 피드백 저장 실패",
     )
+    if res is not None:
+        # fetch_opinion_change 캐시를 비워두지 않으면, 저장 직후 rerun에서도
+        # 학생 화면이 최대 15초간 옛 값을 보여줘 "AI 피드백 카드 받기" 버튼이
+        # 다시 나타난 것처럼 보이고, 학생이 다시 눌러 AI 호출이 중복될 수 있다.
+        clear_opinion_change_cache(supabase, room_name, student_name)
+        clear_opinion_changes_cache(supabase, room_name)
+    return res
 
 
 def save_teacher_feedback(supabase: Client, room_name: str, student_name: str, teacher_feedback: str):
     """AI 피드백과 별개로, 교사가 직접 남기는 의견을 저장합니다."""
     if not teacher_feedback_available():
         return None
-    return execute_query(
+    res = execute_query(
         supabase.table("opinion_changes")
         .update({"teacher_feedback": teacher_feedback})
         .eq("room_name", room_name)
         .eq("student_name", student_name),
         fail_message="교사 의견 저장 실패",
     )
+    if res is not None:
+        clear_opinion_change_cache(supabase, room_name, student_name)
+        clear_opinion_changes_cache(supabase, room_name)
+    return res
 
 
 def save_opinion_analysis(supabase: Client, room_name: str, student_name: str, ai_analysis: str):
     if not opinion_changes_available():
         return None
-    return execute_query(
+    res = execute_query(
         supabase.table("opinion_changes")
         .update({"ai_analysis": ai_analysis})
         .eq("room_name", room_name)
         .eq("student_name", student_name),
         fail_message="AI 분석 저장 실패",
     )
+    if res is not None:
+        # 저장 직후 rerun에서 fetch_opinion_change가 캐시된 옛(분석 전) 값을
+        # 반환하면 "AI 배움 분석 받기" 버튼이 다시 보여 중복 생성을 유발한다.
+        clear_opinion_change_cache(supabase, room_name, student_name)
+        clear_opinion_changes_cache(supabase, room_name)
+    return res
 
 
 def delete_opinion_change(supabase: Client, room_name: str, student_name: str):
     if not opinion_changes_available():
         return None
-    return execute_query(
+    res = execute_query(
         supabase.table("opinion_changes")
         .delete()
         .eq("room_name", room_name)
         .eq("student_name", student_name),
         fail_message="학생 배움 분석 기록 삭제 실패",
     )
+    if res is not None:
+        clear_opinion_change_cache(supabase, room_name, student_name)
+        clear_opinion_changes_cache(supabase, room_name)
+    return res
 
 
 # ==========================================
@@ -1442,18 +1479,22 @@ def fetch_opinions_for_depth(supabase: Client, room_name: str) -> list:
 
 
 def bulk_update_depth_levels(supabase: Client, updates: list) -> bool:
-    """updates: list of {"id": int, "depth_level": int}. True if all succeeded."""
-    success = True
-    for item in updates:
-        res = execute_query(
-            supabase.table("debate")
-            .update({"depth_level": item["depth_level"]})
-            .eq("id", item["id"]),
-            fail_message=f"발언 깊이 업데이트 실패 (id={item['id']})",
-        )
-        if res is None:
-            success = False
-    return success
+    """updates: list of {"id": int, "depth_level": int}.
+
+    발언마다 개별 UPDATE 쿼리를 날리던 기존 방식은 학급 전체 발언 수만큼
+    Supabase 왕복이 발생했다(30명이면 발언 100~200개 → 요청 100~200번).
+    하필 "토론 종료" 직후처럼 이미 부하가 몰리는 순간에 실행되어 그 지연이
+    체감상 "멈춤"으로 보이는 원인 중 하나였다. id를 충돌 키로 하는 upsert
+    한 번으로 묶으면 왕복이 1회로 줄고, 페이로드에 없는 다른 컬럼은
+    건드리지 않는다.
+    """
+    if not updates:
+        return True
+    res = execute_query(
+        supabase.table("debate").upsert(updates, on_conflict="id"),
+        fail_message="발언 깊이 일괄 업데이트 실패",
+    )
+    return res is not None
 
 
 # ==========================================

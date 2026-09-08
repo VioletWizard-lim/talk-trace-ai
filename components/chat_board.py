@@ -206,7 +206,15 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                 st.rerun(scope="app")
     with col_board_ref:
         if user_role == "교사" and teacher_auth:
-            st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board")
+            if st.button("🔄 실시간 보드 새로고침", use_container_width=True, key="refresh_chat_board"):
+                # 캐시를 비우지 않으면 TTL(30초)이 지나기 전엔 버튼을 눌러도
+                # 화면이 그대로라 "안 눌린다"고 오인하기 쉬웠다.
+                clear_live_messages_cache(supabase, room_name)
+                clear_room_likes_cache(supabase, room_name)
+                if comments_available():
+                    clear_comments_cache(supabase, room_name)
+                    clear_comment_likes_cache(supabase, room_name)
+                st.rerun()
 
     if not opinion_df.empty:
         teacher_df = opinion_df[opinion_df['student_name'].str.contains('선생님', na=False)]

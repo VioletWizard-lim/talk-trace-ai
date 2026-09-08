@@ -7,7 +7,7 @@ from db import (
     fetch_room_names,
     fetch_room_names_by_owner,
     topic_owner_column_available,
-    fetch_opinion_change,
+    clear_opinion_change_cache,
     delete_teacher_session,
 )
 from validators import validate_student_number
@@ -52,7 +52,7 @@ def _reset_joined_state():
     st.session_state.pop('_admin_redirected', None)
 
 
-def _enter_room(room_name: str, welcome_name: str = ""):
+def _enter_room(supabase, room_name: str, welcome_name: str = ""):
     st.session_state['current_room'] = room_name
     st.session_state['ai_hint_text'] = ""
     st.session_state['ai_report_text'] = ""
@@ -65,7 +65,10 @@ def _enter_room(room_name: str, welcome_name: str = ""):
     if welcome_name:
         st.session_state['active_student_number'] = welcome_name
         st.session_state['_show_welcome_toast'] = welcome_name
-    fetch_opinion_change.clear()
+    # fetch_opinion_change.clear()를 인자 없이 부르면 이 순간 다른 방에서
+    # 수업 중인 학생들의 캐시까지 한꺼번에 지워진다. 방 입장은 학생 전원이
+    # 수업 시작 시 거의 동시에 하는 행동이라 이 학생 것만 비운다.
+    clear_opinion_change_cache(supabase, room_name, welcome_name or "교사")
     st.session_state.pop('_opinion_fetch_retried', None)
     st.rerun()
 
@@ -146,11 +149,11 @@ def render_lobby_page(supabase):
             room_name = st.selectbox("토론/토의방 목록", existing_rooms, index=default_idx, key="teacher_room_select")
 
         if AUTO_JOIN_ON_REFRESH and not admin_auth:
-            _enter_room(room_name)
+            _enter_room(supabase, room_name)
         with col_enter:
             st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
             if st.button(f"🚀 '{room_name}' 관리자 권한으로 입장", type="primary", use_container_width=True):
-                _enter_room(room_name)
+                _enter_room(supabase, room_name)
 
     else:
         st.session_state['teacher_auth'] = False
@@ -204,5 +207,5 @@ def render_lobby_page(supabase):
                             "⚠️ 이 학번은 다른 기기/브라우저에서 이미 접속 중인 것 같습니다. 본인이 맞는지 확인해 주세요.",
                             icon="⚠️",
                         )
-                    _enter_room(room_name, welcome_name=student_number)
+                    _enter_room(supabase, room_name, welcome_name=student_number)
     st.stop()
