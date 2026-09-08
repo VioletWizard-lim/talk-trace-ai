@@ -561,9 +561,21 @@ def _poll_new_messages(supabase, room_name):
     st.rerun(scope="app")
 
 
+def _has_draft_opinion() -> bool:
+    """학생이 의견 입력창에 아직 제출하지 않은 글을 쓰고 있는지 확인.
+
+    새 발언 감지 시 st.rerun(scope="app")로 전체 페이지를 다시 그리는데,
+    이때 다른 학생이 한창 글을 쓰고 있으면 아직 서버로 동기화되지 않은
+    입력 내용이 화면에서 사라져 버리는 문제가 있었다. 입력창에 글이
+    있는 동안에는 이 전체 재렌더링을 잠시 미뤄 글이 날아가지 않게 한다.
+    """
+    draft_key = f"input_{st.session_state.get('reset_key', 0)}"
+    return bool(str(st.session_state.get(draft_key, "")).strip())
+
+
 def render_chat_board(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
     _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type)
-    if not st.session_state.get('is_working', False):
+    if not st.session_state.get('is_working', False) and not _has_draft_opinion():
         _poll_new_messages(supabase, room_name)
     # 통계 섹션은 별도 60초 fragment — 메시지 보드와 독립적으로 갱신
     _render_stats_section(supabase, room_name, current_mode)
