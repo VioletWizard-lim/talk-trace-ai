@@ -2,6 +2,7 @@ import streamlit as st
 from db import (
     fetch_pending_teacher_accounts, approve_teacher_account, reject_teacher_account,
     fetch_judge_accounts, set_teacher_active, teacher_judge_column_available,
+    delete_teacher_session,
 )
 from utils import format_kst_datetime, get_kst_now_str
 
@@ -80,6 +81,7 @@ def render_admin_page(supabase, user_role, teacher_auth, admin_auth):
             st.rerun()
     with col_btn3:
         if st.button("🔓 로그아웃", use_container_width=True):
+            delete_teacher_session(supabase, st.session_state.get('session_uuid', ''))
             st.session_state['teacher_auth'] = False
             st.session_state['admin_auth'] = False
             st.session_state['teacher_id'] = ""

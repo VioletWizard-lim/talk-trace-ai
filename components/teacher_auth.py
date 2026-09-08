@@ -4,6 +4,7 @@ from auth import _is_hashed, _verify_password
 from db import (
     fetch_teacher_account,
     request_teacher_account,
+    save_teacher_session,
     upgrade_teacher_password,
 )
 from validators import validate_teacher_credential
@@ -60,6 +61,10 @@ def _handle_login(supabase, teacher_id_input, teacher_pw_input):
         st.session_state['teacher_auth'] = True
         st.session_state['admin_auth'] = to_bool_flag(account.get("is_admin", False))
         st.session_state['teacher_id'] = safe_teacher_id
+        save_teacher_session(
+            supabase, st.session_state.get('session_uuid', ''),
+            safe_teacher_id, st.session_state['admin_auth'],
+        )
         _redirect_from_admin_if_needed()
         if not _is_hashed(account.get("teacher_pw", "")):
             upgrade_teacher_password(supabase, account["id"], safe_pw)
