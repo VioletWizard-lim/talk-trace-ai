@@ -53,50 +53,6 @@ def format_kst_datetime(value):
     return parsed_dt.strftime(DISPLAY_DATETIME_FMT)
 
 
-def get_client_ip():
-    try:
-        headers = st.context.headers
-    except Exception:
-        return ""
-    if not headers:
-        return ""
-    for key in ["x-forwarded-for", "x-real-ip", "cf-connecting-ip", "fly-client-ip",
-                "X-Forwarded-For", "X-Real-Ip", "CF-Connecting-IP", "True-Client-Ip",
-                "true-client-ip"]:
-        raw_ip = headers.get(key)
-        if raw_ip:
-            return str(raw_ip).split(",")[0].strip()
-    try:
-        all_keys = list(headers.keys()) if headers else []
-        logger.info("get_client_ip: IP 헤더 없음. 수신된 헤더 키: %s", all_keys)
-    except Exception:
-        pass
-    return ""
-
-
-def anonymize_ip(raw_ip: str) -> str | None:
-    """IP를 익명화하여 반환합니다. 저장 불가 시 None 반환.
-
-    IPv4: 첫 번째·마지막 옥텟 유지, 중간 0으로 대체 (예: 165.0.0.41)
-    IPv6: 앞 4그룹·마지막 그룹 유지, 중간 :: 처리 (예: 2406:5900:117c:424b::4444)
-          → 같은 Wi-Fi라도 기기별 구분 가능
-    """
-    ip = str(raw_ip or "").strip()
-    if not ip:
-        return None
-    if ":" in ip:  # IPv6
-        groups = [g for g in ip.split(":") if g]  # 빈 그룹 제거
-        if len(groups) >= 5:
-            return ":".join(groups[:4]) + "::" + groups[-1]
-        if len(groups) >= 4:
-            return ":".join(groups[:4]) + "::"
-        return None
-    parts = ip.split(".")  # IPv4
-    if len(parts) == 4:
-        return f"{parts[0]}.0.0.{parts[3]}"
-    return None
-
-
 def dashboard_busy_key(room_name: str) -> str:
     """교사 대시보드에서 무거운 AI 작업(자동/수동 생성)이 진행 중일 때
     탭 전환을 막기 위한 session_state 키. 여러 컴포넌트 파일이 공유하므로

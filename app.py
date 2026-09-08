@@ -4,7 +4,6 @@ import time
 import streamlit as st
 
 from db import (
-    debate_ip_column_available,
     debate_session_id_column_available,
     delete_teacher_session,
     ensure_db_login,
@@ -29,7 +28,7 @@ from db import (
     using_service_role_key,
 )
 from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS
-from utils import anonymize_ip, get_client_ip, get_kst_now_str, get_or_create_session_uuid, log_audit
+from utils import get_kst_now_str, get_or_create_session_uuid, log_audit
 from validators import validate_entry_code, validate_opinion_content, validate_student_number, normalize_user_text
 from moderation import find_forbidden_word
 from views.home import render_home_page
@@ -315,15 +314,10 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         if input_ok and safe_input:
             now = get_kst_now_str()
             author_role_for_submit = "교사" if user_role == "교사" else "학생"
-            client_ip = get_client_ip()
             insert_payload = {
                 "room_name": room_name, "timestamp": now, "student_name": safe_student_name,
                 "content": safe_input, "sentiment": sentiment, "author_role": author_role_for_submit,
             }
-            if debate_ip_column_available() and client_ip:
-                anonymized_ip = anonymize_ip(client_ip)
-                if anonymized_ip:
-                    insert_payload["ip_address"] = anonymized_ip
             if debate_session_id_column_available() and st.session_state.get("session_uuid"):
                 insert_payload["session_id"] = st.session_state["session_uuid"]
             try:
@@ -338,7 +332,6 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
                     "opinion_submitted",
                     room_name=room_name, actor_name=safe_student_name,
                     role=author_role_for_submit, sentiment=sentiment,
-                    client_ip=client_ip if client_ip else "N/A",
                 )
                 st.session_state['reset_key'] += 1
                 st.rerun(scope="app")

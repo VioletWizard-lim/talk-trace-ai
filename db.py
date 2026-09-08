@@ -147,7 +147,6 @@ def check_schema_columns() -> dict:
     supabase = init_db()
 
     checks = [
-        ("debate.ip_address",              lambda: supabase.table("debate").select("ip_address").limit(1).execute()),
         ("debate.session_id",              lambda: supabase.table("debate").select("session_id").limit(1).execute()),
         ("debate.is_deleted",              lambda: supabase.table("debate").select("is_deleted").limit(1).execute()),
         ("debate.deleted_by",              lambda: supabase.table("debate").select("deleted_by").limit(1).execute()),
@@ -168,7 +167,6 @@ def check_schema_columns() -> dict:
         ("topic.is_hidden",                lambda: supabase.table("topic").select("is_hidden").limit(1).execute()),
         ("session_attempts.session_id",    lambda: supabase.table("session_attempts").select("session_id").limit(1).execute()),
         ("comments.debate_id",             lambda: supabase.table("comments").select("debate_id").limit(1).execute()),
-        ("comments.ip_address",            lambda: supabase.table("comments").select("ip_address").limit(1).execute()),
         ("comments.session_id",            lambda: supabase.table("comments").select("session_id").limit(1).execute()),
         ("comment_likes.comment_id",       lambda: supabase.table("comment_likes").select("comment_id").limit(1).execute()),
         ("content_flags.reason",           lambda: supabase.table("content_flags").select("reason").limit(1).execute()),
@@ -212,9 +210,6 @@ def _schema() -> dict:
         logger.warning("스키마 체크 실패, 기능 플래그를 기본값(False)으로 처리합니다: %s", e)
         return {}
 
-
-def debate_ip_column_available() -> bool:
-    return _schema().get("debate.ip_address", False)
 
 def debate_session_id_column_available() -> bool:
     return _schema().get("debate.session_id", False)
@@ -273,9 +268,6 @@ def session_attempts_available() -> bool:
 
 def comments_available() -> bool:
     return _schema().get("comments.debate_id", False)
-
-def comments_ip_column_available() -> bool:
-    return _schema().get("comments.ip_address", False)
 
 def comments_session_id_column_available() -> bool:
     return _schema().get("comments.session_id", False)
@@ -894,7 +886,7 @@ def clear_comments_cache(supabase: Client, room_name: str):
 
 def create_comment(
     supabase: Client, room_name: str, debate_id: int, student_name: str, comment_type: str, content: str,
-    ip_address: str = None, session_id: str = None,
+    session_id: str = None,
 ):
     """발언에 댓글(반박/보충)을 작성합니다."""
     if not comments_available():
@@ -907,8 +899,6 @@ def create_comment(
         "content": content,
         "timestamp": get_kst_now_str(),
     }
-    if ip_address and comments_ip_column_available():
-        payload["ip_address"] = ip_address
     if session_id and comments_session_id_column_available():
         payload["session_id"] = session_id
     return execute_query(supabase.table("comments").insert(payload), fail_message="댓글 작성 실패")
@@ -1070,7 +1060,7 @@ def fetch_opinion_change(_supabase: Client, room_name: str, student_name: str):
     return res.data[0]
 
 
-def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_opinion: str, initial_stance: str = None, ip_address: str = None, session_id: str = None):
+def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_opinion: str, initial_stance: str = None, session_id: str = None):
     if not opinion_changes_available():
         return None
     payload = {"pre_opinion": pre_opinion}
@@ -1089,12 +1079,7 @@ def upsert_pre_opinion(supabase: Client, room_name: str, student_name: str, pre_
         )
     if res is not None:
         fetch_opinion_change.clear()
-    # IP/세션ID는 별도 업데이트 — 컬럼 미존재 시 실패해도 메인 저장에 영향 없음
-    if ip_address and res is not None:
-        try:
-            supabase.table("opinion_changes").update({"ip_address": ip_address}).eq("room_name", room_name).eq("student_name", student_name).execute()
-        except Exception:
-            pass
+    # 세션ID는 별도 업데이트 — 컬럼 미존재 시 실패해도 메인 저장에 영향 없음
     if session_id and res is not None:
         try:
             supabase.table("opinion_changes").update({"session_id": session_id}).eq("room_name", room_name).eq("student_name", student_name).execute()

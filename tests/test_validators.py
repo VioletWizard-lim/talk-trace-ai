@@ -8,7 +8,6 @@ from validators import (
     validate_teacher_credential,
     normalize_user_text,
     normalize_room_name,
-    mask_ip_for_teacher,
 )
 
 
@@ -117,18 +116,3 @@ def test_normalize_user_text_truncates():
 
 def test_normalize_room_name_collapses_whitespace():
     assert normalize_room_name("a   b") == "a b"
-
-
-# ── mask_ip_for_teacher ───────────────────────────────────────────
-
-def test_mask_ipv4():
-    assert mask_ip_for_teacher("1.2.3.4") == "1.XXX.XXX.4"
-
-
-def test_mask_ipv6():
-    result = mask_ip_for_teacher("2001:db8:85a3:0:0:8a2e:370:7334")
-    assert "XXXX" in result
-
-
-def test_mask_empty():
-    assert mask_ip_for_teacher("") == ""

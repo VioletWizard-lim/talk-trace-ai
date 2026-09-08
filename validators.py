@@ -38,32 +38,6 @@ def normalize_room_name(raw_text, max_len=60):
 
 
 # ══════════════════════════════════════════════
-# [3] IP 마스킹
-# ══════════════════════════════════════════════
-
-def mask_ip_for_teacher(ip_text):
-    """
-    교사 화면에 표시할 IP를 마스킹합니다.
-      IPv4 예: 1.XXX.XXX.4
-      IPv6 예: 2001:db8:XXXX:XXXX:1
-    """
-    ip = str(ip_text or "").strip()
-    if not ip:
-        return ""
-
-    ipv4_parts = ip.split(".")
-    if len(ipv4_parts) == 4 and all(part.isdigit() for part in ipv4_parts):
-        return f"{ipv4_parts[0]}.XXX.XXX.{ipv4_parts[3]}"
-
-    if ":" in ip:
-        ipv6_parts = ip.split(":")
-        if len(ipv6_parts) >= 3:
-            return f"{ipv6_parts[0]}:{ipv6_parts[1]}:XXXX:XXXX:{ipv6_parts[-1]}"
-
-    return ip
-
-
-# ══════════════════════════════════════════════
 # [4] author_role fallback
 # ══════════════════════════════════════════════
 
