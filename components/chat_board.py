@@ -98,7 +98,7 @@ def _render_content_box(content: str, sentiment: str) -> None:
     safe_content = _escape_md(html.escape(str(content or ""))).replace("\n", "<br>")
     st.markdown(
         f"<div style='background:{bg}; color:#000000; font-weight:600; border-radius:0.5rem; "
-        f"padding:1.1rem 1rem 1.1rem 1rem; margin:0.3rem 0; line-height:1.7; font-size:16px;'>"
+        f"padding:1.1rem 1rem 1.1rem 1rem; margin:0.3rem 0 1.5rem 0; line-height:1.7; font-size:16px;'>"
         f"{safe_content}</div>",
         unsafe_allow_html=True,
     )
@@ -286,41 +286,45 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
 
                     c_type = c.get('comment_type', '')
                     with st.container(border=True, key=_msg_card_key("commentcard", c_type, c_id)):
-                        col_c_text, col_c_actions = st.columns([8, 2])
-                        with col_c_text:
-                            _header_html = (
-                                f"`{c_type}` **{c.get('student_name', '')}** "
-                                f"<span style='color:gray; font-size:12px;'>{format_kst_datetime(c.get('timestamp', ''))}</span>"
-                            )
-                            _id_html = ""
-                            if user_role == "교사" and teacher_auth:
-                                c_session = str(c.get("session_id") or "").strip()
-                                _id_lines = []
-                                if c_session:
-                                    _id_lines.append(f"세션: {c_session[:8]}")
-                                if _id_lines:
-                                    _id_html = "<br>".join(
-                                        f"<span style='color:gray; font-size:12px;'>{line}</span>" for line in _id_lines
-                                    )
-                            st.markdown(
-                                "<br>".join(filter(None, [_header_html, _id_html])),
-                                unsafe_allow_html=True,
-                            )
-                            _render_content_box(c.get('content', ''), c_type)
-                        with col_c_actions:
-                            if user_role == "교사" and teacher_auth:
-                                c_like, c_del = st.columns([3, 1], gap="small")
-                                with c_like:
-                                    st.button(c_like_label, key=f"cbact_clike_{c_id}", disabled=c_like_disabled,
-                                              type=c_like_type, help="좋아요",
-                                              on_click=do_toggle_comment_like, args=(c_id,))
-                                with c_del:
-                                    if st.button("🗑️", key=f"cbact_cdel_{c_id}", help="댓글 삭제"):
-                                        if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
-                                            clear_comments_cache(supabase, room_name)
-                                            st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
-                                            st.rerun(scope="app")
-                            else:
+                        # 답글 카드는 찬성/반대 절반 폭 컬럼 안에 다시 중첩되는
+                        # 경우가 많아, 내용 박스 옆에 버튼을 나란히(컬럼 분할)
+                        # 두면 박스가 그 절반의 80%로 더 좁아져 "가로 길이가
+                        # 짧다"는 문제가 반복됐다. 버튼을 박스 아래로 내려
+                        # 내용 박스가 카드 전체 폭을 그대로 쓰게 한다.
+                        _header_html = (
+                            f"`{c_type}` **{c.get('student_name', '')}** "
+                            f"<span style='color:gray; font-size:12px;'>{format_kst_datetime(c.get('timestamp', ''))}</span>"
+                        )
+                        _id_html = ""
+                        if user_role == "교사" and teacher_auth:
+                            c_session = str(c.get("session_id") or "").strip()
+                            _id_lines = []
+                            if c_session:
+                                _id_lines.append(f"세션: {c_session[:8]}")
+                            if _id_lines:
+                                _id_html = "<br>".join(
+                                    f"<span style='color:gray; font-size:12px;'>{line}</span>" for line in _id_lines
+                                )
+                        st.markdown(
+                            "<br>".join(filter(None, [_header_html, _id_html])),
+                            unsafe_allow_html=True,
+                        )
+                        _render_content_box(c.get('content', ''), c_type)
+                        if user_role == "교사" and teacher_auth:
+                            col_c_like, col_c_del, _col_c_spacer = st.columns([2, 2, 6])
+                            with col_c_like:
+                                st.button(c_like_label, key=f"cbact_clike_{c_id}", disabled=c_like_disabled,
+                                          type=c_like_type, use_container_width=True, help="좋아요",
+                                          on_click=do_toggle_comment_like, args=(c_id,))
+                            with col_c_del:
+                                if st.button("🗑️", key=f"cbact_cdel_{c_id}", use_container_width=True, help="댓글 삭제"):
+                                    if delete_comment(supabase, c_id, deleted_by=student_name) is not None:
+                                        clear_comments_cache(supabase, room_name)
+                                        st.toast("댓글이 보관소로 이동되었습니다.", icon="🗑️")
+                                        st.rerun(scope="app")
+                        else:
+                            col_c_like, _col_c_spacer = st.columns([2, 8])
+                            with col_c_like:
                                 st.button(c_like_label, key=f"cbact_clike_{c_id}", disabled=c_like_disabled,
                                           type=c_like_type, use_container_width=True, help="좋아요",
                                           on_click=do_toggle_comment_like, args=(c_id,))
