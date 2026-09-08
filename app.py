@@ -204,9 +204,11 @@ if user_role == "교사" and teacher_auth and topic_entry_code_column_available(
                     st.toast("✅ 방 암호가 변경되었습니다.", icon="🔒")
                     st.rerun()
 
-@st.fragment(run_every=20)
+@st.fragment(run_every=30)
 def _poll_debate_status(room_name, student_number):
-    """학생 화면에서 5초마다 토론 상태를 확인하고 변경 시 전체 rerun. 접속 기록도 함께 갱신한다."""
+    """학생 화면에서 주기적으로 토론 상태를 확인하고 변경 시 전체 rerun. 접속 기록도 함께 갱신한다.
+
+    다수 동시 접속 시 Supabase/Cloudflare 요청량 부담을 줄이기 위해 20초에서 늘림."""
     current = fetch_debate_status(supabase, room_name)
     if student_number:
         touch_session_attempt(supabase, room_name, student_number, st.session_state.get("session_uuid", ""))
