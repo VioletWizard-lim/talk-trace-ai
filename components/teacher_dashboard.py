@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from db import ai_feedback_available, clear_comments_cache, clear_live_messages_cache, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_teacher_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available, teacher_feedback_available
+from db import ai_feedback_available, clear_comments_cache, clear_live_messages_cache, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_teacher_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available, teacher_feedback_available
 from achievement import ACHIEVEMENT_LABELS, STARS as ACHIEVEMENT_STARS, compute_room_achievements, format_achievement_line
 from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
@@ -384,19 +384,29 @@ def _render_participation_section(supabase, room_name, act_type):
         ].copy()
         if not df.empty else df
     )
-    if not df.empty:
-        if not student_df.empty:
-            counts = student_df['student_name'].astype(str).value_counts().reset_index()
-            counts.columns = ['학생 이름', '참여 횟수']
-            counts['학생 이름'] = counts['학생 이름'] + " "
-            fig = px.bar(counts, x='학생 이름', y='참여 횟수', text='참여 횟수', color='학생 이름')
-            fig.update_xaxes(type='category', title="")
-            fig.update_layout(yaxis_title="의견 수", dragmode=False, showlegend=False, font={"family": UI_FONT_FAMILY})
-            st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': False, 'displayModeBar': False})
-        else:
-            st.info("실명 참여 데이터가 없습니다.")
-    else:
+    counts = (
+        student_df['student_name'].astype(str).value_counts()
+        if not student_df.empty else pd.Series(dtype=int)
+    )
+    # 댓글(반박/보충)도 참여의 한 형태이므로 발언 수에 합산한다.
+    if comments_available():
+        comment_counts = pd.Series(
+            [c.get("student_name") for c in fetch_comments_for_room(supabase, room_name) if c.get("student_name")]
+        ).value_counts()
+        counts = counts.add(comment_counts, fill_value=0)
+
+    if not counts.empty:
+        counts = counts.astype(int).reset_index()
+        counts.columns = ['학생 이름', '참여 횟수']
+        counts['학생 이름'] = counts['학생 이름'] + " "
+        fig = px.bar(counts, x='학생 이름', y='참여 횟수', text='참여 횟수', color='학생 이름')
+        fig.update_xaxes(type='category', title="")
+        fig.update_layout(yaxis_title="발언+댓글 수", dragmode=False, showlegend=False, font={"family": UI_FONT_FAMILY})
+        st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': False, 'displayModeBar': False})
+    elif df.empty:
         st.info(f"{act_type} 데이터가 없습니다.")
+    else:
+        st.info("실명 참여 데이터가 없습니다.")
 
 
 def _render_archive_section(supabase, room_name):

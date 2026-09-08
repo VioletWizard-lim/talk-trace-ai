@@ -271,7 +271,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
 
                     c_type = c.get('comment_type', '')
                     with st.container(border=True, key=_msg_card_key("commentcard", c_type, c_id)):
-                        col_c_text, col_c_actions = st.columns([6, 2])
+                        col_c_text, col_c_actions = st.columns([8, 2])
                         with col_c_text:
                             _header_html = (
                                 f"`{c_type}` **{c.get('student_name', '')}** "
