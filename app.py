@@ -8,6 +8,7 @@ from db import (
     delete_teacher_session,
     ensure_db_login,
     clear_live_messages_cache,
+    clear_opinion_change_cache,
     fetch_debate_status,
     fetch_live_messages,
     fetch_opinion_change,
@@ -363,7 +364,7 @@ if user_role == "학생" and opinion_changes_available():
         # 비워도 재현됨 — 원인 불명의 1회성 조회 실패로 추정), 세션당 1회
         # 즉시 재조회해 기존 학번의 기록을 놓치지 않도록 한다.
         st.session_state['_opinion_fetch_retried'] = True
-        fetch_opinion_change.clear()
+        clear_opinion_change_cache(supabase, room_name, student_name)
         row = fetch_opinion_change(supabase, room_name, student_name)
     has_pre_opinion = bool((row or {}).get("pre_opinion"))
     if debate_status == "ended":
