@@ -7,7 +7,7 @@ import streamlit as st
 from db import ai_feedback_available, clear_comments_cache, clear_live_messages_cache, clear_session_attempts, comments_available, content_flags_available, debate_soft_delete_available, delete_opinion_change, destroy_room_data, fetch_all_opinion_changes, fetch_comments_for_room, fetch_debate_status, fetch_deleted_comments, fetch_deleted_messages, fetch_live_messages, fetch_session_attempts_by_room, fetch_unreviewed_flags_for_room, opinion_changes_available, permanently_delete_comment, permanently_delete_message, restore_comment, restore_opinion_message, room_soft_destroy_available, save_teacher_feedback, session_control_available, session_attempts_available, set_debate_status, stance_available, teacher_feedback_available
 from achievement import ACHIEVEMENT_LABELS, STARS as ACHIEVEMENT_STARS, compute_room_achievements, format_achievement_line
 from utils import create_analysis_image
-from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card
+from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card, _trigger_analysis
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from validators import with_fallback_author_role
 from utils import log_audit, dashboard_busy_key, dashboard_pending_action_key
@@ -130,6 +130,17 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
         )
     else:
         st.caption("AI 분석이 아직 없습니다.")
+        # AI 분석은 학생이 "생각 변화 제출" 직후 같은 브라우저에서 한 번
+        # 더 화면이 갱신될 때 자동 실행되는데, 그 사이 학생이 탭을 닫거나
+        # AI 호출이 실패하면 재시도 없이 그대로 비어있게 된다. 지금까지는
+        # 학생이 직접 자기 화면에서 버튼을 눌러야만 채워졌는데, 학생이
+        # 돌아오지 않으면 교사 쪽에서 대신 채워줄 방법이 없었다.
+        if post != "(없음)":
+            if st.button("🤖 지금 AI 분석 생성하기", key=f"gen_analysis_{room_name}_{selected}", use_container_width=True):
+                _trigger_analysis(supabase, room_name, selected, act_type, current_topic, pre, post)
+                st.rerun()
+        else:
+            st.caption("학생이 아직 토론 후 생각을 제출하지 않아 생성할 수 없습니다.")
 
 
 def _render_stance_section(supabase, room_name, act_type, current_topic, df_all):
