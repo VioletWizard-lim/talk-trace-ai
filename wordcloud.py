@@ -60,6 +60,9 @@ def build_word_frequencies(text_series):
         # 추가 불용어 (4차 스크린샷 기반 — 딥페이크 워드클라우드)
         "지인입니", "많습니", "합니", "입니", "잠기", "이건", "그걸",
         "안됩니", "쓰이", "심지어", "양도록", "보기", "좋은곳", "막아야",
+        # 추가 불용어 (5차 스크린샷 기반 — 표절/AI 워드클라우드)
+        "것처럼", "인용해왔", "밝힌다면", "밝히지", "생각했", "않거나",
+        "있다면", "중요한것", "바뀌는거", "사용하자", "그런것", "할때",
     }
     particle_suffixes = [
         "에게서", "으로는", "이라고", "라면", "처럼", "까지는", "으로도", "에서", "에게", "으로", "로써",
@@ -116,6 +119,9 @@ def build_word_frequencies(text_series):
         normalized = re.sub(r"[^\w가-힣]", "", normalized)
         if len(normalized) < 2:
             return ""
+        # 영문 단어는 대소문자를 통일해 "AI"/"ai"가 따로 집계되지 않게 한다.
+        if re.fullmatch(r"[A-Za-z]+", normalized):
+            normalized = normalized.upper()
         return normalized
 
     for content in text_series.fillna("").astype(str):
