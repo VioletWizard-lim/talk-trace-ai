@@ -174,6 +174,7 @@ def check_schema_columns() -> dict:
         ("content_flags.reason",           lambda: supabase.table("content_flags").select("reason").limit(1).execute()),
         ("teacher_accounts.is_judge",      lambda: supabase.table("teacher_accounts").select("is_judge").limit(1).execute()),
         ("teacher_accounts.is_active",     lambda: supabase.table("teacher_accounts").select("is_active").limit(1).execute()),
+        ("teacher_sessions.session_id",    lambda: supabase.table("teacher_sessions").select("session_id").limit(1).execute()),
     ]
 
     def _run_check(item):
@@ -289,6 +290,10 @@ def teacher_judge_column_available() -> bool:
 
 def teacher_active_column_available() -> bool:
     return _schema().get("teacher_accounts.is_active", False)
+
+
+def teacher_sessions_available() -> bool:
+    return _schema().get("teacher_sessions.session_id", False)
 
 
 def comment_likes_available() -> bool:
@@ -1271,6 +1276,50 @@ def fetch_teacher_account(supabase: Client, teacher_id: str):
     if not ci_res.data:
         return None
     return ci_res.data[0]
+
+
+def save_teacher_session(supabase: Client, session_id: str, teacher_id: str, is_admin: bool):
+    """교사 로그인 시 (브라우저 session_id → 교사 ID) 매핑을 저장해, 새로고침해도
+    로그아웃 전까지 로그인 상태가 유지되도록 한다."""
+    if not teacher_sessions_available() or not session_id:
+        return None
+    payload = {"session_id": session_id, "teacher_id": teacher_id, "is_admin": bool(is_admin)}
+    existing = execute_query(
+        supabase.table("teacher_sessions").select("session_id").eq("session_id", session_id).limit(1),
+        fail_message="교사 로그인 세션 저장 실패",
+    )
+    if existing and existing.data:
+        return execute_query(
+            supabase.table("teacher_sessions").update(payload).eq("session_id", session_id),
+            fail_message="교사 로그인 세션 저장 실패",
+        )
+    return execute_query(
+        supabase.table("teacher_sessions").insert(payload),
+        fail_message="교사 로그인 세션 저장 실패",
+    )
+
+
+def fetch_teacher_session(supabase: Client, session_id: str):
+    """이 브라우저 session_id에 저장된 교사 로그인 정보를 반환합니다(없으면 None)."""
+    if not teacher_sessions_available() or not session_id:
+        return None
+    res = execute_query(
+        supabase.table("teacher_sessions").select("teacher_id, is_admin").eq("session_id", session_id).limit(1),
+        fail_message="교사 로그인 세션 조회 실패",
+    )
+    if not res or not res.data:
+        return None
+    return res.data[0]
+
+
+def delete_teacher_session(supabase: Client, session_id: str):
+    """로그아웃 시 이 브라우저의 저장된 교사 로그인 정보를 지웁니다."""
+    if not teacher_sessions_available() or not session_id:
+        return None
+    return execute_query(
+        supabase.table("teacher_sessions").delete().eq("session_id", session_id),
+        fail_message="교사 로그인 세션 삭제 실패",
+    )
 
 
 def request_teacher_account(supabase: Client, teacher_id: str, teacher_pw: str):

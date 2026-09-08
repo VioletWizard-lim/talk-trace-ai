@@ -6,6 +6,7 @@ import streamlit as st
 from db import (
     debate_ip_column_available,
     debate_session_id_column_available,
+    delete_teacher_session,
     ensure_db_login,
     clear_live_messages_cache,
     fetch_debate_status,
@@ -13,6 +14,8 @@ from db import (
     fetch_opinion_change,
     fetch_pending_teacher_accounts,
     fetch_room_names,
+    fetch_teacher_account,
+    fetch_teacher_session,
     fetch_topic_data,
     init_db,
     is_recent_submission,
@@ -61,6 +64,22 @@ if 'ai_hint_manual_mode' not in st.session_state: st.session_state['ai_hint_manu
 if '_last_debate_status' not in st.session_state: st.session_state['_last_debate_status'] = None
 
 get_or_create_session_uuid()
+
+# 새로고침해도 로그아웃하기 전까지는 교사 로그인이 유지되도록, 이 브라우저의
+# session_uuid에 저장된 로그인 정보가 있으면 세션 시작 시 한 번만 복원한다.
+if not st.session_state['teacher_auth'] and not st.session_state.get('_teacher_session_restore_checked'):
+    st.session_state['_teacher_session_restore_checked'] = True
+    _saved_session = fetch_teacher_session(supabase, st.session_state.get('session_uuid', ''))
+    if _saved_session:
+        _account = fetch_teacher_account(supabase, _saved_session.get('teacher_id', ''))
+        if (
+            isinstance(_account, dict) and not _account.get("_query_failed")
+            and _account.get("is_approved")
+            and (not _account.get("is_judge") or _account.get("is_active", True))
+        ):
+            st.session_state['teacher_auth'] = True
+            st.session_state['admin_auth'] = bool(_saved_session.get('is_admin', False))
+            st.session_state['teacher_id'] = _saved_session.get('teacher_id', '')
 
 if st.session_state['page'] != "home":
     col_home_btn, _ = st.columns([1, 7])
@@ -130,6 +149,7 @@ for _col, (_label, _target) in zip(_header_cols, _header_buttons):
     with _col:
         if st.button(_label, use_container_width=True, key=f"header_btn_{_target}"):
             if _target == "__logout__":
+                delete_teacher_session(supabase, st.session_state.get('session_uuid', ''))
                 st.session_state['teacher_auth'] = False
                 st.session_state['admin_auth'] = False
                 st.session_state['teacher_id'] = ""

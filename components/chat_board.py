@@ -300,7 +300,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                 c_like, c_del = st.columns([3, 1], gap="small")
                                 with c_like:
                                     st.button(c_like_label, key=f"cbact_clike_{c_id}", disabled=c_like_disabled,
-                                              type=c_like_type,
+                                              type=c_like_type, help="좋아요",
                                               on_click=do_toggle_comment_like, args=(c_id,))
                                 with c_del:
                                     if st.button("🗑️", key=f"cbact_cdel_{c_id}", help="댓글 삭제"):
@@ -310,7 +310,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                                             st.rerun(scope="app")
                             else:
                                 st.button(c_like_label, key=f"cbact_clike_{c_id}", disabled=c_like_disabled,
-                                          type=c_like_type, use_container_width=True,
+                                          type=c_like_type, use_container_width=True, help="좋아요",
                                           on_click=do_toggle_comment_like, args=(c_id,))
 
                 if debate_ended:
@@ -382,7 +382,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                         c_like, c_del = st.columns([3, 1], gap="small")
                         with c_like:
                             st.button(like_label, key=f"cbact_like_{msg_id}", disabled=like_disabled,
-                                      type=like_type,
+                                      type=like_type, help="좋아요",
                                       on_click=do_toggle_like, args=(msg_id,))
                         with c_del:
                             if st.button("🗑️", key=f"cbact_del_{msg_id}", help="강제 삭제"):
@@ -431,7 +431,7 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                         )
                     with c_actions:
                         st.button(like_label, key=f"cbact_like_{msg_id}", disabled=like_disabled,
-                                  type=like_type, use_container_width=True,
+                                  type=like_type, use_container_width=True, help="좋아요",
                                   on_click=do_toggle_like, args=(msg_id,))
                     _render_content_box(row['content'], row.get('sentiment', ''))
                     if use_comments:
