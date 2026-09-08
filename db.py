@@ -296,7 +296,7 @@ def comment_likes_available() -> bool:
 # [4] 방(topic) 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=20, show_spinner="설정을 불러오는 중입니다...")
+@st.cache_data(ttl=30, show_spinner="설정을 불러오는 중입니다...")
 def fetch_room_names(_supabase: Client, include_hidden: bool = False):
     hide_filter = topic_is_hidden_available() and not include_hidden
 
@@ -381,7 +381,7 @@ def toggle_room_visibility(supabase: Client, room_name: str, hidden: bool):
         fetch_all_rooms_hidden_status.clear()
     return res
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=20)
 def fetch_all_rooms_hidden_status(_supabase: Client) -> dict:
     """모든 방의 숨김 상태를 한 번에 조회해 {room_name: is_hidden} dict 반환."""
     if not topic_is_hidden_available():
@@ -501,7 +501,7 @@ def fetch_room_entry_code(supabase: Client, room_name):
         return None
 
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=45)
 def fetch_topic_data(_supabase: Client, room_name):
     order_col = _resolve_topic_order_col(_supabase)
     try:
@@ -520,7 +520,7 @@ def fetch_topic_data(_supabase: Client, room_name):
 # [5] 토론(debate) 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=20)
+@st.cache_data(ttl=30)
 def fetch_live_messages(_supabase: Client, room_name, limit):
     query = _supabase.table("debate").select("*").eq("room_name", room_name)
     if debate_soft_delete_available():
@@ -863,7 +863,7 @@ def create_teacher_hint(supabase: Client, payload):
 # [댓글(반박/보충)] 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=25)
 def fetch_comments_for_room(_supabase: Client, room_name: str) -> list:
     """이 방의 삭제되지 않은 모든 댓글을 반환합니다. [{"id", "debate_id", "student_name", ...}, ...]"""
     if not comments_available():
@@ -948,7 +948,7 @@ def permanently_delete_comment(supabase: Client, comment_id: int):
     return res
 
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=25)
 def fetch_comment_likes_for_room(_supabase: Client, room_name: str) -> list:
     """방의 모든 댓글 공감 데이터를 반환합니다: [{"comment_id": ..., "student_name": ...}, ...]"""
     if not comment_likes_available():
@@ -1043,7 +1043,7 @@ def destroy_room_data(supabase: Client, room_name: str, deleted_by: str = ""):
 # [6] 생각 변화 기록(opinion_changes) 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=15)
 def fetch_opinion_change(_supabase: Client, room_name: str, student_name: str):
     if not opinion_changes_available():
         return None
@@ -1112,7 +1112,7 @@ def upsert_post_opinion(supabase: Client, room_name: str, student_name: str, pos
     return res
 
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=25)
 def fetch_all_opinion_changes(_supabase: Client, room_name: str):
     if not opinion_changes_available():
         return pd.DataFrame()
@@ -1181,7 +1181,7 @@ def delete_opinion_change(supabase: Client, room_name: str, student_name: str):
 # [7] 토론 제어(session_control) 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=20)
+@st.cache_data(ttl=30)
 def fetch_debate_status(_supabase: Client, room_name: str) -> str:
     if not session_control_available():
         return "active"
@@ -1383,7 +1383,7 @@ def set_teacher_active(supabase: Client, account_id: int, active: bool):
 # [공감(likes)] 관련 쿼리
 # ==========================================
 
-@st.cache_data(ttl=20)
+@st.cache_data(ttl=30)
 def fetch_room_likes(_supabase: Client, room_name: str):
     """방의 모든 공감 데이터를 반환한다: [{"opinion_id": ..., "student_name": ...}, ...]"""
     res = execute_query(
@@ -1484,7 +1484,7 @@ def create_content_flag(supabase: Client, room_name: str, source_table: str, sou
     )
 
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=25)
 def fetch_unreviewed_flags_for_room(_supabase: Client, room_name: str) -> list:
     if not content_flags_available():
         return []

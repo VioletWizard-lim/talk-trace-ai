@@ -55,11 +55,11 @@ _ACTION_BTN_CSS = """
     }
     </style>
 """
-_NEW_MSG_POLL_INTERVAL = 9       # 가벼운 변경 확인 주기(초) — 다수 동시 접속 시
-                                 # Supabase/Cloudflare 요청량 부담을 줄이기 위해
-                                 # 5초에서 늘림 (30명 규모 수업 중 순간 폭주로
-                                 # 전체 요청이 일시 차단된 사례 있음)
-_HEAVY_REFRESH_MIN_INTERVAL = 15  # 무거운 재렌더링 최소 간격(초) — 폭주 시 안전장치
+_NEW_MSG_POLL_INTERVAL = 15      # 가벼운 변경 확인 주기(초) — 다수 동시 접속 시
+                                 # Supabase 앞단 Cloudflare가 서버 IP발 요청을
+                                 # 한꺼번에 몰리는 트래픽으로 보고 차단한 사례가
+                                 # 반복되어(유료 플랜에서도 발생) 계속 늘림
+_HEAVY_REFRESH_MIN_INTERVAL = 20  # 무거운 재렌더링 최소 간격(초) — 폭주 시 안전장치
 _HEAVY_REFRESH_JITTER = 2.0       # 새 발언 감지 시 전체 재렌더링을 이 범위(초) 안에서
                                   # 학생마다 랜덤하게 지연시켜, 다같이 동시에 새 발언을
                                   # 확인하고 한꺼번에 전체 페이지를 다시 그리는 "몰림"을 분산
@@ -454,9 +454,11 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
         st.info(f"아직 대화가 없습니다. 첫 {act_type} 의견을 남겨주세요!")
 
 
-@st.fragment(run_every=60)
+@st.fragment(run_every=90)
 def _render_stats_section(supabase, room_name, current_mode):
-    """통계(파이차트 + 워드클라우드)를 60초 주기로 갱신 — CPU 집약적 렌더링 분리."""
+    """통계(파이차트 + 워드클라우드)를 주기적으로 갱신 — CPU 집약적 렌더링 분리.
+
+    다수 동시 접속 시 Cloudflare 트래픽 차단 재발을 막기 위해 60초에서 늘림."""
     df = with_fallback_author_role(fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT))
     if df.empty:
         with st.expander("📊 실시간 의견 통계", expanded=False):
