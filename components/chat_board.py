@@ -166,8 +166,12 @@ def _cached_pie_chart_json(sentiment_tuple: tuple) -> str:
                  category_orders={
                      "sentiment": ["🔴 반대", "🔵 찬성", "💡 아이디어", "➕ 보충", "❓ 질문"]
                  })
-    # 찬성/반대 라벨을 차트 밖 범례가 아니라 각 조각 안에 직접 표시
-    fig.update_traces(textinfo="label+percent", textposition="inside", insidetextorientation="horizontal")
+    # 찬성/반대 라벨을 차트 밖 범례가 아니라 각 조각 안에 직접 표시.
+    # sort=False: go.Pie 기본값(sort=True)은 조각을 값 크기순으로 다시
+    # 배치해, 실시간으로 표수가 바뀔 때마다 같은 항목이 도넛 위 다른
+    # 위치로 옮겨 다녀 보인다. category_orders로 정해둔 순서를 그대로
+    # 유지해 각 항목의 위치가 고정되게 한다.
+    fig.update_traces(sort=False, textinfo="label+percent", textposition="inside", insidetextorientation="horizontal")
     fig.update_layout(font={"family": UI_FONT_FAMILY}, showlegend=False)
     return fig.to_json()
 

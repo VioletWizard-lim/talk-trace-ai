@@ -168,7 +168,13 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                                     "🔴 반대": "#d62728",
                                 },
                             )
-                            fig.update_traces(textinfo="label+percent", textposition="inside")
+                            # Plotly의 go.Pie는 기본적으로 값 크기순으로 조각을 다시
+                            # 정렬한다(sort=True) — 그래서 데이터를 항상 "찬성, 반대"
+                            # 순서로 넘겨도, 그때그때 다수인 쪽이 12시 방향 첫 조각을
+                            # 차지해 두 도넛(전/후)에서 찬성/반대 위치가 서로 바뀌어
+                            # 보였다. sort=False로 입력 순서를 그대로 유지해 위치를
+                            # 고정한다.
+                            fig.update_traces(sort=False, textinfo="label+percent", textposition="inside")
                             fig.update_layout(
                                 margin=dict(t=10, b=10, l=10, r=10),
                                 font={"family": UI_FONT_FAMILY},
