@@ -17,7 +17,7 @@ def build_word_frequencies(text_series):
         "라고", "라는", "라서", "라면서", "라도",
         "그것", "그것은", "그것이", "그것을", "그런", "그렇게", "그래도", "그러나", "그러면", "그러므로",
         "모든", "어떤", "어떻게", "왜냐하면", "따라서", "또한", "또는", "하지만", "그리고",
-        "통해", "통하여", "위해", "위하여", "대해", "대하여",
+        "통해", "통하여", "위해", "위하여", "위한", "대해", "대하여",
         "더욱", "매우", "아주", "조금", "많이", "항상", "절대", "결국", "사실",
         # 대명사·일반 명사
         "우리", "사람", "자신", "누구", "여기", "거기", "저기",
@@ -84,7 +84,7 @@ def build_word_frequencies(text_series):
         "되고", "되며", "되어", "되기", "된다", "되는", "되게", "되어서",
         "이고", "이며", "이기", "인다", "이는",
         "한다고", "해야한다고", "해야한다",
-        "습니다", "습니까", "ㅂ니다", "ㅂ니까", "니다", "니까",
+        "습니다", "습니까", "입니다", "입니까", "합니다", "합니까", "니다", "니까",
         "발견하고", "공유하면", "배우고", "생각하기", "부여한다",
         # 추가 동사 활용 패턴
         "없다고", "있다고", "한다면", "된다면", "되는데", "하는것",
@@ -97,21 +97,46 @@ def build_word_frequencies(text_series):
         "망입니", "망입니다", "이라는것", "라는것",
     )
 
+    # particle_suffixes/verb_endings를 각각 따로, 리스트 순서대로 훑으면
+    # "같습니다"처럼 긴 어미(습니다)보다 짧은 조사(다)가 먼저 걸려 "같습니"
+    # 같은 잘린 조각에서 멈춰버린다 — 스크린샷마다 "-습니/-입니/-합니"류
+    # 잔재가 계속 나와 그때그때 불용어를 추가해온 근본 원인이 이것이었다.
+    # 두 리스트를 합쳐 긴 어미부터 먼저 시도하면(길이 내림차순) 항상
+    # 가장 긴 어미가 온전히 먼저 제거된다.
+    _all_endings = sorted(set(particle_suffixes) | set(verb_endings), key=len, reverse=True)
+
+    # "-습니다/-입니다/-니다"류 종결어미는 짧게 잘려도(심지어 1글자만 남아도)
+    # "같습니다"→"같", "것입니다"→"것"처럼 남는 글자가 애초에 별 의미 없는
+    # 경우가 대부분이라, 다른 어미보다 더 짧은 잔여 길이(1자)까지 허용해
+    # 통째로 벗겨내고 아래 최소 길이 검사에서 버려지게 한다. 이 완화를
+    # 모든 어미에 적용하면 "제한"(한 제거 시 "제"만 남음) 같은 멀쩡한
+    # 2글자 단어까지 망가지므로, 이 목적어(용언 종결형)로만 한정한다.
+    _copula_endings = {"습니다", "입니다", "합니다", "습니까", "입니까", "합니까", "니다", "니까"}
+
+    # 어미 스트리핑 규칙만으로는 "민주주의"의 "의"처럼 단어 자체에 포함된
+    # 글자를 조사로 착각해 잘라내는 경우가 있다. 이런 복합명사는 예외로 둔다.
+    protected_words = {"민주주의", "자본주의", "사회주의", "권위주의"}
+
     def normalize_token(token):
         cleaned = re.sub(r"^[^\w가-힣]+|[^\w가-힣]+$", "", token)
         if len(cleaned) < 2:
+            return ""
+        if cleaned in protected_words:
+            return cleaned
+        # "ㄱㄱ", "ㅋㅋ", "ㄴㄴ" 같은 자모만으로 된 토큰(감탄사·초성체)은
+        # 완성된 음절이 아니라 잡음에 가까워 워드클라우드에 의미가 없다.
+        if re.fullmatch(r"[ㄱ-ㅎㅏ-ㅣ]+", cleaned):
             return ""
         normalized = cleaned
         # 최대 3회 반복 strip — "제한하는" → "제한하" → "제한"
         for _ in range(3):
             prev = normalized
-            for suffix in particle_suffixes:
-                if normalized.endswith(suffix) and len(normalized) > len(suffix) + 1:
+            for suffix in _all_endings:
+                if not normalized.endswith(suffix):
+                    continue
+                min_remainder = 1 if suffix in _copula_endings else 2
+                if len(normalized) - len(suffix) >= min_remainder:
                     normalized = normalized[: -len(suffix)]
-                    break
-            for ending in verb_endings:
-                if normalized.endswith(ending) and len(normalized) > len(ending) + 1:
-                    normalized = normalized[: -len(ending)]
                     break
             if normalized == prev:
                 break
