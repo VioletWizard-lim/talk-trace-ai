@@ -1404,12 +1404,20 @@ def reject_teacher_account(supabase: Client, account_id: int):
     )
 
 
-def fetch_judge_account(supabase: Client):
-    """미리 만들어둔 심사용 계정을 조회합니다 (is_judge=true인 첫 번째 승인된 계정)."""
+@st.cache_data(ttl=60)
+def fetch_judge_account(_supabase: Client):
+    """미리 만들어둔 심사용 계정을 조회합니다 (is_judge=true인 첫 번째 승인된 계정).
+
+    홈 화면(모든 학생이 방에 들어가기 전 가장 먼저 보는 화면)에서 매번
+    호출되는데 캐시가 없었다. 수업 시작 시 학생 20~30명이 거의 동시에
+    홈 화면을 열면 그 순간 이 쿼리만 20~30번 동시에 날아가는 셈이라
+    캐시를 씌운다. 결과가 학생마다 동일하므로 방/학생별 캐시(기존 다른
+    조회들처럼 room_name·student_name으로 나눠 비우는 방식)가 필요 없다.
+    """
     if not (teacher_judge_column_available() and teacher_active_column_available()):
         return None
     res = execute_query(
-        supabase.table("teacher_accounts")
+        _supabase.table("teacher_accounts")
         .select("id, teacher_id, is_approved, is_active")
         .eq("is_judge", True)
         .eq("is_approved", True)
@@ -1434,10 +1442,13 @@ def fetch_judge_accounts(supabase: Client) -> list:
 
 
 def set_teacher_active(supabase: Client, account_id: int, active: bool):
-    return execute_query(
+    res = execute_query(
         supabase.table("teacher_accounts").update({"is_active": active}).eq("id", account_id),
         fail_message="계정 활성화 상태 변경 실패",
     )
+    if res is not None:
+        fetch_judge_account.clear()
+    return res
 
 
 # ==========================================
