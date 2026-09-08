@@ -98,7 +98,7 @@ def _render_content_box(content: str, sentiment: str) -> None:
     safe_content = _escape_md(html.escape(str(content or ""))).replace("\n", "<br>")
     st.markdown(
         f"<div style='background:{bg}; color:#000000; font-weight:600; border-radius:0.5rem; "
-        f"padding:0.75rem 1rem; margin:0.3rem 0; line-height:1.7; font-size:16px;'>"
+        f"padding:0.85rem 1rem 1.1rem 1rem; margin:0.3rem 0; line-height:1.7; font-size:16px;'>"
         f"{safe_content}</div>",
         unsafe_allow_html=True,
     )
