@@ -195,6 +195,7 @@ def generate_ai_response(
     api_key: str,
     log_message: str,
     fallback: str = "AI 응답을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    raise_on_error: bool = False,
     **context,
 ) -> str | None:
     """
@@ -207,6 +208,10 @@ def generate_ai_response(
     api_key     : Gemini API 키
     log_message : 실패 시 로그에 남길 메시지
     fallback    : AI 응답이 공백이거나 실패 시 반환할 기본 문구
+    raise_on_error : True면 실패 시 fallback을 반환하지 않고 예외를 그대로 올린다.
+                     "빈 응답"과 "호출 자체가 실패함"을 구분해야 하는 호출부
+                     (예: 유해 발언 검수 — 실패를 조용히 삼키면 교사가 검수가
+                     제대로 됐다고 착각할 수 있음)에서 사용한다.
     context     : 로그에 포함할 추가 컨텍스트 (room_name 등)
 
     Returns
@@ -232,4 +237,6 @@ def generate_ai_response(
         logger.exception(
             "AI_CALL_FAILED %s (model=%s, context=%s)", log_message, model_name, context
         )
+        if raise_on_error:
+            raise
         return fallback

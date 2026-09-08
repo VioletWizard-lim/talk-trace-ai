@@ -24,40 +24,56 @@ logger = logging.getLogger("talk_trace_ai")
 _BATCH_SIZE = 30
 
 
-def _scan_in_batches(items: list, api_key: str) -> dict:
-    """items: list of (key, content, parent_content) tuples. Returns {key: reason} for flagged items only."""
+def _scan_in_batches(items: list, api_key: str) -> tuple[dict, int]:
+    """items: list of (key, content, parent_content) tuples.
+
+    Returns (flagged 결과 dict, 실패한 배치 수). 이전에는 AI 호출이 실패하면
+    해당 배치를 조용히 건너뛰기만 해서, 교사는 "검수 완료" 토스트만 보고
+    실제로는 일부(또는 전부)가 아예 검사되지 않은 걸 알 방법이 없었다.
+    "AI가 문제없다고 판단함"과 "AI 호출 자체가 실패해서 검사를 못 함"을
+    구분해 호출부가 실패를 화면에 알릴 수 있게 한다.
+    """
     all_results = {}
+    failed_batches = 0
     for i in range(0, len(items), _BATCH_SIZE):
         batch = items[i: i + _BATCH_SIZE]
         prompt = build_moderation_flag_prompt(batch)
-        # 유해 발언 검수는 항상 Flash 모델만 사용한다 (Pro 대비 충분히 빠르고
-        # 저렴하며, 단순 분류 작업이라 Pro까지는 필요하지 않다고 판단).
-        response = generate_ai_response(
-            prompt=prompt, model_name=AI_MODEL_NAME, api_key=api_key,
-            log_message="moderation_flag_batch (Flash)", fallback="",
-        )
+        try:
+            # 유해 발언 검수는 항상 Flash 모델만 사용한다 (Pro 대비 충분히 빠르고
+            # 저렴하며, 단순 분류 작업이라 Pro까지는 필요하지 않다고 판단).
+            response = generate_ai_response(
+                prompt=prompt, model_name=AI_MODEL_NAME, api_key=api_key,
+                log_message="moderation_flag_batch (Flash)", fallback="",
+                raise_on_error=True,
+            )
+        except Exception as e:
+            logger.warning("유해 발언 검수 배치 실패, 이 배치는 검사되지 않음: %s", e)
+            failed_batches += 1
+            continue
         if response:
             batch_keys = {k for k, _, _ in batch}
             all_results.update(parse_moderation_flags(response, batch_keys))
-        # AI 실패 시 해당 배치는 조용히 건너뜀 (플래그 누락 < 제출 흐름 방해 방지 우선)
-    return all_results
+    return all_results, failed_batches
 
 
-def auto_flag_room_content(supabase, room_name: str) -> bool:
+def auto_flag_room_content(supabase, room_name: str) -> tuple[bool, int]:
     """토론/토의 종료 시 자동으로 호출되는 유해 발언 2차 검수.
 
     이미 플래그된 항목은 다시 검사하지 않는다. 문제 없다고 판단된 항목은
     별도 기록을 남기지 않으므로, 재실행 시 그 항목들은 다시 검사 대상이 된다.
+
+    Returns (성공 여부, 실패한 배치 수) — 실패한 배치가 있으면 호출부가
+    "검수 완료"로 오해하지 않도록 알려야 한다.
     """
     if not content_flags_available():
-        return False
+        return False, 0
     api_key = get_secret("GEMINI_API_KEY", "")
     if not api_key:
-        return False
+        return False, 0
 
     all_items = fetch_flaggable_content(supabase, room_name)
     if not all_items:
-        return False
+        return False, 0
 
     already_flagged = fetch_flagged_source_keys(supabase, room_name)
     to_scan = [
@@ -66,11 +82,11 @@ def auto_flag_room_content(supabase, room_name: str) -> bool:
         if (it["source_table"], it["source_id"]) not in already_flagged and it["content"]
     ]
     if not to_scan:
-        return True
+        return True, 0
 
-    flagged = _scan_in_batches(to_scan, api_key)
+    flagged, failed_batches = _scan_in_batches(to_scan, api_key)
     if not flagged:
-        return True
+        return True, failed_batches
 
     by_key = {f"{it['source_table']}:{it['source_id']}": it for it in all_items}
     ok = True
@@ -84,7 +100,7 @@ def auto_flag_room_content(supabase, room_name: str) -> bool:
         )
         if res is None:
             ok = False
-    return ok
+    return ok, failed_batches
 
 
 _AUTO_SCAN_INTERVAL_SECONDS = 300  # 수업 중 자동 재검수 최소 간격 (5분)
@@ -104,7 +120,9 @@ def maybe_auto_flag_periodically(supabase, room_name: str, debate_status: str) -
         return
     st.session_state[key] = now
     try:
-        auto_flag_room_content(supabase, room_name)
+        _ok, failed_batches = auto_flag_room_content(supabase, room_name)
+        if failed_batches:
+            logger.warning("수업 중 자동 유해 발언 검수: %d개 배치 실패", failed_batches)
         fetch_unreviewed_flags_for_room.clear()
     except Exception as e:
         logger.warning("수업 중 자동 유해 발언 검수 실패: %s", e)
