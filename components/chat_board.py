@@ -204,9 +204,21 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
         with col_board_flag:
             if st.button("🚩 지금 유해 발언 검수 실행", use_container_width=True, key="run_moderation_flag"):
                 with st.spinner("🤖 AI가 발언·답글을 검수하고 있습니다..."):
-                    auto_flag_room_content(supabase, room_name)
+                    _ok, failed_batches = auto_flag_room_content(supabase, room_name)
                 fetch_unreviewed_flags_for_room.clear()
-                st.toast("검수를 완료했습니다. 'AI 검수함' 탭에서 확인하세요.", icon="🚩")
+                if failed_batches:
+                    # AI 호출이 실패해 일부가 검사되지 않은 경우 "완료" 토스트로
+                    # 오해하게 두지 않고 명확히 알린다 — 이전에는 실패해도
+                    # 조용히 넘어가 교사가 검수가 제대로 됐다고 착각할 수 있었다.
+                    # st.warning은 바로 이어지는 rerun에 화면이 지워져 버리므로,
+                    # rerun 후에도 남는 st.toast를 쓴다.
+                    st.toast(
+                        f"⚠️ AI 호출 실패로 일부 항목({failed_batches}개 배치)이 검사되지 못했습니다. "
+                        "잠시 후 다시 실행해 주세요.",
+                        icon="⚠️",
+                    )
+                else:
+                    st.toast("검수를 완료했습니다. 'AI 검수함' 탭에서 확인하세요.", icon="🚩")
                 st.rerun(scope="app")
     with col_board_ref:
         if user_role == "교사" and teacher_auth:
