@@ -908,6 +908,28 @@ def clear_comments_cache(supabase: Client, room_name: str):
     fetch_comments_for_room.clear(supabase, room_name)
 
 
+def fetch_latest_comment_id(supabase: Client, room_name: str):
+    """이 방의 가장 최근 답글(댓글) id만 가볍게 조회합니다 (변경 감지 전용, 캐시 없음).
+
+    fetch_latest_message_id와 같은 목적 — 새 답글이 달렸는지 자주 확인할 때
+    댓글 전체(fetch_comments_for_room)를 다시 부르지 않고 id 하나만 가볍게 본다.
+    """
+    if not comments_available():
+        return None
+    res = execute_query(
+        supabase.table("comments")
+        .select("id")
+        .eq("room_name", room_name)
+        .or_("is_deleted.is.null,is_deleted.eq.false")
+        .order("id", desc=True)
+        .limit(1),
+        fail_message="최신 답글 확인 실패",
+    )
+    if res and res.data:
+        return res.data[0]["id"]
+    return None
+
+
 def create_comment(
     supabase: Client, room_name: str, debate_id: int, student_name: str, comment_type: str, content: str,
     session_id: str = None,
