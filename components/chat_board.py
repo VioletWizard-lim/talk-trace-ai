@@ -5,7 +5,7 @@ import streamlit as st
 import plotly.io as pio
 from collections import Counter
 from db import (
-    fetch_live_messages, fetch_latest_message_id, delete_opinion_message, fetch_room_likes, toggle_like, likes_available, debate_soft_delete_available,
+    fetch_live_messages, fetch_latest_message_id, fetch_latest_comment_id, delete_opinion_message, fetch_room_likes, toggle_like, likes_available, debate_soft_delete_available,
     comments_available, comment_likes_available, fetch_comments_for_room, fetch_comment_likes_for_room,
     create_comment, delete_comment, toggle_comment_like,
     fetch_debate_status, session_control_available, content_flags_available, fetch_unreviewed_flags_for_room,
@@ -543,8 +543,8 @@ def _render_stats_section(supabase, room_name, current_mode):
 
 
 @st.fragment(run_every=_NEW_MSG_POLL_INTERVAL)
-def _poll_new_messages(supabase, room_name):
-    """새 발언 유무만 가볍게 확인하고, 있을 때만 무거운 보드 재렌더링을 트리거한다.
+def _poll_new_messages(supabase, room_name, student_name):
+    """새 발언·답글 유무만 가볍게 확인하고, 있을 때만 무거운 보드 재렌더링을 트리거한다.
 
     기존에는 접속자 전원이 고정 주기마다 무조건 전체 게시판을
     다시 그렸는데(과부하의 원인), 이제는 id 하나만 조회하는 저비용 쿼리로
@@ -553,17 +553,26 @@ def _poll_new_messages(supabase, room_name):
     경우에도 무거운 재렌더링이 너무 잦아지지 않도록 최소 간격
     (_HEAVY_REFRESH_MIN_INTERVAL)을 두어, 폭주 상황에서도 기존 방식보다
     나빠지지 않도록 안전장치를 둔다.
+
+    새 발언뿐 아니라 새 답글도 함께 감지한다 — 답글만 달리고 새 발언이
+    없으면(기존에는 발언 id만 봤음) 아무도 알아채지 못하는 문제가 있었다.
+    본인 발언에 달린 새 답글이면 토스트로 알려준다.
     """
+    use_comments = comments_available()
     latest_id = fetch_latest_message_id(supabase, room_name)
+    latest_comment_id = fetch_latest_comment_id(supabase, room_name) if use_comments else None
     last_seen_key = f"_last_seen_msg_id_{room_name}"
+    last_seen_comment_key = f"_last_seen_comment_id_{room_name}"
     last_render_key = f"_last_heavy_render_ts_{room_name}"
 
-    if latest_id == st.session_state.get(last_seen_key):
+    prev_seen_id = st.session_state.get(last_seen_key)
+    prev_seen_comment_id = st.session_state.get(last_seen_comment_key)
+    if latest_id == prev_seen_id and latest_comment_id == prev_seen_comment_id:
         return
 
     last_render_ts = st.session_state.get(last_render_key, 0)
     if time.time() - last_render_ts < _HEAVY_REFRESH_MIN_INTERVAL:
-        return  # 새 발언은 있지만 안전장치 간격 전 — 다음 틱에 다시 확인
+        return  # 새 발언/답글은 있지만 안전장치 간격 전 — 다음 틱에 다시 확인
 
     # 여러 학생이 거의 동시에 새 발언을 감지해 한꺼번에 캐시를 비우고 전체
     # 페이지를 다시 그리면 순간적으로 부하가 몰린다. 학생마다 무작위로 짧게
@@ -571,12 +580,31 @@ def _poll_new_messages(supabase, room_name):
     time.sleep(random.uniform(0, _HEAVY_REFRESH_JITTER))
 
     st.session_state[last_seen_key] = latest_id
+    st.session_state[last_seen_comment_key] = latest_comment_id
     st.session_state[last_render_key] = time.time()
     clear_live_messages_cache(supabase, room_name)
     clear_room_likes_cache(supabase, room_name)
-    if comments_available():
+    if use_comments:
         clear_comments_cache(supabase, room_name)
         clear_comment_likes_cache(supabase, room_name)
+        # 새 답글이 생겼고(첫 확인이 아니라 실제로 늘어난 경우), 그중 내
+        # 발언에 달린 게 있으면 알려준다. 교사 힌트에는 알림을 띄우지 않는다.
+        if (
+            student_name and student_name != "교사"
+            and prev_seen_comment_id is not None
+            and latest_comment_id and latest_comment_id != prev_seen_comment_id
+        ):
+            my_df = fetch_live_messages(supabase, room_name, LIVE_BOARD_FETCH_LIMIT)
+            my_msg_ids = set(my_df[my_df['student_name'] == student_name]['id']) if not my_df.empty else set()
+            if my_msg_ids:
+                has_reply_to_me = any(
+                    c.get('id', 0) > prev_seen_comment_id
+                    and c.get('debate_id') in my_msg_ids
+                    and c.get('student_name') != student_name
+                    for c in fetch_comments_for_room(supabase, room_name)
+                )
+                if has_reply_to_me:
+                    st.toast("💬 내 발언에 새로운 답글이 달렸습니다!", icon="💬")
     st.rerun(scope="app")
 
 
@@ -602,6 +630,6 @@ def _has_draft_opinion() -> bool:
 def render_chat_board(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type):
     _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_name, current_mode, act_type)
     if not st.session_state.get('is_working', False) and not _has_draft_opinion():
-        _poll_new_messages(supabase, room_name)
+        _poll_new_messages(supabase, room_name, student_name)
     # 통계 섹션은 별도 60초 fragment — 메시지 보드와 독립적으로 갱신
     _render_stats_section(supabase, room_name, current_mode)
