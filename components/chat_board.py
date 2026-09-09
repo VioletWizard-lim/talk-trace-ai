@@ -389,25 +389,24 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
 
             if user_role == "교사" and teacher_auth:
                 with st.container(border=True, key=_msg_card_key("msgcard", row.get('sentiment', ''), msg_id)):
-                    c_name, c_actions = st.columns([7, 2])
-                    with c_name:
-                        st.markdown(
-                            f"{sentiment_tag}**{name_badge}{row['student_name']}** "
-                            f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
-                            unsafe_allow_html=True,
-                        )
-                        if row_session:
-                            st.caption(f"세션: {row_session[:8]}")
-                    with c_actions:
-                        c_like, c_del = st.columns([3, 1], gap="small")
-                        with c_like:
-                            st.button(like_label, key=f"cbact_like_{msg_id}", disabled=like_disabled,
-                                      type=like_type, help="좋아요",
-                                      on_click=do_toggle_like, args=(msg_id,))
-                        with c_del:
-                            if st.button("🗑️", key=f"cbact_del_{msg_id}", help="강제 삭제"):
-                                st.session_state[f"confirm_del_msg_{msg_id}"] = True
+                    # 답글 카드와 같은 구조로 통일: 버튼을 내용 박스 옆이 아니라
+                    # 아래에 둬서 박스가 카드 전체 폭을 그대로 쓰게 한다.
+                    st.markdown(
+                        f"{sentiment_tag}**{name_badge}{row['student_name']}** "
+                        f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
+                        unsafe_allow_html=True,
+                    )
+                    if row_session:
+                        st.caption(f"세션: {row_session[:8]}")
                     _render_content_box(row['content'], row.get('sentiment', ''))
+                    col_like, col_del, _col_spacer = st.columns([2, 2, 6])
+                    with col_like:
+                        st.button(like_label, key=f"cbact_like_{msg_id}", disabled=like_disabled,
+                                  type=like_type, use_container_width=True, help="좋아요",
+                                  on_click=do_toggle_like, args=(msg_id,))
+                    with col_del:
+                        if st.button("🗑️", key=f"cbact_del_{msg_id}", use_container_width=True, help="강제 삭제"):
+                            st.session_state[f"confirm_del_msg_{msg_id}"] = True
                     if use_comments:
                         render_reply_thread(msg_id)
 
@@ -442,18 +441,17 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             st.rerun()
             else:
                 with st.container(border=True, key=_msg_card_key("msgcard", row.get('sentiment', ''), msg_id)):
-                    c_name, c_actions = st.columns([7, 2])
-                    with c_name:
-                        st.markdown(
-                            f"{sentiment_tag}**{name_badge}{row['student_name']}** "
-                            f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
-                            unsafe_allow_html=True,
-                        )
-                    with c_actions:
+                    st.markdown(
+                        f"{sentiment_tag}**{name_badge}{row['student_name']}** "
+                        f"<span style='color:gray; font-size:14px;'>{formatted_timestamp}</span>",
+                        unsafe_allow_html=True,
+                    )
+                    _render_content_box(row['content'], row.get('sentiment', ''))
+                    col_like, _col_spacer = st.columns([2, 8])
+                    with col_like:
                         st.button(like_label, key=f"cbact_like_{msg_id}", disabled=like_disabled,
                                   type=like_type, use_container_width=True, help="좋아요",
                                   on_click=do_toggle_like, args=(msg_id,))
-                    _render_content_box(row['content'], row.get('sentiment', ''))
                     if use_comments:
                         render_reply_thread(msg_id)
             st.write("")
