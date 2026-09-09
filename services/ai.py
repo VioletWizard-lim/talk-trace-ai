@@ -166,11 +166,19 @@ def build_moderation_flag_prompt(items: list) -> str:
 
 
 def parse_moderation_flags(response_text: str, keys: set) -> dict:
-    """AI 응답을 파싱해 {key: 사유} dict를 반환합니다. 파싱 안 된 항목은 포함하지 않습니다."""
+    """AI 응답을 파싱해 {key: 사유} dict를 반환합니다. 파싱 안 된 항목은 포함하지 않습니다.
+
+    실제 key 형식은 "comments:37"처럼 콜론을 포함한다(source_table:source_id).
+    이전 정규식 [^\\s:]+ 는 콜론을 키에서 제외해버려서 "comments:37: 사유"에서
+    "comments"만 캡처되고, 이건 keys 집합의 어떤 항목과도 일치하지 않아
+    AI가 실제로 문제 발언을 정확히 찾아내도 결과가 전부 조용히 버려지고
+    있었다 — 검수 기능이 사실상 처음부터 아무것도 못 잡아내고 있던 근본
+    원인. 키가 항상 "단어:단어" 형태라는 걸 명시해 콜론을 포함해 캡처한다.
+    """
     result = {}
     if not response_text or response_text.strip().upper() == "NONE":
         return result
-    for match in re.finditer(r"key\s*=\s*([^\s:]+)\s*:\s*(.+)", response_text):
+    for match in re.finditer(r"key\s*=\s*(\w+:\w+)\s*:\s*(.+)", response_text):
         key, reason = match.group(1).strip(), match.group(2).strip()
         if key in keys:
             result[key] = reason[:50]
