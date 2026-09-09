@@ -185,7 +185,14 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                             # 차지해 두 도넛(전/후)에서 찬성/반대 위치가 서로 바뀌어
                             # 보였다. sort=False로 입력 순서를 그대로 유지해 위치를
                             # 고정한다.
-                            fig.update_traces(sort=False, textinfo="label+percent", textposition="inside")
+                            # rotation=0(12시 방향에서 시작) + direction="counterclockwise"
+                            # 조합: 첫 조각(찬성)이 12시에서 반시계 방향(왼쪽, 9시 쪽)으로
+                            # 채워지고 두 번째 조각(반대)이 이어서 오른쪽(3시 쪽)을 채운다.
+                            # 50:50이면 정확히 왼쪽 절반=찬성, 오른쪽 절반=반대가 된다.
+                            fig.update_traces(
+                                sort=False, rotation=0, direction="counterclockwise",
+                                textinfo="label+percent", textposition="inside",
+                            )
                             fig.update_layout(
                                 margin=dict(t=10, b=10, l=10, r=10),
                                 font={"family": UI_FONT_FAMILY},
