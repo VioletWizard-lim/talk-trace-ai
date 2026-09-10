@@ -185,17 +185,16 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                             # 차지해 두 도넛(전/후)에서 찬성/반대 위치가 서로 바뀌어
                             # 보였다. sort=False로 입력 순서를 그대로 유지해 위치를
                             # 고정한다.
-                            # rotation=0(12시 방향에서 시작) + direction="clockwise"
-                            # 조합: 첫 조각(찬성)이 12시에서 화면상 왼쪽(9시 쪽)으로
-                            # 채워지고 두 번째 조각(반대)이 이어서 오른쪽(3시 쪽)을
-                            # 채운다. 50:50이면 정확히 왼쪽 절반=찬성, 오른쪽
-                            # 절반=반대가 된다.
-                            # (주의: Plotly의 direction="counterclockwise"는 화면
-                            # 좌표계에서 오히려 오른쪽부터 채워지는 것으로 실측
-                            # 확인됨 — 수학적 반시계 방향과 화면상 방향이 반대라
-                            # "clockwise"가 실제로 왼쪽부터 채운다.)
+                            # 직접 렌더링해서(kaleido) 픽셀로 확인한 결과:
+                            # - direction 속성은 이 렌더러에서 실제로는 아무 효과가
+                            #   없다(clockwise/counterclockwise 결과가 완전히 동일한
+                            #   이미지였음 — 이전 두 번의 수정이 실패한 이유).
+                            # - 실제로 위치를 바꾸는 건 rotation뿐이었다. rotation=180
+                            #   으로 시작점을 6시로 옮기면 첫 조각(찬성)이 6시→9시→12시로
+                            #   채워져 화면 왼쪽 절반을, 두 번째 조각(반대)이 이어서
+                            #   12시→3시→6시로 오른쪽 절반을 채운다(50:50 기준 실측 확인).
                             fig.update_traces(
-                                sort=False, rotation=0, direction="clockwise",
+                                sort=False, rotation=180,
                                 textinfo="label+percent", textposition="inside",
                             )
                             fig.update_layout(
