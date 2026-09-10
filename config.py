@@ -14,10 +14,6 @@ DATA_FREEZE_DATE = get_secret("DATA_FREEZE_DATE", "2026-09-20").strip()
 # 잠금 안내 메시지에 표시할, 제출 테스트용으로 미리 만들어둘 방 이름.
 # 이 이름(또는 "테스트"가 들어간 다른 이름)의 방은 잠금 대상에서 제외된다.
 TEST_ROOM_NAME = get_secret("TEST_ROOM_NAME", "심사위원 테스트방").strip()
-# 홈 화면의 "심사위원으로 입장" 버튼은 클릭 한 번으로 관리자 권한을 부여하므로,
-# 이 코드를 아는 사람만 입장할 수 있도록 막는다. 비워두면(설정 안 하면) 기존처럼
-# 코드 없이도 버튼이 그대로 노출되니 반드시 값을 설정해서 사용할 것.
-JUDGE_ACCESS_CODE = get_secret("JUDGE_ACCESS_CODE", "").strip()
 MAX_ROOM_NAME_LEN = 60
 MAX_TOPIC_LEN = 120
 MAX_ENTRY_CODE_LEN = 60

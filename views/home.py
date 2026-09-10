@@ -1,7 +1,6 @@
 import streamlit as st
 
 from db import fetch_judge_account
-from config import JUDGE_ACCESS_CODE
 
 
 def render_home_page(supabase):
@@ -46,29 +45,15 @@ def render_home_page(supabase):
 
     judge_account = None if teacher_auth else fetch_judge_account(supabase)
     if judge_account and judge_account.get("is_active"):
-        # 이 버튼은 클릭 한 번으로 관리자 권한(모든 방 접근)을 부여하므로,
-        # JUDGE_ACCESS_CODE를 아는 사람만 입장할 수 있도록 코드 확인을 거친다.
-        # 코드가 설정되어 있지 않으면(운영자 설정 누락) 안전하게 버튼 자체를 숨긴다.
-        if not JUDGE_ACCESS_CODE:
-            st.caption("🎓 심사위원 입장 기능이 준비 중입니다. (관리자: JUDGE_ACCESS_CODE 설정 필요)")
-        else:
-            with st.expander("🎓 심사위원으로 입장"):
-                entered_code = st.text_input(
-                    "심사위원 안내에 포함된 입장 코드를 입력하세요",
-                    type="password", key="judge_access_code_input",
-                )
-                if st.button("입장", key="judge_access_enter_btn", use_container_width=True):
-                    if entered_code.strip() != JUDGE_ACCESS_CODE:
-                        st.error("입장 코드가 올바르지 않습니다.")
-                    else:
-                        st.session_state['teacher_auth'] = True
-                        # 모든 방을 볼 수 있어야 하므로 일반 교사가 아닌 관리자 권한으로 로그인시킨다.
-                        st.session_state['admin_auth'] = True
-                        st.session_state['teacher_id'] = judge_account.get("teacher_id", "")
-                        # 사이드바의 "모드 선택"이 기본값(학생)으로 남아있으면 위 인증 상태가
-                        # 곧바로 초기화되므로, 모드도 함께 "교사"로 강제 전환해준다.
-                        st.session_state['user_role_radio'] = "교사"
-                        st.session_state['page'] = "lobby"
-                        st.rerun()
+        if st.button("🎓 심사위원으로 입장", use_container_width=True):
+            st.session_state['teacher_auth'] = True
+            # 모든 방을 볼 수 있어야 하므로 일반 교사가 아닌 관리자 권한으로 로그인시킨다.
+            st.session_state['admin_auth'] = True
+            st.session_state['teacher_id'] = judge_account.get("teacher_id", "")
+            # 사이드바의 "모드 선택"이 기본값(학생)으로 남아있으면 위 인증 상태가
+            # 곧바로 초기화되므로, 모드도 함께 "교사"로 강제 전환해준다.
+            st.session_state['user_role_radio'] = "교사"
+            st.session_state['page'] = "lobby"
+            st.rerun()
 
     st.stop()
