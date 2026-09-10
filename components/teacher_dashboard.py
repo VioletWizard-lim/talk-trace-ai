@@ -163,7 +163,11 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                         df_oc[col_name]
                         .dropna()
                         .value_counts()
-                        .reindex(_STANCE_OPTIONS, fill_value=0)
+                        # 도넛에서 "반대"를 먼저 두는 게 어색해 보일 수 있지만,
+                        # rotation=0(12시 시작)에서 첫 조각이 화면상 오른쪽으로
+                        # 채워지는 것으로 실측 확인했다 — "반대"를 먼저 둬야
+                        # 12시에서 고정으로 시작해 오른쪽(반대)/왼쪽(찬성)이 된다.
+                        .reindex(list(reversed(_STANCE_OPTIONS)), fill_value=0)
                         .reset_index()
                     )
                     counts.columns = ["입장", "인원"]
@@ -188,13 +192,15 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                             # 직접 렌더링해서(kaleido) 픽셀로 확인한 결과:
                             # - direction 속성은 이 렌더러에서 실제로는 아무 효과가
                             #   없다(clockwise/counterclockwise 결과가 완전히 동일한
-                            #   이미지였음 — 이전 두 번의 수정이 실패한 이유).
-                            # - 실제로 위치를 바꾸는 건 rotation뿐이었다. rotation=180
-                            #   으로 시작점을 6시로 옮기면 첫 조각(찬성)이 6시→9시→12시로
-                            #   채워져 화면 왼쪽 절반을, 두 번째 조각(반대)이 이어서
-                            #   12시→3시→6시로 오른쪽 절반을 채운다(50:50 기준 실측 확인).
+                            #   이미지였음).
+                            # - 실제로 위치를 바꾸는 건 rotation과 데이터 순서뿐이다.
+                            #   위에서 순서를 [반대, 찬성]으로 뒤집어뒀으므로
+                            #   rotation=0(12시 시작)이면 첫 조각(반대)이 12시에서
+                            #   오른쪽으로 채워지고 두 번째 조각(찬성)이 이어서
+                            #   왼쪽을 채운다 — 12시가 항상 고정 경계가 되고
+                            #   왼쪽=찬성, 오른쪽=반대를 동시에 만족한다(실측 확인).
                             fig.update_traces(
-                                sort=False, rotation=180,
+                                sort=False, rotation=0,
                                 textinfo="label+percent", textposition="inside",
                             )
                             fig.update_layout(
