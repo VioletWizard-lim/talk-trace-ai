@@ -10,7 +10,7 @@ from utils import create_analysis_image
 from components.opinion_change import _render_image_download, _build_student_depth_summary, _STANCE_OPTIONS, render_feedback_card, _trigger_analysis
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from validators import with_fallback_author_role
-from utils import log_audit, dashboard_busy_key, dashboard_pending_action_key
+from utils import log_audit, dashboard_busy_key, dashboard_pending_action_key, is_data_collection_frozen
 from config import DASHBOARD_FETCH_LIMIT, ROOM_DESTROY_ENABLED, UI_FONT_FAMILY
 from components.teacher_hint import render_hint_section
 from components.teacher_summary import render_summary_section, auto_generate_summary_report, auto_build_pdf_cache, run_manual_summary_generation
@@ -47,6 +47,10 @@ def _render_learning_analysis_section(supabase, room_name, act_type, current_top
         col_yes, col_no = st.columns(2)
         with col_yes:
             if st.button("✅ 삭제 확인", type="primary", use_container_width=True, key=f"confirm_yes_{selected}"):
+                if is_data_collection_frozen(room_name):
+                    st.toast("🔒 데이터 수집 기간이 종료되어 이 방의 기록은 삭제할 수 없습니다.", icon="🔒")
+                    st.session_state.pop(f"confirm_del_{selected}", None)
+                    st.rerun()
                 delete_opinion_change(supabase, room_name, selected)
                 st.session_state.pop(f"confirm_del_{selected}", None)
                 st.toast(f"'{selected}' 학생 기록이 삭제되었습니다.", icon="🗑️")
@@ -491,6 +495,10 @@ def _render_deleted_messages(supabase, room_name, deleted_df):
                 col_yes, col_no = st.columns(2)
                 with col_yes:
                     if st.button("✅ 완전 삭제 확인", key=f"confirm_purge_yes_{msg_id}", type="primary", use_container_width=True):
+                        if is_data_collection_frozen(room_name):
+                            st.toast("🔒 데이터 수집 기간이 종료되어 이 방의 기록은 삭제할 수 없습니다.", icon="🔒")
+                            st.session_state.pop(f"confirm_purge_{msg_id}", None)
+                            st.rerun()
                         if permanently_delete_message(supabase, msg_id) is not None:
                             st.session_state.pop(f"confirm_purge_{msg_id}", None)
                             st.toast("완전히 삭제했습니다.", icon="🗑️")
@@ -529,6 +537,10 @@ def _render_deleted_comments(supabase, room_name, deleted_comments):
                 col_yes, col_no = st.columns(2)
                 with col_yes:
                     if st.button("✅ 완전 삭제 확인", key=f"confirm_cpurge_yes_{c_id}", type="primary", use_container_width=True):
+                        if is_data_collection_frozen(room_name):
+                            st.toast("🔒 데이터 수집 기간이 종료되어 이 방의 기록은 삭제할 수 없습니다.", icon="🔒")
+                            st.session_state.pop(f"confirm_cpurge_{c_id}", None)
+                            st.rerun()
                         if permanently_delete_comment(supabase, c_id) is not None:
                             st.session_state.pop(f"confirm_cpurge_{c_id}", None)
                             st.toast("완전히 삭제했습니다.", icon="🗑️")
@@ -693,6 +705,8 @@ def _render_tab_content(active_tab, supabase, room_name, user_role, student_name
         with st.expander("이 방 전체 삭제하기 (클릭 시 펼쳐짐)", expanded=False):
             if not ROOM_DESTROY_ENABLED:
                 st.warning("운영 안전 모드로 방 삭제 기능이 비활성화되어 있습니다.")
+            elif is_data_collection_frozen(room_name):
+                st.warning("🔒 데이터 수집 기간이 종료되어 이 방은 삭제할 수 없습니다.")
             elif room_soft_destroy_available():
                 st.warning(
                     f"⚠️ '{room_name}' 방을 숨김 처리하고, 모든 {act_type} 발언을 삭제 보관소로 이동합니다. "

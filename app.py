@@ -28,7 +28,7 @@ from db import (
     touch_session_attempt,
     using_service_role_key,
 )
-from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS
+from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS, TEST_ROOM_NAME
 from utils import get_kst_now_str, get_or_create_session_uuid, is_data_collection_frozen, log_audit
 from validators import validate_entry_code, validate_opinion_content, validate_student_number, normalize_user_text
 from moderation import find_forbidden_word
@@ -165,8 +165,8 @@ st.info(f"**이번 {act_type} 주제:** {current_topic} ({current_mode})")
 if is_data_collection_frozen(room_name):
     st.warning(
         "🔒 이 방은 데이터 수집 기간이 종료되어 새 발언/답글/좋아요를 제출할 수 없습니다. "
-        "기존 기록 조회·분석은 그대로 가능합니다. 테스트가 필요하면 방 이름에 "
-        "'테스트'가 들어간 새 방을 만들어 사용해 주세요."
+        "기존 기록 조회·분석은 그대로 가능합니다. "
+        f"제출 기능 테스트는 '{TEST_ROOM_NAME}'에서 해주세요."
     )
 _ethics_hint = next(
     (t for t in DIGITAL_ETHICS_TOPICS if t["title"] == current_topic and t.get("pro") and t.get("con")),
@@ -305,7 +305,7 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         st.session_state['is_working'] = True
         if is_data_collection_frozen(room_name):
             st.session_state['is_working'] = False
-            st.warning("🔒 이 방은 데이터 수집 기간이 종료되어 더 이상 제출할 수 없습니다. 테스트가 필요하면 방 이름에 '테스트'가 들어간 새 방을 만들어 사용해 주세요.")
+            st.warning(f"🔒 이 방은 데이터 수집 기간이 종료되어 더 이상 제출할 수 없습니다. 제출 테스트는 '{TEST_ROOM_NAME}'에서 해주세요.")
             st.stop()
         input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
         student_number_ok, safe_student_number, _, student_number_error_message = validate_student_number(student_number)
