@@ -14,7 +14,7 @@ from db import (
 from validators import with_fallback_author_role, validate_opinion_content
 from moderation import find_forbidden_word
 from components.moderation_review import auto_flag_room_content
-from utils import format_kst_datetime, log_audit
+from utils import format_kst_datetime, is_data_collection_frozen, log_audit
 from wordcloud import build_word_frequencies, build_circular_wordcloud_html
 from config import DASHBOARD_FETCH_LIMIT, LIVE_BOARD_FETCH_LIMIT, UI_FONT_FAMILY
 
@@ -275,11 +275,17 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
         on_comment_like_cooldown = (time.time() - st.session_state.get('_last_comment_like_ts', 0)) < _LIKE_COOLDOWN
 
         def do_toggle_comment_like(comment_id):
+            if is_data_collection_frozen(room_name):
+                st.toast("🔒 데이터 수집 기간이 종료되어 좋아요를 변경할 수 없습니다.", icon="🔒")
+                return
             toggle_comment_like(supabase, comment_id, room_name, student_name)
             clear_comment_likes_cache(supabase, room_name)
             st.session_state['_last_comment_like_ts'] = time.time()
 
         def do_toggle_like(msg_id):
+            if is_data_collection_frozen(room_name):
+                st.toast("🔒 데이터 수집 기간이 종료되어 좋아요를 변경할 수 없습니다.", icon="🔒")
+                return
             toggle_like(supabase, msg_id, room_name, student_name)
             clear_room_likes_cache(supabase, room_name)
             st.session_state['_last_like_ts'] = time.time()
@@ -351,6 +357,8 @@ def _live_chat_board_core(supabase, room_name, user_role, teacher_auth, student_
                             st.warning("❌ 욕설/비속어가 포함되어 있어 등록할 수 없습니다. 내용을 수정해 주세요.")
                         elif debate_ended:
                             st.warning(f"🔒 {act_type}이(가) 종료되어 답글을 작성할 수 없습니다.")
+                        elif is_data_collection_frozen(room_name):
+                            st.warning("🔒 이 방은 데이터 수집 기간이 종료되어 더 이상 제출할 수 없습니다.")
                         else:
                             _session_id = st.session_state.get("session_uuid")
                             if create_comment(
