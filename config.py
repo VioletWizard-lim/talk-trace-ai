@@ -7,6 +7,13 @@ DASHBOARD_FETCH_LIMIT = 300
 AI_HINT_ENABLED = str(get_secret("AI_HINT_ENABLED", "true")).lower() not in ("false", "0", "no")
 ROOM_DESTROY_ENABLED = str(get_secret("ROOM_DESTROY_ENABLED", "true")).lower() not in ("false", "0", "no")
 AUTO_JOIN_ON_REFRESH = str(get_secret("AUTO_JOIN_ON_REFRESH", "false")).lower() not in ("false", "0", "no")
+# 이 날짜(KST 기준, YYYY-MM-DD) 00:00부터 학생의 새 데이터 제출(발언/답글/좋아요 등)을
+# 막는다. 조회·분석 기능(대시보드, 리포트 등)에는 영향 없음 — 데이터 수집만 잠근다.
+# 값을 비워두면(빈 문자열) 잠금 없이 계속 운영된다.
+DATA_FREEZE_DATE = get_secret("DATA_FREEZE_DATE", "2026-09-12").strip()
+# 잠금 안내 메시지에 표시할, 제출 테스트용으로 미리 만들어둘 방 이름.
+# 이 이름(또는 "테스트"가 들어간 다른 이름)의 방은 잠금 대상에서 제외된다.
+TEST_ROOM_NAME = get_secret("TEST_ROOM_NAME", "심사위원 테스트방").strip()
 MAX_ROOM_NAME_LEN = 60
 MAX_TOPIC_LEN = 120
 MAX_ENTRY_CODE_LEN = 60

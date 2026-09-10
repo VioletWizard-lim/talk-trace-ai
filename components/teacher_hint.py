@@ -3,8 +3,8 @@ import streamlit as st
 from db import create_teacher_hint, clear_live_messages_cache
 from env import get_secret
 from services.ai import generate_ai_response, build_hint_prompt
-from utils import get_kst_now_str, log_audit
-from config import AI_MODEL_NAME, AI_HINT_ENABLED
+from utils import get_kst_now_str, is_data_collection_frozen, log_audit
+from config import AI_MODEL_NAME, AI_HINT_ENABLED, TEST_ROOM_NAME
 
 
 @st.fragment
@@ -15,6 +15,9 @@ def render_hint_section(supabase, room_name, user_role, student_name, current_to
     def send_hint():
         val = st.session_state.get('hint_input_widget', '').strip()
         if val:
+            if is_data_collection_frozen(room_name):
+                st.toast(f"🔒 데이터 수집 기간이 종료되어 이 방에는 더 이상 보낼 수 없습니다. 테스트는 '{TEST_ROOM_NAME}'에서 해주세요.", icon="🔒")
+                return
             now = get_kst_now_str()
             try:
                 res = create_teacher_hint(supabase, {

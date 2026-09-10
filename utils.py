@@ -20,6 +20,30 @@ def get_kst_now_str():
     return get_kst_now().strftime(DATETIME_FMT)
 
 
+_TEST_ROOM_MARKER = "테스트"
+
+
+def is_data_collection_frozen(room_name: str = "") -> bool:
+    """config.DATA_FREEZE_DATE(KST) 이후면 True — 기존(제출 당시) 방에서
+    학생의 새 데이터 제출(발언/답글/좋아요 등)을 막기 위한 스위치.
+
+    방 이름에 "테스트"가 들어간 방은 잠금 대상에서 제외한다 — 심사위원이
+    실제 제출된 데이터에는 손대지 않으면서 프로그램이 정상 작동하는지는
+    확인할 수 있도록, 잠금 이후 새로 만든 테스트 전용 방에서는 자유롭게
+    제출해볼 수 있게 하기 위함이다.
+    """
+    from config import DATA_FREEZE_DATE
+    if not DATA_FREEZE_DATE:
+        return False
+    if _TEST_ROOM_MARKER in (room_name or ""):
+        return False
+    try:
+        freeze_at = datetime.strptime(DATA_FREEZE_DATE, "%Y-%m-%d").replace(tzinfo=KST)
+    except ValueError:
+        return False
+    return get_kst_now() >= freeze_at
+
+
 def format_kst_datetime(value):
     if value is None:
         return "-"

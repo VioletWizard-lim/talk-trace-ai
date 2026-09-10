@@ -18,6 +18,7 @@ from db import (
 from env import get_secret
 from config import AI_MODEL_NAME
 from services.ai import build_moderation_flag_prompt, generate_ai_response, parse_moderation_flags
+from utils import is_data_collection_frozen
 
 logger = logging.getLogger("talk_trace_ai")
 
@@ -158,6 +159,9 @@ def render_moderation_review_section(supabase, room_name: str) -> None:
                         st.rerun(scope="app")
             with col_del:
                 if st.button("🗑️ 발언 삭제", key=f"flag_del_{flag_id}", use_container_width=True):
+                    if is_data_collection_frozen(room_name):
+                        st.toast("🔒 데이터 수집 기간이 종료되어 이 방의 발언은 삭제할 수 없습니다.", icon="🔒")
+                        st.stop()
                     if source_table == "debate":
                         res = delete_opinion_message(supabase, source_id, deleted_by="교사")
                         clear_live_messages_cache(supabase, room_name)

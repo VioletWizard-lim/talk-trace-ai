@@ -28,8 +28,8 @@ from db import (
     touch_session_attempt,
     using_service_role_key,
 )
-from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS
-from utils import get_kst_now_str, get_or_create_session_uuid, log_audit
+from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS, TEST_ROOM_NAME
+from utils import get_kst_now_str, get_or_create_session_uuid, is_data_collection_frozen, log_audit
 from validators import validate_entry_code, validate_opinion_content, validate_student_number, normalize_user_text
 from moderation import find_forbidden_word
 from views.home import render_home_page
@@ -162,6 +162,12 @@ for _col, (_label, _target) in zip(_header_cols, _header_buttons):
                     st.session_state['joined'] = False
             st.rerun()
 st.info(f"**이번 {act_type} 주제:** {current_topic} ({current_mode})")
+if is_data_collection_frozen(room_name):
+    st.warning(
+        "🔒 이 방은 데이터 수집 기간이 종료되어 새 발언/답글/좋아요를 제출할 수 없습니다. "
+        "기존 기록 조회·분석은 그대로 가능합니다. "
+        f"제출 기능 테스트는 '{TEST_ROOM_NAME}'에서 해주세요."
+    )
 _ethics_hint = next(
     (t for t in DIGITAL_ETHICS_TOPICS if t["title"] == current_topic and t.get("pro") and t.get("con")),
     None,
@@ -192,18 +198,24 @@ if user_role == "교사" and teacher_auth:
 
 if user_role == "교사" and teacher_auth and topic_entry_code_column_available():
     with st.expander("🔒 방 암호 변경", expanded=False):
-        _new_pw = st.text_input("새 암호 (비워두면 공개방으로 변경)", type="password", key="change_room_pw")
-        _new_pw_confirm = st.text_input("새 암호 확인", type="password", key="change_room_pw_confirm")
-        if st.button("✅ 암호 저장", type="primary", use_container_width=True, key="change_room_pw_save"):
-            if _new_pw != _new_pw_confirm:
-                st.error("❌ 암호가 일치하지 않습니다.")
-            else:
-                entry_ok, safe_pw, _, entry_error_message = validate_entry_code(_new_pw, max_len=MAX_ENTRY_CODE_LEN)
-                if not entry_ok:
-                    st.error(f"❌ {entry_error_message}")
-                elif update_room_entry_code(supabase, room_name, safe_pw) is not None:
-                    st.toast("✅ 방 암호가 변경되었습니다.", icon="🔒")
-                    st.rerun()
+        # 두 입력칸을 st.form 없이 따로 두면, 두 번째 칸에 입력한 직후 바로
+        # 버튼을 눌렀을 때 그 값이 서버에 도착하기 전에 버튼 클릭이 먼저
+        # 처리되어 "암호가 일치하지 않습니다" 오탐이 발생할 수 있다.
+        # st.form으로 묶으면 제출 시 모든 입력값이 한 번에 함께 전달되어
+        # 이 레이스 컨디션이 사라진다.
+        with st.form(key="change_room_pw_form"):
+            _new_pw = st.text_input("새 암호 (비워두면 공개방으로 변경)", type="password", key="change_room_pw")
+            _new_pw_confirm = st.text_input("새 암호 확인", type="password", key="change_room_pw_confirm")
+            if st.form_submit_button("✅ 암호 저장", type="primary", use_container_width=True):
+                if _new_pw != _new_pw_confirm:
+                    st.error("❌ 암호가 일치하지 않습니다.")
+                else:
+                    entry_ok, safe_pw, _, entry_error_message = validate_entry_code(_new_pw, max_len=MAX_ENTRY_CODE_LEN)
+                    if not entry_ok:
+                        st.error(f"❌ {entry_error_message}")
+                    elif update_room_entry_code(supabase, room_name, safe_pw) is not None:
+                        st.toast("✅ 방 암호가 변경되었습니다.", icon="🔒")
+                        st.rerun()
 
 @st.fragment(run_every=45)
 def _poll_debate_status(room_name, student_number):
@@ -297,6 +309,10 @@ def _render_opinion_input(supabase, room_name, user_role, student_name, student_
         if st.session_state.get('is_working', False):
             st.stop()
         st.session_state['is_working'] = True
+        if is_data_collection_frozen(room_name):
+            st.session_state['is_working'] = False
+            st.warning(f"🔒 이 방은 데이터 수집 기간이 종료되어 더 이상 제출할 수 없습니다. 제출 테스트는 '{TEST_ROOM_NAME}'에서 해주세요.")
+            st.stop()
         input_ok, safe_input, input_error_code, input_error_message = validate_opinion_content(user_input, max_len=700)
         student_number_ok, safe_student_number, _, student_number_error_message = validate_student_number(student_number)
         if user_role == "학생":

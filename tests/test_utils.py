@@ -1,5 +1,6 @@
 from datetime import timezone
-from utils import get_kst_now, compact_ai_report_output
+import config
+from utils import get_kst_now, compact_ai_report_output, is_data_collection_frozen
 
 
 def test_get_kst_now_is_aware():
@@ -25,3 +26,24 @@ def test_compact_ai_report_output_strips_headers():
     text = "# 제목\n핵심요약 1: 내용\n핵심요약 2: 내용2"
     result = compact_ai_report_output(text)
     assert "# 제목" not in result
+
+
+def test_is_data_collection_frozen_no_freeze_date(monkeypatch):
+    monkeypatch.setattr(config, "DATA_FREEZE_DATE", "")
+    assert is_data_collection_frozen("아무방") is False
+
+
+def test_is_data_collection_frozen_future_date(monkeypatch):
+    future = (get_kst_now().year + 1)
+    monkeypatch.setattr(config, "DATA_FREEZE_DATE", f"{future}-01-01")
+    assert is_data_collection_frozen("1학년 1반") is False
+
+
+def test_is_data_collection_frozen_past_date(monkeypatch):
+    monkeypatch.setattr(config, "DATA_FREEZE_DATE", "2000-01-01")
+    assert is_data_collection_frozen("1학년 1반") is True
+
+
+def test_is_data_collection_frozen_test_room_exempt(monkeypatch):
+    monkeypatch.setattr(config, "DATA_FREEZE_DATE", "2000-01-01")
+    assert is_data_collection_frozen("심사위원 테스트방") is False

@@ -2,8 +2,8 @@ import re
 import pandas as pd
 import streamlit as st
 
-from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT
-from utils import create_analysis_image, get_or_create_session_uuid
+from config import AI_MODEL_NAME, LIVE_BOARD_FETCH_LIMIT, TEST_ROOM_NAME
+from utils import create_analysis_image, get_or_create_session_uuid, is_data_collection_frozen
 from db import (
     ai_feedback_available,
     comments_available,
@@ -105,6 +105,9 @@ def render_pre_opinion_form(supabase, room_name, student_name, current_topic, ac
         if not pre_input.strip():
             st.warning("생각을 입력해 주세요.")
             return
+        if is_data_collection_frozen(room_name):
+            st.warning(f"🔒 이 방은 데이터 수집 기간이 종료되어 더 이상 제출할 수 없습니다. 제출 테스트는 '{TEST_ROOM_NAME}'에서 해주세요.")
+            return
         session_uuid = get_or_create_session_uuid()
         res = upsert_pre_opinion(supabase, room_name, student_name, pre_input.strip(), initial_stance=initial_stance, session_id=session_uuid)
         if res is not None:
@@ -200,6 +203,9 @@ def render_post_opinion_section(supabase, room_name, student_name, act_type, cur
         if st.button("✅ 생각 변화 제출", use_container_width=True, type="primary", disabled=not post_confirmed):
             if not post_input.strip():
                 st.warning("생각을 입력해 주세요.")
+                return
+            if is_data_collection_frozen(room_name):
+                st.warning(f"🔒 이 방은 데이터 수집 기간이 종료되어 더 이상 제출할 수 없습니다. 제출 테스트는 '{TEST_ROOM_NAME}'에서 해주세요.")
                 return
             res = upsert_post_opinion(
                 supabase, room_name, student_name, post_input.strip(),
