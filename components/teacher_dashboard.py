@@ -298,14 +298,26 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                 conclusion_rows = df_oc[df_oc["discussion_conclusion"].notna() & (df_oc["discussion_conclusion"].astype(str).str.strip() != "")]
                 conclusions = conclusion_rows["discussion_conclusion"]
                 if not conclusions.empty:
-                    st.subheader("☁️ 결론 워드클라우드")
-                    freq = build_word_frequencies(conclusions)
-                    if freq:
-                        wc_col, _ = st.columns([1, 1])
-                        with wc_col:
-                            st.markdown(build_circular_wordcloud_html(freq), unsafe_allow_html=True)
+                    st.subheader("☁️ 토의 전/후 생각 워드클라우드")
+                    if "pre_opinion" in df_oc.columns:
+                        pre_rows = df_oc[df_oc["pre_opinion"].notna() & (df_oc["pre_opinion"].astype(str).str.strip() != "")]
+                    else:
+                        pre_rows = df_oc.iloc[0:0]
+                    pre_freq = build_word_frequencies(pre_rows["pre_opinion"]) if not pre_rows.empty else {}
+                    post_freq = build_word_frequencies(conclusions)
+                    wc_pre_col, wc_post_col = st.columns(2)
+                    with wc_pre_col:
+                        st.caption(f"📌 토의 전 생각 ({len(pre_rows)}명)")
+                        if pre_freq:
+                            st.markdown(build_circular_wordcloud_html(pre_freq), unsafe_allow_html=True)
+                        else:
+                            st.info("아직 제출된 사전 생각이 없습니다.")
+                    with wc_post_col:
+                        st.caption(f"✅ 토의 후 결론 ({len(conclusion_rows)}명)")
+                        if post_freq:
+                            st.markdown(build_circular_wordcloud_html(post_freq), unsafe_allow_html=True)
                     _submitted_names = conclusion_rows["student_name"].tolist()
-                    st.caption(f"✅ 제출한 학생 ({len(_submitted_names)}명): {', '.join(_submitted_names)}")
+                    st.caption(f"✅ 결론 제출한 학생 ({len(_submitted_names)}명): {', '.join(_submitted_names)}")
                 else:
                     st.info("아직 제출된 결론이 없습니다.")
 
