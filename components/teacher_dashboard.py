@@ -305,6 +305,8 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                         pre_rows = df_oc.iloc[0:0]
                     pre_freq = build_word_frequencies(pre_rows["pre_opinion"]) if not pre_rows.empty else {}
                     post_freq = build_word_frequencies(conclusions)
+                    pre_names = pre_rows["student_name"].tolist()
+                    post_names = conclusion_rows["student_name"].tolist()
                     wc_pre_col, wc_post_col = st.columns(2)
                     with wc_pre_col:
                         st.caption(f"📌 토의 전 생각 ({len(pre_rows)}명)")
@@ -312,12 +314,12 @@ def _render_stance_section(supabase, room_name, act_type, current_topic, df_all)
                             st.markdown(build_circular_wordcloud_html(pre_freq), unsafe_allow_html=True)
                         else:
                             st.info("아직 제출된 사전 생각이 없습니다.")
+                        st.caption(f"제출한 학생: {', '.join(pre_names) if pre_names else '없음'}")
                     with wc_post_col:
                         st.caption(f"✅ 토의 후 결론 ({len(conclusion_rows)}명)")
                         if post_freq:
                             st.markdown(build_circular_wordcloud_html(post_freq), unsafe_allow_html=True)
-                    _submitted_names = conclusion_rows["student_name"].tolist()
-                    st.caption(f"✅ 결론 제출한 학생 ({len(_submitted_names)}명): {', '.join(_submitted_names)}")
+                        st.caption(f"제출한 학생: {', '.join(post_names) if post_names else '없음'}")
                 else:
                     st.info("아직 제출된 결론이 없습니다.")
 
