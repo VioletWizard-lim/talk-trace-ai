@@ -2,6 +2,7 @@ import streamlit as st
 
 from db import (
     fetch_room_names,
+    fetch_room_names_by_owner,
     topic_entry_code_column_available,
     topic_is_hidden_available,
     fetch_all_rooms_hidden_status,
@@ -19,11 +20,18 @@ _VIEW_KEY = "_room_mgmt_view"
 _ROOMS_PER_ROW = 4
 
 
-def _render_visibility_section(supabase):
+def _render_visibility_section(supabase, admin_auth, teacher_id_for_scope):
     if not topic_is_hidden_available():
         st.info("이 기능을 사용하려면 topic.is_hidden 컬럼이 필요합니다.")
         return
-    all_rooms_for_manage = fetch_room_names(supabase, include_hidden=True)
+    # 일반 교사는 자기가 만든 방만 공개/숨김을 바꿀 수 있어야 하는데, 기존엔
+    # admin 여부와 상관없이 항상 전체 방 목록을 가져와 다른 교사의 방까지
+    # 조작할 수 있었다. admin(관리자/심사위원 계정)만 전체를 보고, 일반
+    # 교사는 소유한 방으로 제한한다.
+    if admin_auth:
+        all_rooms_for_manage = fetch_room_names(supabase, include_hidden=True)
+    else:
+        all_rooms_for_manage = fetch_room_names_by_owner(supabase, teacher_id_for_scope)
     if not all_rooms_for_manage:
         st.info("아직 개설된 방이 없습니다. '✨ 새 방 만들기'에서 첫 번째 방을 만들어보세요.")
         return
@@ -157,6 +165,7 @@ def render_room_management_page(supabase):
         st.rerun()
 
     teacher_id_for_scope = st.session_state.get('teacher_id', '')
+    admin_auth = st.session_state.get('admin_auth', False)
 
     col_title, col_btn = st.columns([6, 2])
     with col_title:
@@ -180,7 +189,7 @@ def render_room_management_page(supabase):
 
     with st.container(border=True):
         if view == "visibility":
-            _render_visibility_section(supabase)
+            _render_visibility_section(supabase, admin_auth, teacher_id_for_scope)
         else:
             _render_create_section(supabase, teacher_id_for_scope)
     st.stop()
