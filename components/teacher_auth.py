@@ -4,9 +4,9 @@ from auth import _is_hashed, _verify_password
 from db import (
     fetch_teacher_account,
     request_teacher_account,
-    save_teacher_session,
     upgrade_teacher_password,
 )
+from teacher_session import LOGIN_WINDOW_SECONDS, login_limiter, start_teacher_session
 from validators import validate_teacher_credential
 from utils import to_bool_flag
 
@@ -36,19 +36,24 @@ def _handle_login(supabase, teacher_id_input, teacher_pw_input):
         st.error(f"❌ {pw_error_message}")
         st.stop()
 
+    limiter = login_limiter()
+    if limiter.blocked(safe_teacher_id):
+        _reset_auth_state()
+        _redirect_from_admin_if_needed()
+        st.error(f"⏳ 로그인 실패가 너무 많습니다. {LOGIN_WINDOW_SECONDS // 60}분 뒤에 다시 시도해 주세요.")
+        return
+
     account = fetch_teacher_account(supabase, safe_teacher_id)
     if isinstance(account, dict) and account.get("_query_failed"):
         _reset_auth_state()
         _redirect_from_admin_if_needed()
         st.error("🚨 교사 계정 조회에 실패했습니다. Supabase RLS 정책/권한 및 DB 연결 상태를 확인해 주세요.")
-    elif not account:
+    elif not account or not _verify_password(safe_pw, account.get("teacher_pw", "")):
+        # 없는 ID와 틀린 비밀번호를 같은 문구로 알려 준다(어떤 ID가 있는지 알아내지 못하게)
+        limiter.record_fail(safe_teacher_id)
         _reset_auth_state()
         _redirect_from_admin_if_needed()
-        st.error("🚨 등록되지 않은 교사 ID입니다.")
-    elif not _verify_password(safe_pw, account.get("teacher_pw", "")):
-        _reset_auth_state()
-        _redirect_from_admin_if_needed()
-        st.error("❌ 비밀번호가 일치하지 않습니다.")
+        st.error("❌ 교사 ID 또는 비밀번호가 올바르지 않습니다.")
     elif not account.get("is_approved"):
         _reset_auth_state()
         _redirect_from_admin_if_needed()
@@ -58,13 +63,12 @@ def _handle_login(supabase, teacher_id_input, teacher_pw_input):
         _redirect_from_admin_if_needed()
         st.error("🚨 등록되지 않은 교사 ID입니다.")
     else:
+        limiter.reset(safe_teacher_id)
         st.session_state['teacher_auth'] = True
         st.session_state['admin_auth'] = to_bool_flag(account.get("is_admin", False))
         st.session_state['teacher_id'] = safe_teacher_id
-        save_teacher_session(
-            supabase, st.session_state.get('session_uuid', ''),
-            safe_teacher_id, st.session_state['admin_auth'],
-        )
+        # 로그인 유지 열쇠는 주소창 sid가 아니라 서버가 새로 만든 값(쿠키)으로 한다
+        start_teacher_session(supabase, safe_teacher_id, st.session_state['admin_auth'])
         _redirect_from_admin_if_needed()
         if not _is_hashed(account.get("teacher_pw", "")):
             upgrade_teacher_password(supabase, account["id"], safe_pw)
