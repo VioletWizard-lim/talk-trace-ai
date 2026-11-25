@@ -5,7 +5,6 @@ import streamlit as st
 
 from db import (
     debate_session_id_column_available,
-    delete_teacher_session,
     ensure_db_login,
     clear_live_messages_cache,
     clear_opinion_change_cache,
@@ -14,8 +13,6 @@ from db import (
     fetch_opinion_change,
     fetch_pending_teacher_accounts,
     fetch_room_names,
-    fetch_teacher_account,
-    fetch_teacher_session,
     fetch_topic_data,
     init_db,
     is_recent_submission,
@@ -29,7 +26,8 @@ from db import (
     using_service_role_key,
 )
 from config import APP_CSS, MAX_ENTRY_CODE_LEN, DIGITAL_ETHICS_TOPICS, TEST_ROOM_NAME
-from utils import get_kst_now_str, get_or_create_session_uuid, is_data_collection_frozen, log_audit
+from teacher_session import end_teacher_session, flush_cookie_action, restore_teacher_session
+from utils import get_kst_now_str, get_or_create_session_uuid, is_data_collection_frozen, log_audit, to_bool_flag
 from validators import validate_entry_code, validate_opinion_content, validate_student_number, normalize_user_text
 from moderation import find_forbidden_word
 from views.home import render_home_page
@@ -65,21 +63,24 @@ if '_last_debate_status' not in st.session_state: st.session_state['_last_debate
 
 get_or_create_session_uuid()
 
-# 새로고침해도 로그아웃하기 전까지는 교사 로그인이 유지되도록, 이 브라우저의
-# session_uuid에 저장된 로그인 정보가 있으면 세션 시작 시 한 번만 복원한다.
+# 새로고침해도 로그인 유지 시간(teacher_session.SESSION_SECONDS) 동안은 교사 로그인이
+# 유지되도록, 이 브라우저의 교사 로그인 쿠키가 있으면 세션 시작 시 한 번만 복원한다.
+# (주소창 sid로는 복원하지 않는다: 주소가 새면 누구나 교사가 될 수 있었음)
+def _teacher_account_usable(account: dict) -> bool:
+    return bool(account.get("is_approved")) and (not account.get("is_judge") or account.get("is_active", True))
+
+
 if not st.session_state['teacher_auth'] and not st.session_state.get('_teacher_session_restore_checked'):
     st.session_state['_teacher_session_restore_checked'] = True
-    _saved_session = fetch_teacher_session(supabase, st.session_state.get('session_uuid', ''))
-    if _saved_session:
-        _account = fetch_teacher_account(supabase, _saved_session.get('teacher_id', ''))
-        if (
-            isinstance(_account, dict) and not _account.get("_query_failed")
-            and _account.get("is_approved")
-            and (not _account.get("is_judge") or _account.get("is_active", True))
-        ):
-            st.session_state['teacher_auth'] = True
-            st.session_state['admin_auth'] = bool(_saved_session.get('is_admin', False))
-            st.session_state['teacher_id'] = _saved_session.get('teacher_id', '')
+    _account = restore_teacher_session(supabase, _teacher_account_usable)
+    if _account:
+        st.session_state['teacher_auth'] = True
+        # 관리자 여부는 저장해 둔 값이 아니라 지금 계정 상태로 정한다
+        st.session_state['admin_auth'] = to_bool_flag(_account.get("is_admin", False))
+        st.session_state['teacher_id'] = _account.get('teacher_id', '')
+
+# 로그인·로그아웃 때 미뤄 둔 쿠키 쓰기·지우기
+flush_cookie_action()
 
 if st.session_state['page'] != "home":
     col_home_btn, _ = st.columns([1, 7])
@@ -149,7 +150,7 @@ for _col, (_label, _target) in zip(_header_cols, _header_buttons):
     with _col:
         if st.button(_label, use_container_width=True, key=f"header_btn_{_target}"):
             if _target == "__logout__":
-                delete_teacher_session(supabase, st.session_state.get('session_uuid', ''))
+                end_teacher_session(supabase)
                 st.session_state['teacher_auth'] = False
                 st.session_state['admin_auth'] = False
                 st.session_state['teacher_id'] = ""

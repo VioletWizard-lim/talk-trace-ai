@@ -29,6 +29,7 @@ jobs:
           python -m py_compile config.py
           python -m py_compile validators.py
           python -m py_compile utils.py
+          python -m py_compile teacher_session.py
           python -m py_compile wordcloud.py
           python -m py_compile services/ai.py
           python -m py_compile views/home.py

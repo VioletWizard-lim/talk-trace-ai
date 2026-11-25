@@ -8,11 +8,11 @@ from db import (
     fetch_room_names_by_owner,
     topic_owner_column_available,
     clear_opinion_change_cache,
-    delete_teacher_session,
 )
 from validators import validate_student_number
 from config import AUTO_JOIN_ON_REFRESH
 from components.teacher_auth import render_teacher_auth
+from teacher_session import end_teacher_session
 
 _ROLE_TAB_KEY = "user_role_radio"
 _ROLE_TAB_CSS = f"""
@@ -95,7 +95,7 @@ def render_lobby_page(supabase):
         with _col:
             if st.button(_label, use_container_width=True, key=f"lobby_header_{_target}"):
                 if _target == "__logout__":
-                    delete_teacher_session(supabase, st.session_state.get('session_uuid', ''))
+                    end_teacher_session(supabase)
                     st.session_state['teacher_auth'] = False
                     st.session_state['admin_auth'] = False
                     st.session_state['teacher_id'] = ""
